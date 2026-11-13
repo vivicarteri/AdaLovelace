@@ -30,3 +30,48 @@ struct DicaEntrarNaCaixa: Tip {
     var image: Image? { Image(systemName: "hand.pinch") }
     var rules: [Rule] { #Rule(Self.$estaForaDaCaixa) { $0 } }
 }
+
+// MARK: - Previews
+//
+// Nas previews o app não roda o MyApp.init(), então o TipKit é ligado aqui.
+// resetDatastore() faz a dica aparecer de novo toda vez, mesmo se já foi fechada antes.
+
+#Preview("DicaSairDaCaixa") {
+    TipView(DicaSairDaCaixa())
+        .padding()
+        .task {
+            try? Tips.resetDatastore()
+            try? Tips.configure([.displayFrequency(.immediate)])
+            DicaSairDaCaixa.podeSair = true
+        }
+}
+
+#Preview("DicaEntrarNaCaixa") {
+    TipView(DicaEntrarNaCaixa())
+        .padding()
+        .task {
+            try? Tips.resetDatastore()
+            try? Tips.configure([.displayFrequency(.immediate)])
+            DicaEntrarNaCaixa.estaForaDaCaixa = true
+        }
+}
+
+// Do jeito que aparece no app: um balão apontando para o botão
+#Preview("Dica no botão") {
+    VStack {
+        HStack {
+            BotaoRedondo(icone: "arrow.down.right.and.arrow.up.left", rotulo: "Ver o teatro de sombras",
+                         tamanho: 44) {}
+                .popoverTip(DicaSairDaCaixa(), arrowEdge: .top)
+            Spacer()
+        }
+        Spacer()
+    }
+    .padding(20)
+    .background(Cores.fundoEscuro)
+    .task {
+        try? Tips.resetDatastore()
+        try? Tips.configure([.displayFrequency(.immediate)])
+        DicaSairDaCaixa.podeSair = true
+    }
+}

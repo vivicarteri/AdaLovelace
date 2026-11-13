@@ -202,3 +202,58 @@ private struct Personagens: View {
         .frame(width: tamanho.width, height: tamanho.height)
     }
 }
+
+// MARK: - Previews
+
+#Preview("CenarioView: home (apagada)") {
+    CenarioView(acesa: false, progresso: 0, mostrarPersonagens: false)
+}
+
+// Arraste o slider para ver o dia virando noite enquanto a vela queima
+#Preview("CenarioView: vela acesa") {
+    @Previewable @State var progresso = 0.0
+    CenarioView(acesa: true, progresso: progresso, mostrarPersonagens: true)
+        .overlay(alignment: .bottom) {
+            Slider(value: $progresso, in: 0...1) { Text("Progresso da vela") }
+                .padding()
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                .padding()
+        }
+}
+
+// Só as figuras, sem fundo (é assim que ele entra no teatro de sombras quando não há arte de sombra)
+#Preview("CenarioView: só as figuras") {
+    CenarioView(acesa: true, progresso: 0.5, mostrarPersonagens: true, comFundo: false)
+        .colorMultiply(.black)
+        .opacity(0.7)
+        .background(Cores.papel)
+}
+
+// O cenário provisório só aparece quando a "tenda" NÃO está no Assets.
+// Como a arte da Georgia já chegou, as peças provisórias ficam aqui separadas.
+
+#Preview("Provisório: Tenda") {
+    Tenda()
+        .background(Cores.fundoClaro)
+        .ignoresSafeArea()
+}
+
+#Preview("Provisório: RodaSolLua") {
+    @Previewable @State var progresso = 0.0
+    VStack(spacing: 30) {
+        RodaSolLua(raio: 110)
+            .rotationEffect(.degrees(180 * progresso))
+        Slider(value: $progresso, in: 0...1) { Text("Progresso da vela") }
+    }
+    .padding(30)
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .background(Cores.fundoClaro)
+}
+
+#Preview("Provisório: Personagens") {
+    GeometryReader { geo in
+        Personagens(tamanho: geo.size)
+    }
+    .ignoresSafeArea()
+    .background(Cores.fundoClaro)
+}
