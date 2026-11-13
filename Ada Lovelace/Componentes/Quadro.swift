@@ -236,11 +236,12 @@ struct CenaArte: View {
 
 // MARK: - Previews
 
-// Se a Georgia mandar os quadros "acrobata2_1", "acrobata2_2"…, esta preview já mostra a animação.
+// Se a Georgia mandar os quadros "tenda_1", "tenda_2"…, esta preview já mostra a animação.
 // Por enquanto só existe a peça parada, então ela aparece sem se mexer.
+// (As peças novas, lua e passarinho, usam outro sistema: veja CenarioAnimado.swift.)
 #Preview("ImagemAnimada", traits: .sizeThatFitsLayout) {
     TimelineView(.animation) { contexto in
-        ImagemAnimada(nome: "acrobata2", t: contexto.date.timeIntervalSinceReferenceDate)
+        ImagemAnimada(nome: "tenda", t: contexto.date.timeIntervalSinceReferenceDate)
             .scaledToFit()
             .frame(height: 300)
     }
@@ -248,14 +249,15 @@ struct CenaArte: View {
     .background(Cores.fundoClaro)
 }
 
-// Duas peças soltas, cada uma no lugar dela no quadro. A acrobata está girada a partir de cima.
+// Duas peças soltas, cada uma no lugar dela no quadro. O picadeiro está girado de leve.
+// (Os acrobatas saíram do cenário; a lua antiga continua no Assets só para esta preview.)
 #Preview("Camada") {
     GeometryReader { geo in
         let quadro = Quadro(tela: geo.size)
         ZStack {
             Camada(nome: "lua", retangulo: PosicaoArte.lua, quadro: quadro)
-            Camada(nome: "acrobata1", retangulo: PosicaoArte.acrobata1, quadro: quadro,
-                   giro: 0.15, pivo: .top)
+            Camada(nome: "picadero", retangulo: PosicaoArte.picadeiro, quadro: quadro,
+                   giro: 0.05, pivo: .bottom)
         }
     }
     .ignoresSafeArea()
