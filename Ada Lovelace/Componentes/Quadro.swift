@@ -39,11 +39,7 @@ enum PosicaoArte {
     }
     static let tenda = r(0, 0, 1290, 2725)
     static let lua = r(264, 442, 1025, 1237)
-    static let acrobata1 = r(76, 523, 462, 1478)
-    static let acrobata2 = r(378, 101, 967, 801)
     static let picadeiro = r(3, 2152, 1290, 2643)
-    static let acrobata3 = r(69, 1799, 430, 2368)
-    static let acrobata4 = r(764, 1634, 1229, 2415)
     static let suporte = r(469, 2542, 825, 2770)
 }
 
@@ -158,10 +154,10 @@ struct Camada: View {
     }
 }
 
-// As camadas do circo (normais ou as versões de sombra).
-// Os personagens balançam de leve, como bonecos de papel — e as SOMBRAS balançam junto,
-// porque são a sombra desses mesmos personagens (mesma conta, mesmo ritmo).
-// Em cima disso, cada sombra ainda tremula devagarinho por causa da chama.
+// As camadas do cenário (normais ou as versões de sombra): tenda, a faixa infinita
+// com as peças novas da Georgia (lua e passarinho) e o picadeiro.
+// As SOMBRAS andam junto com as peças (mesma conta, mesmo ritmo)
+// e ainda tremulam devagarinho por causa da chama.
 struct CenaArte: View {
     var quadro: Quadro
     var mostrarPersonagens: Bool
@@ -179,23 +175,15 @@ struct CenaArte: View {
                                 paused: reduzirMovimento || congelado
                                         || (!mostrarPersonagens && !CenaArte.temArteAnimada))) { contexto in
             let t = reduzirMovimento ? 0 : contexto.date.timeIntervalSinceReferenceDate
-            let mexe: Double = reduzirMovimento ? 0 : 1
             ZStack {
                 camada("tenda", PosicaoArte.tenda, t: t, indice: 0)
-                camada("lua", PosicaoArte.lua, t: t, indice: 1)
-                Group {
-                    // Penduradas: balançam a partir de cima
-                    camada("acrobata1", PosicaoArte.acrobata1, t: t, indice: 2, giro: mexe * sin(t * 1.1) * 0.06, pivo: .top)
-                    camada("acrobata2", PosicaoArte.acrobata2, t: t, indice: 3, giro: mexe * sin(t * 1.3 + 1) * 0.08, pivo: .top)
-                }
-                .opacity(mostrarPersonagens ? 1 : 0)
+                // A lua antiga saiu: no lugar dela passam as peças novas da Georgia (lua e passarinho).
+                // Elas só aparecem com a vela acesa (somem devagar quando apaga).
+                FaixaInfinitaView(quadro: quadro, t: t, sombra: sombra)
+                    .offset(x: sombra && !reduzirMovimento ? CenaArte.tremor(t: t, indice: 1).dx : 0)
+                    .opacity(mostrarPersonagens ? 1 : 0)
+                // Os acrobatas saíram do cenário (pedido do time). As imagens continuam no Assets.
                 camada("picadeiro", PosicaoArte.picadeiro, t: t, indice: 4)
-                Group {
-                    // No palco: balançam de leve a partir dos pés
-                    camada("acrobata3", PosicaoArte.acrobata3, t: t, indice: 5, giro: mexe * sin(t * 0.9 + 2) * 0.03, pivo: .bottom)
-                    camada("acrobata4", PosicaoArte.acrobata4, t: t, indice: 6, giro: mexe * sin(t * 0.8 + 3) * 0.03, pivo: .bottom)
-                }
-                .opacity(mostrarPersonagens ? 1 : 0)
             }
         }
         .allowsHitTesting(false)
@@ -213,13 +201,15 @@ struct CenaArte: View {
     }
 
     // As peças do cenário, na ordem em que são desenhadas
-    static let pecas = ["tenda", "lua", "acrobata1", "acrobata2", "picadeiro", "acrobata3", "acrobata4"]
+    static let pecas = ["tenda", "picadeiro"]
 
     // Tem alguma peça com animação desenhada? (a conta é feita uma vez e guardada)
     private static var cacheArteAnimada: Bool?
 
     static var temArteAnimada: Bool {
         if let c = cacheArteAnimada { return c }
+        // (A faixa infinita não entra aqui: ela só aparece com a vela acesa, e aí a cena
+        // já está rodando. Com a vela apagada, a cena para e não gasta bateria.)
         let tem = pecas.contains { ArteAnimada.quadros(nomeDaArte($0)) > 1 }
         cacheArteAnimada = tem
         return tem

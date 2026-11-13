@@ -17,6 +17,20 @@ struct VelaView: View {
 
     static func espacoChama(largura: CGFloat) -> CGFloat { largura * 1.8 }
 
+    // Onde fica o MEIO da chama, medido a partir do topo da cera.
+    // Serve para quem precisa acertar um toque nela (apagar tocando na chama).
+    static func centroDaChama(largura: CGFloat) -> CGPoint {
+        let usa = arteExiste("velaCorpo")
+        let s = largura / ArteVela.largura
+        let altura = usa ? ArteVela.chamaAltura * s : largura * 1.2
+        return CGPoint(x: usa ? ArteVela.chamaDesvioX * s : 0,
+                       y: (usa ? ArteVela.chamaDentro * s : -largura * 0.12) - altura / 2)
+    }
+
+    static func alturaDaChama(largura: CGFloat) -> CGFloat {
+        arteExiste("velaCorpo") ? ArteVela.chamaAltura * largura / ArteVela.largura : largura * 1.2
+    }
+
     private var alturaCera: CGFloat { max(3, alturaCheia * CGFloat(1 - progresso)) }
     private var espacoChama: CGFloat { VelaView.espacoChama(largura: largura) }
     private var usaArte: Bool { arteExiste("velaCorpo") }

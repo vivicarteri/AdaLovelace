@@ -39,7 +39,7 @@ struct PalcoView: View {
     @State private var riscado: CGFloat = 0
     @State private var ultimoPontoRisco: CGPoint?
 
-    private var tamanhoFosforo: CGFloat { 70 }
+    private var tamanhoFosforo: CGFloat { FosforoView.tamanhoNoPalco }
 
     // ⚙️ Quanto tempo o fósforo aceso dura antes de apagar sozinho (como um de verdade).
     // Depois disso ele volta para a caixa e a pessoa pega outro.
@@ -107,9 +107,12 @@ struct PalcoView: View {
         let alturaCheia = g.alturaCheia(sessao.config.posicaoSlider)
         let espacoChama = VelaView.espacoChama(largura: g.larguraVela)
         let topoCera = g.baseY - alturaCheia * CGFloat(1 - sessao.progresso)
+        let centroChama = VelaView.centroDaChama(largura: g.larguraVela)
+        let alvoChama = max(64, VelaView.alturaDaChama(largura: g.larguraVela) * 0.9)
 
         return ZStack {
-            CenarioView(acesa: acesa, progresso: sessao.progresso, mostrarPersonagens: estado != .nova, quadro: g.quadro)
+            // As peças do cenário (lua, passarinho…) só aparecem com a vela ACESA
+            CenarioView(acesa: acesa, progresso: sessao.progresso, mostrarPersonagens: estado == .acesa, quadro: g.quadro)
 
             // Vela apagada = tudo escuro, só a vela e os botões em destaque
             Color.black.opacity(acesa ? 0 : 0.55)
@@ -140,11 +143,29 @@ struct PalcoView: View {
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel("Vela")
                     .accessibilityValue(descricaoVela)
+                    .accessibilityHint(acesa ? "Toque duas vezes na chama para apagar" : "")
+                    .accessibilityActions {
+                        if acesa {
+                            Button("Apagar a vela") { apagarTocandoNaChama() }
+                        }
+                    }
                     .position(x: g.centroX,
                               y: g.baseY - (alturaCheia + espacoChama) / 2 + (afundando ? alturaCheia + espacoChama : 0))
             }
             .frame(width: g.tamanho.width, height: g.tamanho.height)
             .mask(alignment: .top) { Rectangle().frame(height: g.baseY + 2) }
+
+            // Tocar na chama apaga a vela.
+            // É também o jeito de apagar SEM virar o aparelho: importante para quem não pode
+            // virar o celular e para quando o Core Motion estiver desligado nas configurações.
+            if acesa && !miniatura {
+                Color.clear
+                    .frame(width: alvoChama, height: alvoChama)
+                    .contentShape(Circle())
+                    .position(x: g.centroX + centroChama.x, y: topoCera + centroChama.y)
+                    .onTapGesture { apagarTocandoNaChama() }
+                    .accessibilityHidden(true)   // a ação fica na própria vela, para o VoiceOver
+            }
 
             // Suporte da vela
             SuporteView(largura: g.larguraVela)
@@ -263,7 +284,7 @@ struct PalcoView: View {
         // Inclinado, como na mão de alguém. A cabeça fica em posFosforo.
         let pivo = UnitPoint(x: 0.5, y: FosforoView.posicaoCabeca(tamanho: tamanhoFosforo) / tamanhoFosforo)
         return FosforoView(aceso: etapa == .aceso, tamanho: tamanhoFosforo)
-            .rotationEffect(.degrees(-30), anchor: pivo)
+            .rotationEffect(FosforoView.inclinacao, anchor: pivo)
             .contentShape(Rectangle().inset(by: -16))   // um pouco mais fácil de pegar
             .gesture(
                 DragGesture(minimumDistance: 0, coordinateSpace: .named("palco"))
@@ -434,6 +455,13 @@ struct PalcoView: View {
         }
     }
 
+    // Tocar na chama apaga a vela. Ela continua de onde parou: para acender de novo,
+    // a pessoa precisa do fósforo, igual a virar o aparelho de cabeça para baixo.
+    private func apagarTocandoNaChama() {
+        guard sessao.estado == .acesa, !trocando, !trocandoCena else { return }
+        sessao.apagar()
+    }
+
     // A chama apaga, a vela afunda pelo alçapão, a cortina desce e sobe uma vela nova
     private func descartar() {
         guard !trocando else { return }
@@ -520,13 +548,21 @@ private struct LayoutPalco {
         return faixa.offsetBy(dx: caixa.x - larguraCaixa / 2, dy: caixa.y - alturaCaixa / 2)
     }
 
-    // De onde o fósforo sai (de dentro da gaveta) e onde ele fica esperando, logo acima da caixa
-    var saidaDoFosforo: CGPoint {
-        CGPoint(x: caixa.x - CaixaFosforoView.corrida(largura: larguraCaixa) * 0.6, y: caixa.y)
+    // O fósforo espera EM PÉ dentro da gaveta aberta: o pé fica no meio da parte da gaveta
+    // que saiu da caixa, e a cabeça fica para fora. Assim ele nunca fica solto no ar.
+    // (A conta usa a cabeça, porque é ela que segue o dedo.)
+    var repousoDoFosforo: CGPoint {
+        let bordaEsquerda = caixa.x - larguraCaixa / 2
+        let pe = CGPoint(x: bordaEsquerda - CaixaFosforoView.corrida(largura: larguraCaixa) * 0.5,
+                         y: caixa.y)
+        let desvio = FosforoView.peDesdeACabeca(tamanho: FosforoView.tamanhoNoPalco)
+        return CGPoint(x: pe.x - desvio.width, y: pe.y - desvio.height)
     }
 
-    var repousoDoFosforo: CGPoint {
-        CGPoint(x: caixa.x - larguraCaixa * 0.55, y: caixa.y - alturaCaixa * 1.25)
+    // De onde o fósforo sai: um pouco mais para baixo, ainda deitado dentro da gaveta.
+    // Ele sobe reto até ficar em pé (repousoDoFosforo).
+    var saidaDoFosforo: CGPoint {
+        CGPoint(x: repousoDoFosforo.x, y: repousoDoFosforo.y + alturaCaixa * 0.35)
     }
 
     func alturaCheia(_ posicao: Double) -> CGFloat {
