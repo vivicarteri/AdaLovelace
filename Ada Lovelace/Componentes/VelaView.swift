@@ -340,3 +340,123 @@ extension TamanhoEnfeite {
         )
     }
 }
+
+// MARK: - Previews
+//
+// A vela fica sempre em cima do suporte, como no palco: o suporte esconde o pé da vela.
+
+// A vela mais curta, a do meio e a mais longa. Serve para conferir a emenda do topo em todos os tamanhos.
+#Preview("VelaView: tamanhos") {
+    let largura: CGFloat = 40
+    HStack(alignment: .bottom, spacing: 0) {
+        ForEach([0.0, 0.4, 1.0], id: \.self) { posicao in
+            VStack(spacing: 0) {
+                VelaView(alturaCheia: GeometriaVela.alturaCheia(posicao: posicao, alturaMaxima: 420),
+                         largura: largura, acesa: true)
+                SuporteView(largura: largura)
+                    .offset(x: SuporteView.desvioX(largura: largura))
+                Text("\(VelaConfig.minutos(para: posicao)) min")
+                    .font(.caption)
+                    .foregroundStyle(Cores.papel)
+                    .padding(.top, 8)
+            }
+        }
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .background(Cores.fundoEscuro)
+}
+
+// Arraste o slider: a cera desce e cada enfeite cai quando a cera chega nele (mesma regra da Sessao).
+// "Apagar" mostra a fumaça.
+#Preview("VelaView: queimando") {
+    @Previewable @State var progresso = 0.0
+    @Previewable @State var acesa = true
+    @Previewable @State var apagouEm: Date? = nil
+    @Previewable @State var enfeites = [
+        Enfeite(tipo: .alfinete, altura: 0.8, lado: -1),
+        Enfeite(tipo: .penduricalho, altura: 0.6, lado: 1),
+        Enfeite(tipo: .alfinete, altura: 0.35, lado: 1),
+        Enfeite(tipo: .penduricalho, altura: 0.25, lado: -1),
+    ]
+    @Previewable @State var marcas = [Marca(altura: 0.5, lado: -1)]
+    let largura: CGFloat = 60
+    let caidos = Set(enfeites.filter { $0.altura >= 1 - progresso }.map(\.id))
+
+    VStack {
+        Spacer()
+        VStack(spacing: 0) {
+            VelaView(alturaCheia: 320, largura: largura, progresso: progresso, acesa: acesa,
+                     apagouEm: apagouEm, enfeites: enfeites, caidos: caidos, marcas: marcas)
+            SuporteView(largura: largura)
+                .offset(x: SuporteView.desvioX(largura: largura))
+        }
+        Spacer()
+        VStack {
+            Slider(value: $progresso, in: 0...1) { Text("Progresso da vela") }
+            Button(acesa ? "Apagar" : "Acender") {
+                if acesa { apagouEm = .now }
+                acesa.toggle()
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Cores.tinta)
+        }
+        .padding()
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .padding()
+    }
+    .frame(maxWidth: .infinity)
+    .background(Cores.fundoEscuro)
+}
+
+// Só aparece na vela provisória (quando "velaCorpo" não está no Assets)
+#Preview("Provisório: Escorridos", traits: .sizeThatFitsLayout) {
+    Escorridos(largura: 80)
+        .frame(width: 80, height: 56)
+        .background(Cores.cera)
+        .padding(30)
+        .background(Cores.fundoEscuro)
+}
+
+// Em cima: lado esquerdo da vela. Embaixo: lado direito (espelhado).
+#Preview("EnfeiteView", traits: .sizeThatFitsLayout) {
+    HStack(alignment: .top, spacing: 40) {
+        ForEach(TipoEnfeite.allCases, id: \.self) { tipo in
+            VStack(spacing: 20) {
+                EnfeiteView(tipo: tipo, lado: -1, largura: 60)
+                EnfeiteView(tipo: tipo, lado: 1, largura: 60)
+                Text(tipo.nome).font(.caption)
+            }
+        }
+    }
+    .padding(30)
+    .background(Cores.papel)
+}
+
+#Preview("ChamaView", traits: .sizeThatFitsLayout) {
+    HStack(alignment: .bottom, spacing: 30) {
+        ChamaView(tamanho: 40)
+        ChamaView(tamanho: 80)
+        ChamaView(tamanho: 140)
+    }
+    .padding(30)
+    .background(Cores.fundoEscuro)
+}
+
+// A fumaça dura 3 segundos. O botão solta de novo.
+#Preview("FumacaView") {
+    @Previewable @State var desde = Date()
+    VStack(spacing: 30) {
+        FumacaView(desde: desde, largura: 60)
+        Button("Soltar fumaça de novo") { desde = .now }
+            .buttonStyle(.borderedProminent)
+            .tint(Cores.tinta)
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .background(Cores.papel)
+}
+
+#Preview("SuporteView", traits: .sizeThatFitsLayout) {
+    SuporteView(largura: 80)
+        .padding(30)
+        .background(Cores.fundoEscuro)
+}

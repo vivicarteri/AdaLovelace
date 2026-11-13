@@ -243,3 +243,59 @@ struct CenaArte: View {
         nome == "picadeiro" ? "picadeirosombra" : nome + "sombra"
     }
 }
+
+// MARK: - Previews
+
+// Se a Georgia mandar os quadros "acrobata2_1", "acrobata2_2"…, esta preview já mostra a animação.
+// Por enquanto só existe a peça parada, então ela aparece sem se mexer.
+#Preview("ImagemAnimada", traits: .sizeThatFitsLayout) {
+    TimelineView(.animation) { contexto in
+        ImagemAnimada(nome: "acrobata2", t: contexto.date.timeIntervalSinceReferenceDate)
+            .scaledToFit()
+            .frame(height: 300)
+    }
+    .padding()
+    .background(Cores.fundoClaro)
+}
+
+// Duas peças soltas, cada uma no lugar dela no quadro. A acrobata está girada a partir de cima.
+#Preview("Camada") {
+    GeometryReader { geo in
+        let quadro = Quadro(tela: geo.size)
+        ZStack {
+            Camada(nome: "lua", retangulo: PosicaoArte.lua, quadro: quadro)
+            Camada(nome: "acrobata1", retangulo: PosicaoArte.acrobata1, quadro: quadro,
+                   giro: 0.15, pivo: .top)
+        }
+    }
+    .ignoresSafeArea()
+    .background(Cores.fundoClaro)
+}
+
+#Preview("CenaArte") {
+    GeometryReader { geo in
+        CenaArte(quadro: Quadro(tela: geo.size), mostrarPersonagens: true)
+    }
+    .ignoresSafeArea()
+    .background(Cores.fundoClaro)
+}
+
+#Preview("CenaArte: sem personagens") {
+    GeometryReader { geo in
+        CenaArte(quadro: Quadro(tela: geo.size), mostrarPersonagens: false)
+    }
+    .ignoresSafeArea()
+    .background(Cores.fundoEscuro)
+}
+
+// As sombras com os mesmos efeitos do teatro de sombras (opacidade, borrão e maiores)
+#Preview("CenaArte: sombras") {
+    GeometryReader { geo in
+        CenaArte(quadro: Quadro(tela: geo.size), mostrarPersonagens: true, sombra: true)
+            .opacity(0.7)
+            .blur(radius: 2.5)
+            .scaleEffect(1.15, anchor: .bottom)
+    }
+    .ignoresSafeArea()
+    .background(Cores.papel)
+}

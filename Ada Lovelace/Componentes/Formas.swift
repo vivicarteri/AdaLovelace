@@ -80,3 +80,63 @@ struct Bonequinho: Shape {
         return p
     }
 }
+
+// MARK: - Previews
+
+#Preview("Gota", traits: .sizeThatFitsLayout) {
+    HStack(alignment: .bottom, spacing: 30) {
+        Gota()
+            .fill(Cores.dourado)
+            .overlay(Gota().stroke(Cores.tinta, lineWidth: 2))
+            .frame(width: 40, height: 90)
+        Gota()
+            .stroke(Cores.tinta, lineWidth: 2)
+            .frame(width: 60, height: 90)
+    }
+    .padding(30)
+    .background(Cores.papel)
+}
+
+#Preview("Estrela", traits: .sizeThatFitsLayout) {
+    HStack(spacing: 24) {
+        Estrela()
+            .fill(Cores.dourado)
+            .overlay(Estrela().stroke(Cores.tinta, lineWidth: 1.5))
+        Estrela()
+            .stroke(Cores.tinta, lineWidth: 1.5)
+        Estrela(pontas: 8, miolo: 0.6)
+            .fill(Cores.dourado)
+            .overlay(Estrela(pontas: 8, miolo: 0.6).stroke(Cores.tinta, lineWidth: 1.5))
+        Estrela(miolo: 0.25)
+            .fill(Cores.cortina)
+    }
+    .frame(height: 60)
+    .padding(30)
+    .background(Cores.papel)
+}
+
+#Preview("LuaCrescente", traits: .sizeThatFitsLayout) {
+    LuaCrescente()
+        .fill(Cores.cera)
+        .overlay(LuaCrescente().stroke(Cores.tinta, lineWidth: 2))
+        .frame(width: 120, height: 120)
+        .padding(30)
+        .background(Cores.fundoEscuro)
+}
+
+// Os braços vão de 0 (para baixo) até ~3 (bem para cima, como a trapezista)
+#Preview("Bonequinho", traits: .sizeThatFitsLayout) {
+    HStack(alignment: .bottom, spacing: 24) {
+        ForEach([0.0, 0.6, 1.5, 2.8], id: \.self) { bracos in
+            VStack(spacing: 8) {
+                Bonequinho(bracos: bracos)
+                    .stroke(Cores.tinta, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                    .frame(width: 54, height: 90)
+                Text("braços \(bracos, specifier: "%.1f")")
+                    .font(.caption2)
+            }
+        }
+    }
+    .padding(30)
+    .background(Cores.papel)
+}

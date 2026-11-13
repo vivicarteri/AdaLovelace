@@ -52,3 +52,46 @@ struct Arte<Provisorio: View>: View {
         }
     }
 }
+
+// MARK: - Previews
+
+#Preview("Cores", traits: .sizeThatFitsLayout) {
+    let cores: [(nome: String, cor: Color)] = [
+        ("papel", Cores.papel), ("tinta", Cores.tinta),
+        ("fundoEscuro", Cores.fundoEscuro), ("fundoClaro", Cores.fundoClaro),
+        ("cortina", Cores.cortina), ("dourado", Cores.dourado),
+        ("cera", Cores.cera), ("madeira", Cores.madeira),
+    ]
+    LazyVGrid(columns: Array(repeating: GridItem(.fixed(90)), count: 4), spacing: 16) {
+        ForEach(cores, id: \.nome) { item in
+            VStack(spacing: 6) {
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(item.cor)
+                    .frame(height: 60)
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(.gray, lineWidth: 1))
+                Text(item.nome).font(.caption)
+            }
+        }
+    }
+    .padding()
+}
+
+// Com a imagem no Assets ela aparece; sem a imagem, aparece a forma provisória.
+#Preview("Arte: com e sem imagem", traits: .sizeThatFitsLayout) {
+    HStack(spacing: 24) {
+        VStack {
+            Arte("lua") { Circle().fill(Cores.cortina) }
+                .frame(width: 120, height: 120)
+            Text("\"lua\" está no Assets")
+        }
+        VStack {
+            Arte("naoExiste") { Circle().fill(Cores.cortina) }
+                .frame(width: 120, height: 120)
+            Text("sem imagem → provisório")
+        }
+    }
+    .font(.caption)
+    .foregroundStyle(Cores.papel)
+    .padding()
+    .background(Cores.fundoEscuro)
+}

@@ -1,0 +1,5 @@
+# Time da Apple (DEVELOPMENT_TEAM): cada pessoa usa o seu no computador,
+# mas no commit vai sempre o time oficial do repositório.
+# Para ligar no seu computador: sh scripts/configurar-time.sh SEU_TEAM_ID
+*.xcproj  filter=time-apple
+*.pbxproj filter=time-apple

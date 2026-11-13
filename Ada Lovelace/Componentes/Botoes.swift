@@ -259,3 +259,74 @@ struct FosforoView: View {
         .frame(width: tamanho * 0.4, height: tamanho)
     }
 }
+
+// MARK: - Previews
+
+#Preview("BotaoRedondo", traits: .sizeThatFitsLayout) {
+    HStack(spacing: 20) {
+        BotaoRedondo(icone: "gearshape", rotulo: "Configurações", tamanho: 44) {}
+        BotaoRedondo(icone: "xmark", rotulo: "Fechar") {}
+        BotaoRedondo(icone: "paintbrush.pointed", rotulo: "Personalizar vela", tamanho: 60) {}
+    }
+    .padding(30)
+    .background(Cores.fundoEscuro)
+}
+
+// No Canvas, segure o botão por 1 segundo para ver o anel encher.
+#Preview("BotaoDescartar", traits: .sizeThatFitsLayout) {
+    VStack(spacing: 12) {
+        BotaoDescartar(tamanho: 60, haptics: Haptics()) { print("Descartou a vela") }
+        Text("Segure por 1 segundo")
+            .font(.caption)
+            .foregroundStyle(Cores.papel)
+    }
+    .padding(30)
+    .background(Cores.fundoEscuro)
+}
+
+#Preview("CortinaView") {
+    @Previewable @State var fechada = false
+    ZStack {
+        Cores.fundoClaro.ignoresSafeArea()
+        CortinaView(fechada: fechada)
+        Button(fechada ? "Abrir cortina" : "Fechar cortina") {
+            withAnimation(.easeInOut(duration: 1.6)) { fechada.toggle() }
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(Cores.tinta)
+    }
+}
+
+#Preview("CaixaFosforoView") {
+    @Previewable @State var aberta: CGFloat = CaixaFosforoView.emRepouso
+    let largura: CGFloat = 150
+    VStack(spacing: 40) {
+        CaixaFosforoView(largura: largura, aberta: aberta)
+            // Espaço à esquerda para a gaveta ter para onde sair
+            .padding(.leading, CaixaFosforoView.corrida(largura: largura))
+        Slider(value: $aberta, in: 0...1) { Text("Gaveta") }
+        Text("aberta: \(Double(aberta), specifier: "%.2f")  (em repouso: \(Double(CaixaFosforoView.emRepouso), specifier: "%.2f"))")
+            .font(.caption)
+            .foregroundStyle(Cores.papel)
+    }
+    .padding(30)
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .background(Cores.fundoEscuro)
+}
+
+#Preview("LixaView", traits: .sizeThatFitsLayout) {
+    LixaView()
+        .frame(width: 140, height: 30)
+        .padding(30)
+        .background(Cores.papel)
+}
+
+#Preview("FosforoView", traits: .sizeThatFitsLayout) {
+    HStack(alignment: .bottom, spacing: 40) {
+        FosforoView(aceso: false)
+        FosforoView(aceso: true)
+        FosforoView(aceso: true, tamanho: 120)
+    }
+    .padding(40)
+    .background(Cores.fundoEscuro)
+}

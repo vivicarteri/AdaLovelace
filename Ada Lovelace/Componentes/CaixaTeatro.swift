@@ -225,3 +225,92 @@ private struct ColunaListrada: View {
         .opacity(0.9)
     }
 }
+
+// MARK: - Previews
+
+// A caixa aparece 2,5x maior que no app, para dar para ver os detalhes.
+// Dentro da abertura vai o palco em miniatura, como no app.
+#Preview("CaixaTeatroView") {
+    @Previewable @State var acesa = true
+    @Previewable @State var cortina: CGFloat = 1
+    GeometryReader { geo in
+        let medidas = MedidasCaixa(tela: geo.size)
+        ZStack {
+            (acesa ? Cores.papel : Cores.fundoEscuro).ignoresSafeArea()
+            CaixaTeatroView(medidas: medidas, acesa: acesa, aberturaCortina: cortina,
+                            conteudo: AnyView(CenarioView(acesa: acesa, progresso: 0.3, mostrarPersonagens: true,
+                                                          quadro: Quadro(tela: medidas.tela))))
+                .scaleEffect(2.5)
+            VStack {
+                Toggle("Vela acesa", isOn: $acesa)
+                Slider(value: $cortina, in: 0...1) { Text("Cortina") }
+            }
+            .padding()
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+            .padding()
+            .frame(maxHeight: .infinity, alignment: .top)
+        }
+    }
+}
+
+// A caixa no tamanho e no lugar de verdade. O slider (ou o botão) faz a câmera entrar nela.
+#Preview("EfeitoCamera") {
+    @Previewable @State var z: CGFloat = 0
+    GeometryReader { geo in
+        let medidas = MedidasCaixa(tela: geo.size)
+        ZStack {
+            ZStack {
+                Cores.papel
+                CaixaTeatroView(medidas: medidas, acesa: true, aberturaCortina: 1,
+                                conteudo: AnyView(CenarioView(acesa: true, progresso: 0.3, mostrarPersonagens: true,
+                                                              quadro: Quadro(tela: medidas.tela))))
+                    .position(medidas.centro)
+            }
+            .modifier(EfeitoCamera(z: z, zoomFinal: medidas.zoomFinal,
+                                   alvo: medidas.centroDaAbertura, tela: geo.size))
+
+            VStack {
+                Slider(value: $z, in: 0...1) { Text("Zoom") }
+                Button(z < 0.5 ? "Entrar na caixa" : "Sair da caixa") {
+                    withAnimation(.easeInOut(duration: 1.6)) { z = z < 0.5 ? 1 : 0 }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Cores.tinta)
+            }
+            .padding()
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+            .padding()
+            .frame(maxHeight: .infinity, alignment: .top)
+        }
+    }
+}
+
+#Preview("CortinaCaixa") {
+    @Previewable @State var abertura: CGFloat = 0.5
+    VStack(spacing: 30) {
+        ZStack {
+            Cores.fundoClaro
+            CortinaCaixa(abertura: abertura)
+        }
+        .frame(width: 200, height: 320)
+        .clipped()
+        .overlay(Rectangle().stroke(Cores.tinta, lineWidth: 2.5))
+        Slider(value: $abertura, in: 0...1) { Text("Abertura") }
+    }
+    .padding(30)
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .background(Cores.fundoEscuro)
+}
+
+#Preview("FolhaDeCortina", traits: .sizeThatFitsLayout) {
+    FolhaDeCortina()
+        .frame(width: 100, height: 240)
+        .padding()
+}
+
+#Preview("ColunaListrada", traits: .sizeThatFitsLayout) {
+    ColunaListrada(largura: 40)
+        .frame(height: 200)
+        .padding()
+        .background(Cores.tinta)
+}
