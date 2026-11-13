@@ -28,6 +28,13 @@ final class Sessao: ObservableObject {
     // 1 = girar não muda o tempo.
     static let aceleracaoAoGirar: Double = 2
 
+    // ⚙️ Vibração da chama: com o aparelho parado por este tempo, a vibração "descansa"
+    // (poupa bateria e esquenta menos). Ela volta no instante em que a pessoa mexe.
+    static let descansoDaVibracao: TimeInterval = 15
+
+    // ⚙️ Quanto a inclinação precisa mudar para valer a pena mandar um valor novo ao motor.
+    static let mudancaMinimaDaChama: Double = 0.02
+
     // MARK: Estado que as telas leem
 
     @Published var config = VelaConfig() { didSet { salvar() } }
@@ -49,6 +56,12 @@ final class Sessao: ObservableObject {
     private var ativo = false
     private var observadores = Set<AnyCancellable>()
     private var relogio: AnyCancellable?      // o tique de 0,1 s: só existe com a vela acesa
+
+    // MARK: Vibração da chama (controle de bateria)
+
+    private var chamaVibrando = false                 // o loop da chama está tocando agora?
+    private var ultimaInclinacaoEnviada: Double = -1  // último valor que o motor recebeu
+    private var chamaLigadaEm = Date.distantPast      // acender também conta como "mexeu"
 
     init() {
         carregar()
@@ -88,7 +101,7 @@ final class Sessao: ObservableObject {
         apagouEm = nil
         ultimoTique = Date()
         haptics.acender()
-        haptics.iniciarChama()
+        ligarVibracaoDaChama()
         if somAmbienteLigado { ambiente.tocar() }
         anunciar("Vela acesa")
         atualizarRelogio()
@@ -102,7 +115,7 @@ final class Sessao: ObservableObject {
         estado = .apagada
         ultimoTique = nil
         apagouEm = Date()
-        haptics.pararChama()
+        desligarVibracaoDaChama()
         haptics.apagar()
         ambiente.parar()
         anunciar("Vela apagada. Para continuar, acenda de novo.")
@@ -112,7 +125,7 @@ final class Sessao: ObservableObject {
 
     // Joga a vela fora e coloca uma vela nova, no tamanho padrão e sem enfeites
     func descartar() {
-        haptics.pararChama()
+        desligarVibracaoDaChama()
         ambiente.parar()
         estado = .nova
         queimado = 0
@@ -137,7 +150,7 @@ final class Sessao: ObservableObject {
             haptics.ligarMotor()
             tique()                   // conta o tempo que passou com o app fechado
             if estado == .acesa {
-                haptics.iniciarChama()
+                ligarVibracaoDaChama()
                 if somAmbienteLigado { ambiente.tocar() }
             }
             atualizarRelogio()
@@ -148,6 +161,7 @@ final class Sessao: ObservableObject {
             salvar()
             movimento.parar()
             ambiente.parar()
+            desligarVibracaoDaChama()
             haptics.desligarMotor()
         default:
             break
@@ -174,7 +188,7 @@ final class Sessao: ObservableObject {
         queimado += agora.timeIntervalSince(ultimo) * Sessao.velocidadeDeTeste * fator
         ultimoTique = agora
 
-        haptics.atualizarChama(inclinacao: Float(movimento.inclinacao))
+        cuidarDaVibracaoDaChama(agora: agora)
         atualizarProgresso(comSom: true)
 
         if agora.timeIntervalSince(ultimoSalvo) > 2 { salvar() }
@@ -204,13 +218,57 @@ final class Sessao: ObservableObject {
         ultimoTique = nil
         atualizarRelogio()
         // Se estava nas sombras, a tela (PalcoView) entra na caixa com a animação da cortina
-        haptics.pararChama()
+        desligarVibracaoDaChama()
         ambiente.parar()
         if comSom {
             haptics.fim()
             anunciar("A vela acabou")
         }
         salvar()
+    }
+
+    // MARK: Vibração da chama
+
+    // Liga o loop da chama. Acender conta como "mexeu": o descanso começa a contar daqui.
+    private func ligarVibracaoDaChama() {
+        chamaLigadaEm = Date()
+        chamaVibrando = true
+        ultimaInclinacaoEnviada = movimento.inclinacao
+        haptics.iniciarChama()
+        haptics.atualizarChama(inclinacao: Float(movimento.inclinacao))
+    }
+
+    // Desliga de vez (vela apagou, acabou, foi descartada ou o app saiu da tela).
+    private func desligarVibracaoDaChama() {
+        chamaVibrando = false
+        ultimaInclinacaoEnviada = -1
+        haptics.pararChama()
+    }
+
+    // Chamado a cada tique (10x por segundo), mas quase sempre não faz nada:
+    // - aparelho parado há "descansoDaVibracao" segundos → o loop da chama descansa;
+    // - a pessoa mexeu → o loop volta na hora;
+    // - só manda valor novo ao motor quando a inclinação muda de verdade.
+    private func cuidarDaVibracaoDaChama(agora: Date) {
+        let ultimaMexida = max(movimento.mexeuEm, chamaLigadaEm)
+        let deveVibrar = agora.timeIntervalSince(ultimaMexida) < Sessao.descansoDaVibracao
+
+        if deveVibrar && !chamaVibrando {
+            chamaVibrando = true
+            ultimaInclinacaoEnviada = -1      // força mandar a força certa logo abaixo
+            haptics.iniciarChama()
+        } else if !deveVibrar && chamaVibrando {
+            chamaVibrando = false
+            ultimaInclinacaoEnviada = -1
+            haptics.pararChama()
+        }
+
+        guard chamaVibrando else { return }
+        let inclinacao = movimento.inclinacao
+        if abs(inclinacao - ultimaInclinacaoEnviada) >= Sessao.mudancaMinimaDaChama {
+            ultimaInclinacaoEnviada = inclinacao
+            haptics.atualizarChama(inclinacao: Float(inclinacao))
+        }
     }
 
     private func anunciar(_ texto: String) {

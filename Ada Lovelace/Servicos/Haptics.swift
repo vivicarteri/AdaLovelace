@@ -1,12 +1,3 @@
-//  Haptics.swift
-//  Core Haptics: som e vibração juntos.
-//
-//  - Cada momento tem um arquivo .ahap na pasta Recursos/SonsEVibracoes (Acender, Chama, Prego, Apagar, Fim).
-//    O som (.wav) fica dentro do .ahap, então som e vibração tocam juntinhos.
-//  - A chama é uma "textura" em loop, mais forte quando o celular inclina.
-//  - O motor desliga quando o app sai da tela e liga de novo quando volta.
-//  - Riscar o fósforo e segurar o "descartar" são vibrações feitas no código.
-
 import Foundation
 
 #if os(iOS)
@@ -23,6 +14,7 @@ final class Haptics {
     private var precisaLigar = true
     private var players: [String: CHHapticPatternPlayer] = [:]
     private var chama: CHHapticAdvancedPatternPlayer?
+    private var chamaTocando = false   // para religar a chama se o sistema reiniciar o motor
     private var segurar: CHHapticAdvancedPatternPlayer?
 
     init() {
@@ -45,8 +37,10 @@ final class Haptics {
 
             // Se o sistema reiniciar o motor, os players antigos não valem mais: carregamos tudo de novo
             motor.resetHandler = { [weak self] in
-                self?.precisaLigar = true
-                self?.carregarPadroes()
+                guard let self else { return }
+                self.precisaLigar = true
+                self.carregarPadroes()
+                if self.chamaTocando { self.iniciarChama() }
             }
 
             engine = motor
@@ -199,6 +193,7 @@ final class Haptics {
                 CHHapticDynamicParameter(parameterID: .hapticIntensityControl, value: 0.35, relativeTime: 0)
             ], atTime: 0)
             try chama.start(atTime: CHHapticTimeImmediate)
+            chamaTocando = true
         } catch {
             print("Erro na chama: \(error)")
         }
@@ -214,6 +209,7 @@ final class Haptics {
     }
 
     func pararChama() {
+        chamaTocando = false
         try? chama?.stop(atTime: CHHapticTimeImmediate)
     }
 }

@@ -238,6 +238,19 @@ struct FosforoView: View {
 
     static func posicaoCabeca(tamanho: CGFloat) -> CGFloat { tamanho * 0.1 }  // da cabeça até o topo da vista
 
+    // Tamanho do fósforo no palco e quanto ele fica inclinado (como na mão de alguém)
+    static let tamanhoNoPalco: CGFloat = 70
+    static let inclinacao: Angle = .degrees(-30)
+
+    // Onde fica o PÉ do fósforo em relação à cabeça, já com a inclinação.
+    // (O palito vai até 95% da altura da vista; a cabeça está em 10%.)
+    static func peDesdeACabeca(tamanho: CGFloat) -> CGSize {
+        let comprimento = tamanho * 0.85
+        let a = inclinacao.radians
+        // Girar um ponto que está "embaixo" da cabeça (0, comprimento) pelo ângulo a
+        return CGSize(width: -comprimento * sin(a), height: comprimento * cos(a))
+    }
+
     var body: some View {
         Arte(aceso ? "fosforoAceso" : "fosforo") {
             ZStack(alignment: .top) {
