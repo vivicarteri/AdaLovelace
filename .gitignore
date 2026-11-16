@@ -3,11 +3,12 @@
 
 # Xcode: arquivos pessoais de cada pessoa (evita conflito no time)
 xcuserdata/
+*.xcuserdatad/
 *.xcuserstate
 *.xcscmblueprint
 *.xccheckout
 
-# Xcode: arquivos gerados no build
+# Xcode: arquivos gerados no build e testes
 build/
 DerivedData/
 *.moved-aside
@@ -15,12 +16,17 @@ DerivedData/
 *.ipa
 *.dSYM.zip
 *.dSYM
+*.xcresult
 
 # Swift Package Manager
 .build/
 .swiftpm/
-Packages/
+/Packages/
 
 # Playgrounds
 timeline.xctimeline
 playground.xcworkspace
+
+# Arquivos temporários dos scripts de configuração
+*.tmp
+*.time-apple-tmp

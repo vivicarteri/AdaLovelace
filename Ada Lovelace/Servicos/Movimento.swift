@@ -8,6 +8,7 @@
 
 import Foundation
 import Combine
+import OSLog
 #if os(iOS)
 import CoreMotion
 import UIKit
@@ -42,6 +43,7 @@ final class Movimento: ObservableObject {
     private(set) var mexeuEm = Date()
 
     #if os(iOS)
+    private let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "AdaLovelace", category: "Movimento")
     // Onde era o "para cima" da tela quando a vela foi acesa. O "virar para apagar" é medido
     // a partir daqui, e não da tela de agora: no iPad a tela gira junto quando a pessoa
     // vira o aparelho, e aí a vela nunca ficaria "de cabeça para baixo".
@@ -57,11 +59,18 @@ final class Movimento: ObservableObject {
         #if os(iOS)
         guard manager.isDeviceMotionAvailable, !manager.isDeviceMotionActive else { return }
         mexeuEm = Date()
+        mudouEm = nil
+        invertido = false
         gravidadeDeReferencia = nil
         manager.deviceMotionUpdateInterval = 1.0 / 30.0
 
-        manager.startDeviceMotionUpdates(to: .main) { [weak self] dados, _ in
-            guard let self, let g = dados?.gravity else { return }
+        manager.startDeviceMotionUpdates(to: .main) { [weak self] dados, erro in
+            guard let self else { return }
+            if let erro {
+                self.log.error("Falha ao ler sensores de movimento: \(erro.localizedDescription)")
+                return
+            }
+            guard let g = dados?.gravity else { return }
 
             // Em pé, a gravidade puxa para a base do celular: g = (0, -1, 0) → ângulo 0.
             // O sensor mede em relação ao aparelho EM PÉ. Com a tela deitada (iPad),
@@ -94,9 +103,21 @@ final class Movimento: ObservableObject {
                 self.gravidadeDeReferencia = g
             }
 
+            // Se a pessoa só girou o iPad 90° (de em pé para deitado ou vice-versa) e está
+            // segurando ele firme na nova posição, acompanha o novo topo da tela sem perder
+            // a detecção de 180° (de cabeça para baixo).
+            let topoAtual = Movimento.topoDaTela(tela)
+            if let ref = self.topoDeReferencia {
+                let ortogonal = abs(ref.x * topoAtual.x + ref.y * topoAtual.y) < 0.1
+                let emPeNaNovaOrientacao = (g.x * topoAtual.x + g.y * topoAtual.y) < -0.75
+                if ortogonal && emPeNaNovaOrientacao {
+                    self.topoDeReferencia = topoAtual
+                }
+            }
+
             // De cabeça para baixo = a gravidade puxa para o TOPO da tela.
             // (Com a tela em pé, o topo é +y do aparelho: g.y ≈ +1.)
-            let topo = self.topoDeReferencia ?? Movimento.topoDaTela(tela)
+            let topo = self.topoDeReferencia ?? topoAtual
             let estaInvertido = g.x * topo.x + g.y * topo.y > 0.8
 
             // Só muda depois de meio segundo, para um giro sem querer não apagar a vela
@@ -117,6 +138,7 @@ final class Movimento: ObservableObject {
     func fixarReferencia() {
         #if os(iOS)
         topoDeReferencia = Movimento.topoDaTela(Movimento.orientacaoDaTela())
+        mudouEm = nil
         #endif
     }
 
@@ -124,6 +146,7 @@ final class Movimento: ObservableObject {
     func soltarReferencia() {
         #if os(iOS)
         topoDeReferencia = nil
+        mudouEm = nil
         #endif
     }
 
@@ -140,6 +163,7 @@ final class Movimento: ObservableObject {
     func parar() {
         #if os(iOS)
         manager.stopDeviceMotionUpdates()
+        mudouEm = nil
         #endif
     }
 

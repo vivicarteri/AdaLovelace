@@ -1,5 +1,19 @@
 # Time da Apple (DEVELOPMENT_TEAM): cada pessoa usa o seu no computador,
 # mas no commit vai sempre o time oficial do repositório.
 # Para ligar no seu computador: sh scripts/configurar-time.sh SEU_TEAM_ID
-*.xcproj  filter=time-apple
-*.pbxproj filter=time-apple
+*.xcproj  filter=time-apple text eol=lf
+*.pbxproj filter=time-apple text eol=lf
+
+# Código, scripts e configurações sempre com quebra de linha LF
+*.swift   text eol=lf
+*.sh      text eol=lf
+*.ahap    text eol=lf
+*.json    text eol=lf
+*.md      text eol=lf
+
+# Arquivos de imagem, áudio e vídeo tratados como binários
+*.png     binary
+*.wav     binary
+*.m4a     binary
+*.mp3     binary
+*.mov     binary
