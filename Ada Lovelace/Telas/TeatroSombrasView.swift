@@ -40,7 +40,7 @@ struct TeatroSombrasView: View {
                         if arteExiste("tendasombra") {
                             // Sombras desenhadas pela Georgia
                             CenaArte(quadro: Quadro(geo: geo), mostrarPersonagens: true,
-                                     sombra: true, congelado: congelado)
+                                     sombra: true, congelado: congelado, luz: sessao.movimento)
                         } else {
                             // Sem arte: as figuras provisórias pintadas de preto
                             CenarioView(acesa: true, progresso: sessao.progresso, mostrarPersonagens: true, comFundo: false)
@@ -90,10 +90,14 @@ struct TeatroSombrasView: View {
                     HStack {
                         BotaoRedondo(icone: "arrow.up.left.and.arrow.down.right", rotulo: "Entrar na caixa",
                                      tamanho: 44, acao: entrar)
-                            .popoverTip(DicaEntrarNaCaixa(), arrowEdge: .top)
                         Spacer()
                         BotaoRedondo(icone: "gearshape", rotulo: "Configurações", tamanho: 44, acao: abrirConfiguracoes)
                     }
+                    // Dica EMBUTIDA na tela (e não um balão por cima): o balão (popoverTip) bloqueava
+                    // a tela, e a pinça feita com ele aberto só fechava a dica.
+                    TipView(DicaEntrarNaCaixa(), arrowEdge: .top)
+                        .frame(maxWidth: 340)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     Spacer()
                 }
                 .padding(.horizontal, 20)

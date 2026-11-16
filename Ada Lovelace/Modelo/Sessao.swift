@@ -4,6 +4,12 @@
 
 import SwiftUI
 import Combine
+import TipKit
+
+// Jeitos de apagar a vela (para a dica "outro jeito de apagar").
+enum JeitoDeApagar: String {
+    case toque, virar, sopro
+}
 
 enum EstadoVela: String, Codable {
     case nova      // vela inteira, ainda não acesa (home)
@@ -19,6 +25,14 @@ enum Chaves {
     static let acelerarTempo = "acelerarTempo"            // só para teste (Configurações, rodando pelo Xcode)
     static let velocidadeDoTempo = "velocidadeDoTempo"    // 2 a 20: quantas vezes mais rápido
     static let sessaoSalva = "sessaoSalva"
+    static let somObjetos = "somObjetos"          // sons dos alfinetes e penduricalhos caindo
+    static let movimento = "movimentoLigado"      // Core Motion: inclinar e virar o aparelho
+    static let resetarDicas = "resetarDicas"      // mostra as dicas de novo na próxima abertura
+
+    // Lê uma chave de liga/desliga (quando nunca foi mexida, vale o padrão)
+    static func ligado(_ chave: String, padrao: Bool = true) -> Bool {
+        UserDefaults.standard.object(forKey: chave) as? Bool ?? padrao
+    }
 }
 
 final class Sessao: ObservableObject {
@@ -36,6 +50,8 @@ final class Sessao: ObservableObject {
         return 1
         #endif
     }
+
+    static var velocidade: Double { velocidadeDeTeste }
 
     // ⚙️ Girar o celular faz a vela derreter mais rápido (regra de negócio).
     // 2 = bem inclinada derrete até 2x mais rápido. (Valor provisório: o time ainda vai decidir.)
@@ -57,6 +73,10 @@ final class Sessao: ObservableObject {
     @Published private(set) var caidos: Set<UUID> = []         // enfeites que já caíram
     @Published private(set) var apagouEm: Date?                // para desenhar a fumaça
     @Published var foraDaCaixa = false                         // true = teatro de sombras (zoom out)
+    @Published private(set) var derretendoRapido = false       // a pessoa está segurando o Descartar
+
+    // ⚙️ Segurando o Descartar, uma vela INTEIRA derrete em 4 segundos (uma pela metade, em 2).
+    static let segundosParaDerreterTudo: Double = 4
 
     let movimento = Movimento()
     let haptics = Haptics()
@@ -87,7 +107,7 @@ final class Sessao: ObservableObject {
         movimento.$invertido
             .removeDuplicates()
             .sink { [weak self] invertido in
-                if invertido { self?.apagar() }
+                if invertido { self?.apagar(jeito: .virar) }
             }
             .store(in: &observadores)
     }
@@ -95,7 +115,7 @@ final class Sessao: ObservableObject {
     // O relógio só roda com o app na tela E a vela acesa.
     // Assim o app não acorda 10 vezes por segundo à toa (bateria).
     private func atualizarRelogio() {
-        let precisa = ativo && estado == .acesa
+        let precisa = ativo && (estado == .acesa || (derretendoRapido && estado == .apagada))
         if precisa {
             guard relogio == nil else { return }
             relogio = Timer.publish(every: 0.1, on: .main, in: .common)
@@ -117,6 +137,7 @@ final class Sessao: ObservableObject {
         apagouEm = nil
         ultimoTique = Date()
         haptics.acender()
+        movimento.fixarReferencia()
         ligarVibracaoDaChama()
         if somAmbienteLigado { ambiente.tocar() }
         anunciar("Vela acesa")
@@ -124,13 +145,16 @@ final class Sessao: ObservableObject {
         salvar()
     }
 
-    func apagar() {
+    func apagar(jeito: JeitoDeApagar) {
         guard estado == .acesa else { return }
+        contar(jeito)
         tique()                       // guarda o tempo que queimou até agora
         guard estado == .acesa else { return }   // pode ter acabado nesse último tique
         estado = .apagada
-        ultimoTique = nil
+        // Se a pessoa está segurando o Descartar, a vela continua derretendo mesmo apagada
+        ultimoTique = derretendoRapido ? Date() : nil
         apagouEm = Date()
+        movimento.soltarReferencia()
         desligarVibracaoDaChama()
         haptics.apagar()
         ambiente.parar()
@@ -139,8 +163,65 @@ final class Sessao: ObservableObject {
         salvar()
     }
 
+    // TipKit: 3 vezes seguidas do mesmo jeito → sugere outro jeito de apagar.
+    // Quando a pessoa usa o jeito sugerido, a dica some de vez (aprendeu).
+    private func contar(_ jeito: JeitoDeApagar) {
+        let padrao = UserDefaults.standard
+        let mesmo = padrao.string(forKey: "ultimoJeitoDeApagar") == jeito.rawValue
+        let vezes = mesmo ? padrao.integer(forKey: "vezesDoMesmoJeito") + 1 : 1
+        padrao.set(jeito.rawValue, forKey: "ultimoJeitoDeApagar")
+        padrao.set(vezes, forKey: "vezesDoMesmoJeito")
+
+        let sugerido: JeitoDeApagar? = DicaOutroJeitoDeApagar.sugestao == 1 ? .toque
+            : DicaOutroJeitoDeApagar.sugestao == 2 ? .virar : nil
+        if sugerido == jeito {
+            DicaOutroJeitoDeApagar().invalidate(reason: .actionPerformed)
+            DicaOutroJeitoDeApagar.sugestao = 0
+        } else if vezes >= 3 {
+            switch jeito {
+            case .toque:
+                // Só sugere virar se o movimento estiver ligado nas Configurações
+                if movimentoLigado { DicaOutroJeitoDeApagar.sugestao = 2 }
+            case .virar, .sopro:
+                DicaOutroJeitoDeApagar.sugestao = 1
+            }
+        }
+    }
+
+    // DESCARTE CONTÍNUO (regra de negócio): enquanto a pessoa segura o botão, a vela derrete
+    // rápido. Soltou, para. Se chegar no fim, a vela acaba (estado .acabou, "Finalizada").
+    func comecarADerreter() {
+        guard estado == .acesa || estado == .apagada, !derretendoRapido else { return }
+        tique()                                   // guarda o tempo normal até aqui
+        derretendoRapido = true
+        if ultimoTique == nil { ultimoTique = Date() }   // vela apagada também derrete
+        let falta = max(0.3, (1 - progresso) * Sessao.segundosParaDerreterTudo)
+        haptics.iniciarSegurar(duracao: falta)    // vibração que vai crescendo
+        atualizarRelogio()
+    }
+
+    func pararDeDerreter() {
+        guard derretendoRapido else { return }
+        tique()
+        derretendoRapido = false
+        haptics.cancelarSegurar()
+        if estado == .apagada { ultimoTique = nil }   // apagada, o tempo volta a ficar parado
+        atualizarRelogio()
+        salvar()
+    }
+
+    // VoiceOver (não dá para segurar): derrete tudo de uma vez, depois de confirmar
+    func derreterAteOFim() {
+        guard estado == .acesa || estado == .apagada else { return }
+        derretendoRapido = false
+        haptics.cancelarSegurar()
+        queimado = config.duracao
+        atualizarProgresso(comSom: true)
+    }
+
     // Joga a vela fora e coloca uma vela nova, no tamanho padrão e sem enfeites
     func descartar() {
+        movimento.soltarReferencia()
         desligarVibracaoDaChama()
         ambiente.parar()
         estado = .nova
@@ -164,15 +245,17 @@ final class Sessao: ObservableObject {
         case .active:
             guard !ativo else { return }
             ativo = true
-            movimento.iniciar()
+            if movimentoLigado { movimento.iniciar() }
             haptics.ligarMotor()
             tique()                   // conta o tempo que passou com o app fechado
             if estado == .acesa {
+                movimento.fixarReferencia()
                 ligarVibracaoDaChama()
                 if somAmbienteLigado { ambiente.tocar() }
             }
             atualizarRelogio()
         case .background:
+            pararDeDerreter()
             ativo = false
             atualizarRelogio()
             tique()
@@ -186,10 +269,22 @@ final class Sessao: ObservableObject {
         }
     }
 
+    // Chamado quando a pessoa liga ou desliga o movimento (Core Motion) nas Configurações.
+    // Desligado: inclinar não acelera a vela, virar não apaga e a chama fica parada em pé.
+    func atualizarMovimento() {
+        if movimentoLigado && ativo {
+            movimento.iniciar()
+        } else {
+            movimento.parar()
+            movimento.zerar()
+        }
+    }
+
+    private var movimentoLigado: Bool { Chaves.ligado(Chaves.movimento) }
     func atualizarSopro() {
         let habilitado = UserDefaults.standard.object(forKey: Chaves.apagarSoprando) as? Bool ?? true
         if cenaAtiva && estado == .acesa && habilitado {
-            sopro.iniciar { [weak self] in self?.apagar() }
+            sopro.iniciar { [weak self] in self?.apagar(jeito: .sopro) }
         } else {
             sopro.parar()
         }
@@ -215,13 +310,20 @@ final class Sessao: ObservableObject {
     // O tempo é somado a cada tique pela diferença de datas, e não contando tiques.
     // Assim a vela continua certa mesmo se o app travar ou ficar fechado.
     private func tique() {
-        guard estado == .acesa, let ultimo = ultimoTique else { return }
+        let derretendo = derretendoRapido && estado == .apagada
+        guard estado == .acesa || derretendo, let ultimo = ultimoTique else { return }
         let agora = Date()
-        let fator = 1 + (Sessao.aceleracaoAoGirar - 1) * movimento.inclinacao
-        queimado += agora.timeIntervalSince(ultimo) * Sessao.velocidadeDeTeste * fator
+        let passou = agora.timeIntervalSince(ultimo)
+        if derretendoRapido {
+            // Segurando o Descartar: derrete rápido (a vela inteira em poucos segundos)
+            queimado += passou * config.duracao / Sessao.segundosParaDerreterTudo
+        } else {
+            let fator = 1 + (Sessao.aceleracaoAoGirar - 1) * movimento.inclinacao
+            queimado += passou * Sessao.velocidade * fator
+        }
         ultimoTique = agora
 
-        cuidarDaVibracaoDaChama(agora: agora)
+        if estado == .acesa { cuidarDaVibracaoDaChama(agora: agora) }
         atualizarProgresso(comSom: true)
 
         if agora.timeIntervalSince(ultimoSalvo) > 2 { salvar() }
@@ -231,8 +333,8 @@ final class Sessao: ObservableObject {
         progresso = min(1, queimado / config.duracao)
 
         // Um enfeite cai quando a cera chega na altura dele
-        let topoDaCera = 1 - progresso
-        let novos = config.enfeites.filter { !caidos.contains($0.id) && $0.altura >= topoDaCera }
+        // Cai quando a CERA chega no enfeite (e não a ponta do pavio)
+        let novos = config.enfeites.filter { !caidos.contains($0.id) && config.caiu($0, progresso: progresso) }
         if !novos.isEmpty {
             caidos.formUnion(novos.map(\.id))
             if comSom, let maisAlto = novos.map(\.altura).max() {
@@ -249,8 +351,13 @@ final class Sessao: ObservableObject {
         guard estado != .acabou else { return }
         estado = .acabou
         ultimoTique = nil
+        if derretendoRapido {
+            derretendoRapido = false
+            haptics.cancelarSegurar()
+        }
         atualizarRelogio()
         // Se estava nas sombras, a tela (PalcoView) entra na caixa com a animação da cortina
+        movimento.soltarReferencia()
         desligarVibracaoDaChama()
         ambiente.parar()
         if comSom {
@@ -337,12 +444,11 @@ final class Sessao: ObservableObject {
 
         // Se a vela ficou acesa com o app fechado, ela continuou queimando
         if estado == .acesa, let antes = salvo.ultimoTique {
-            queimado += Date().timeIntervalSince(antes) * Sessao.velocidadeDeTeste
+            queimado += Date().timeIntervalSince(antes) * Sessao.velocidade
             ultimoTique = Date()
         }
         progresso = min(1, queimado / config.duracao)
-        let topoDaCera = 1 - progresso
-        caidos.formUnion(config.enfeites.filter { $0.altura >= topoDaCera }.map(\.id))
+        caidos.formUnion(config.enfeites.filter { config.caiu($0, progresso: progresso) }.map(\.id))
         if progresso >= 1 && estado == .acesa {
             estado = .acabou
             ultimoTique = nil

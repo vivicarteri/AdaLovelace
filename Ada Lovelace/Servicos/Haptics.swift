@@ -139,13 +139,16 @@ final class Haptics {
     // forca: 0 a 1 (enfeite mais alto = cai de mais alto = batida mais forte e som mais alto)
     func prego(forca: Float) {
         let f = max(0, min(1, forca))
-        tocar("Prego", forca: 0.5 + 0.5 * f, volume: 0.4 + 0.6 * f)
+        tocar("Prego", forca: 0.5 + 0.5 * f, volume: (0.4 + 0.6 * f) * volumeDosObjetos)
     }
 
     // Enfeite que não encostou na vela e caiu no pote
     func caiuNoPote() {
-        tocar("Prego", forca: 0.3, volume: 0.25)
+        tocar("Prego", forca: 0.3, volume: 0.25 * volumeDosObjetos)
     }
+
+    // "Sons dos objetos" desligado nas Configurações: a vibração continua, o som some
+    private var volumeDosObjetos: Float { Chaves.ligado(Chaves.somObjetos) ? 1 : 0 }
 
     // Batidinha leve (slider, encaixar enfeite…)
     func tique() { toque(forca: 0.5, nitidez: 0.5) }

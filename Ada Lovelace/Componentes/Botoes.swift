@@ -25,23 +25,33 @@ struct BotaoRedondo: View {
     }
 }
 
-// Botão de descartar: precisa SEGURAR por 1 segundo (para não jogar a vela fora sem querer).
-// O anel vai enchendo e a vibração vai crescendo. Com o VoiceOver, pede confirmação.
+// Botão de descartar. Funciona de dois jeitos (regra de negócio "Descarte contínuo"):
+//
+//  - Vela acesa ou apagada (passe "derreter"): ENQUANTO a pessoa segura, a vela derrete rápido.
+//    Soltou, para. Segurou até o fim, a vela acaba (estado Finalizada). O anel mostra o quanto
+//    da vela já foi embora ("anel", de 0 a 1).
+//  - Vela que já acabou (sem "derreter"): um TOQUE (ou segurar) coloca uma vela nova.
+//    Antes era só segurando 1 segundo, e ninguém descobria: parecia que o app tinha travado.
+//
+// Com o VoiceOver não dá para segurar, então pede confirmação.
 struct BotaoDescartar: View {
     var tamanho: CGFloat = 52
     var haptics: Haptics
+    var anel: Double? = nil                      // quanto da vela já derreteu (modo derreter)
+    var derreter: ((Bool) -> Void)? = nil        // true = começou a segurar, false = soltou
     var descartar: () -> Void
 
     @State private var segurando = false
     @State private var confirmar = false
     private var duracao: TimeInterval { 1 }
+    private var modoDerreter: Bool { derreter != nil }
 
     var body: some View {
         ZStack {
             Circle().fill(Cores.papel)
             Circle().stroke(Cores.tinta, lineWidth: 2)
             Circle()
-                .trim(from: 0, to: segurando ? 1 : 0)
+                .trim(from: 0, to: modoDerreter ? CGFloat(anel ?? 0) : (segurando ? 1 : 0))
                 .stroke(Cores.cortina, style: StrokeStyle(lineWidth: 5, lineCap: .round))
                 .rotationEffect(.degrees(-90))
                 .padding(3)
@@ -57,14 +67,26 @@ struct BotaoDescartar: View {
             .frame(width: tamanho * 0.6, height: tamanho * 0.6)
         }
         .frame(width: tamanho, height: tamanho)
+        .scaleEffect(segurando && modoDerreter ? 0.92 : 1)
         .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
         .contentShape(Circle())
-        .onLongPressGesture(minimumDuration: duracao, maximumDistance: 30) {
+        // Vela acabada: um toque já basta (não tem mais nada a perder)
+        .simultaneousGesture(TapGesture().onEnded {
+            guard !modoDerreter else { return }
+            haptics.tique()
+            descartar()
+        })
+        .onLongPressGesture(minimumDuration: modoDerreter ? 3600 : duracao, maximumDistance: 30) {
+            // Só chega aqui no modo "vela nova" (no modo derreter o tempo é enorme de propósito)
+            guard !modoDerreter else { return }
             haptics.cancelarSegurar()
             segurando = false
             descartar()
         } onPressingChanged: { pressionando in
-            if pressionando {
+            if let derreter {
+                withAnimation(.easeOut(duration: 0.15)) { segurando = pressionando }
+                derreter(pressionando)      // a Sessao derrete e cuida da vibração
+            } else if pressionando {
                 haptics.iniciarSegurar(duracao: duracao)
                 withAnimation(.linear(duration: duracao)) { segurando = true }
             } else {
@@ -73,12 +95,13 @@ struct BotaoDescartar: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Descartar vela")
-        .accessibilityHint("Joga esta vela fora e coloca uma nova")
+        .accessibilityLabel(modoDerreter ? "Derreter a vela" : "Vela nova")
+        .accessibilityHint(modoDerreter ? "Derrete a vela até o fim" : "Joga esta vela fora e coloca uma nova")
         .accessibilityAddTraits(.isButton)
         .accessibilityAction { confirmar = true }
-        .confirmationDialog("Descartar esta vela?", isPresented: $confirmar, titleVisibility: .visible) {
-            Button("Descartar", role: .destructive, action: descartar)
+        .confirmationDialog(modoDerreter ? "Derreter a vela até o fim?" : "Colocar uma vela nova?",
+                            isPresented: $confirmar, titleVisibility: .visible) {
+            Button(modoDerreter ? "Derreter" : "Vela nova", role: .destructive, action: descartar)
             Button("Cancelar", role: .cancel) {}
         }
     }

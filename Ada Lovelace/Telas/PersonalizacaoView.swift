@@ -17,6 +17,8 @@ struct PersonalizacaoView: View {
     var confirmar: (VelaConfig) -> Void
 
     @State private var rascunho: VelaConfig
+    private let original: VelaConfig                 // como a vela estava ao entrar
+    @State private var confirmarSaida = false        // "sair sem salvar?"
 
     private enum Aba { case tempo, alfinete, penduricalho }
     @State private var aba: Aba = .tempo
@@ -38,6 +40,7 @@ struct PersonalizacaoView: View {
         self.fechar = fechar
         self.confirmar = confirmar
         _rascunho = State(initialValue: config)
+        original = config
     }
 
     var body: some View {
@@ -90,7 +93,16 @@ struct PersonalizacaoView: View {
     private var barraDeCima: some View {
         VStack {
             HStack {
-                BotaoRedondo(icone: "xmark", rotulo: "Fechar sem salvar", tamanho: 44, acao: fechar)
+                // Se a pessoa mudou alguma coisa, pergunta antes de jogar fora (dupla confirmação)
+                BotaoRedondo(icone: "xmark", rotulo: "Fechar sem salvar", tamanho: 44) {
+                    if rascunho == original { fechar() } else { confirmarSaida = true }
+                }
+                .confirmationDialog("Sair sem salvar?", isPresented: $confirmarSaida, titleVisibility: .visible) {
+                    Button("Descartar alterações", role: .destructive, action: fechar)
+                    Button("Continuar editando", role: .cancel) {}
+                } message: {
+                    Text("As mudanças que você fez na vela vão se perder.")
+                }
                 Spacer()
                 BotaoRedondo(icone: "checkmark", rotulo: "Confirmar", tamanho: 44) {
                     haptics.tique()

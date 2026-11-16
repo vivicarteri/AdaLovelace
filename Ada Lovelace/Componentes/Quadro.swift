@@ -56,6 +56,7 @@ enum ArteVela {
     static let chamaLargura: CGFloat = 107
     static let chamaAltura: CGFloat = 247
     static let chamaDesvioX: CGFloat = -6.5  // a chama fica um pouquinho à esquerda do centro
+    static let pavio: CGFloat = 40           // do topo do desenho até onde a CERA começa (o resto é pavio)
 }
 
 // ARTE ANIMADA (quadro a quadro)
@@ -163,6 +164,11 @@ struct CenaArte: View {
     var mostrarPersonagens: Bool
     var sombra = false
     var congelado = false   // durante a transição de zoom tudo para, para o movimento ficar liso
+    var luz: Movimento? = nil   // só nas sombras: a chama inclina, a luz muda de lugar e as sombras andam
+
+    // ⚙️ Quanto as sombras andam quando a chama deita (em pixels do Quadro) e quanto elas giram
+    static let andarDaSombra: CGFloat = 110
+    static let giroDaSombra: Double = 0.05
 
     @Environment(\.accessibilityReduceMotion) private var reduzirMovimento
 
@@ -175,6 +181,10 @@ struct CenaArte: View {
                                 paused: reduzirMovimento || congelado
                                         || (!mostrarPersonagens && !CenaArte.temArteAnimada))) { contexto in
             let t = reduzirMovimento ? 0 : contexto.date.timeIntervalSinceReferenceDate
+            // A chama inclina com o aparelho: a luz vai para um lado, então as sombras vão
+            // para o OUTRO e giram de leve. Usa o ângulo LENTO (sem o balancinho rápido da
+            // chama), senão a parede inteira ficava pulando.
+            let chama = sombra && !reduzirMovimento ? (luz?.anguloLento ?? 0) : 0
             ZStack {
                 camada("tenda", PosicaoArte.tenda, t: t, indice: 0)
                 // A lua antiga saiu: no lugar dela passam as peças novas da Georgia (lua e passarinho).
@@ -185,6 +195,8 @@ struct CenaArte: View {
                 // Os acrobatas saíram do cenário (pedido do time). As imagens continuam no Assets.
                 camada("picadeiro", PosicaoArte.picadeiro, t: t, indice: 4)
             }
+            .rotationEffect(.radians(-chama * CenaArte.giroDaSombra), anchor: .bottom)
+            .offset(x: -CGFloat(sin(chama)) * CenaArte.andarDaSombra * quadro.escala)
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
@@ -216,12 +228,12 @@ struct CenaArte: View {
     }
 
     // Respiração da chama nas sombras: bem lenta e bem leve, só para a parede não ficar morta.
-    // (Era rápida demais e cansava a vista — as contas abaixo são ~4x mais lentas e mais suaves.)
+    // (Ainda estava forte: agora é ~metade da velocidade e menos da metade do tamanho de antes.)
     static func tremor(t: Double, indice: Double) -> (escala: CGFloat, dx: CGFloat, opacidade: Double) {
-        let a = sin(t * 1.7 + indice * 1.7) * 0.6 + sin(t * 2.9 + indice * 2.3) * 0.4
-        let b = sin(t * 1.3 + indice * 2.9) * 0.6 + sin(t * 2.3 + indice * 0.7) * 0.4
-        let c = sin(t * 1.1 + indice * 1.3) * 0.5 + sin(t * 0.7 + indice * 3.1) * 0.5
-        return (1 + 0.005 * CGFloat(a), 0.7 * CGFloat(b), 0.94 + 0.06 * c)
+        let a = sin(t * 0.9 + indice * 1.7) * 0.6 + sin(t * 1.5 + indice * 2.3) * 0.4
+        let b = sin(t * 0.7 + indice * 2.9) * 0.6 + sin(t * 1.2 + indice * 0.7) * 0.4
+        let c = sin(t * 0.6 + indice * 1.3) * 0.5 + sin(t * 0.4 + indice * 3.1) * 0.5
+        return (1 + 0.002 * CGFloat(a), 0.3 * CGFloat(b), 0.97 + 0.03 * c)
     }
 
     // Nomes das imagens no Assets

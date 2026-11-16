@@ -31,6 +31,26 @@ struct DicaEntrarNaCaixa: Tip {
     var rules: [Rule] { #Rule(Self.$estaForaDaCaixa) { $0 } }
 }
 
+// Quem apaga a vela do MESMO jeito 3 vezes seguidas ganha a dica de um jeito diferente
+// (regra de negócio do TipKit). Quem decide a sugestão é a Sessao.
+struct DicaOutroJeitoDeApagar: Tip {
+    // 0 = nada a sugerir, 1 = tocar na chama, 2 = virar o aparelho de cabeça para baixo
+    @Parameter static var sugestao: Int = 0
+    // Só aparece com a vela acesa (é quando dá para experimentar)
+    @Parameter static var velaAcesa: Bool = false
+
+    var title: Text { Text("Outro jeito de apagar") }
+    var message: Text? {
+        Text(Self.sugestao == 2 ? "Vire o aparelho de cabeça para baixo e a chama apaga."
+                                : "Toque na chama para apagar a vela.")
+    }
+    var image: Image? { Image(systemName: Self.sugestao == 2 ? "arrow.uturn.down" : "hand.tap") }
+    var rules: [Rule] {
+        #Rule(Self.$sugestao) { $0 != 0 }
+        #Rule(Self.$velaAcesa) { $0 }
+    }
+}
+
 // MARK: - Previews
 //
 // Nas previews o app não roda o MyApp.init(), então o TipKit é ligado aqui.
