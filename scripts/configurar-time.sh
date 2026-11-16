@@ -29,6 +29,35 @@ fi
 git config time-apple.meuTime "$meu_time"
 git config filter.time-apple.clean "sh scripts/filtro-time-apple.sh clean"
 git config filter.time-apple.smudge "sh scripts/filtro-time-apple.sh smudge"
+git config filter.time-apple.required true
+
+# O smudge normalmente ajusta arquivos durante checkout. Em um pull integrado
+# por merge, reaplica o Team ID local após o merge para manter o projeto pronto
+# para abrir no Xcode.
+hooks_dir=$(git rev-parse --git-path hooks)
+post_merge="$hooks_dir/post-merge"
+marcador="# configurado por scripts/configurar-time.sh"
+if [ -e "$post_merge" ] && ! grep -Fq "$marcador" "$post_merge"; then
+    echo "Aviso: já existe um hook post-merge em $post_merge; ele não foi sobrescrito."
+else
+    cat > "$post_merge" <<'HOOK'
+#!/bin/sh
+# configurado por scripts/configurar-time.sh
+set -e
+cd "$(git rev-parse --show-toplevel)"
+
+git ls-files '*.xcproj' '*.pbxproj' | while IFS= read -r arquivo; do
+    temporario="$arquivo.time-apple-tmp"
+    if sh scripts/filtro-time-apple.sh smudge < "$arquivo" > "$temporario"; then
+        mv "$temporario" "$arquivo"
+    else
+        rm -f "$temporario"
+        exit 1
+    fi
+done
+HOOK
+    chmod +x "$post_merge"
+fi
 
 # Coloca o seu time no projeto que já está aqui, sem perder nenhuma outra mudança sua
 git ls-files '*.xcproj' '*.pbxproj' | while IFS= read -r arquivo; do
