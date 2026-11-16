@@ -56,6 +56,7 @@ enum ArteVela {
     static let chamaLargura: CGFloat = 107
     static let chamaAltura: CGFloat = 247
     static let chamaDesvioX: CGFloat = -6.5  // a chama fica um pouquinho à esquerda do centro
+    static let pavio: CGFloat = 40           // do topo do desenho até onde a CERA começa (o resto é pavio)
 }
 
 // ARTE ANIMADA (quadro a quadro)
@@ -163,6 +164,11 @@ struct CenaArte: View {
     var mostrarPersonagens: Bool
     var sombra = false
     var congelado = false   // durante a transição de zoom tudo para, para o movimento ficar liso
+    var luz: Movimento? = nil   // só nas sombras: a chama inclina, a luz muda de lugar e as sombras andam
+
+    // ⚙️ Quanto as sombras andam quando a chama deita (em pixels do Quadro) e quanto elas giram
+    static let andarDaSombra: CGFloat = 180
+    static let giroDaSombra: Double = 0.12
 
     @Environment(\.accessibilityReduceMotion) private var reduzirMovimento
 
@@ -175,6 +181,9 @@ struct CenaArte: View {
                                 paused: reduzirMovimento || congelado
                                         || (!mostrarPersonagens && !CenaArte.temArteAnimada))) { contexto in
             let t = reduzirMovimento ? 0 : contexto.date.timeIntervalSinceReferenceDate
+            // A chama inclina igual na VelaView (ângulo do aparelho + o balancinho da chama).
+            // A luz vai para um lado, então as sombras vão para o OUTRO e giram de leve.
+            let chama = sombra ? (luz?.angulo ?? 0) + (reduzirMovimento ? 0 : 0.04 * sin(t * 7)) : 0
             ZStack {
                 camada("tenda", PosicaoArte.tenda, t: t, indice: 0)
                 // A lua antiga saiu: no lugar dela passam as peças novas da Georgia (lua e passarinho).
@@ -185,6 +194,8 @@ struct CenaArte: View {
                 // Os acrobatas saíram do cenário (pedido do time). As imagens continuam no Assets.
                 camada("picadeiro", PosicaoArte.picadeiro, t: t, indice: 4)
             }
+            .rotationEffect(.radians(-chama * CenaArte.giroDaSombra), anchor: .bottom)
+            .offset(x: -CGFloat(sin(chama)) * CenaArte.andarDaSombra * quadro.escala)
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)

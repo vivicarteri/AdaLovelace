@@ -38,6 +38,10 @@ final class Movimento: ObservableObject {
     private(set) var mexeuEm = Date()
 
     #if os(iOS)
+    // Onde era o "para cima" da tela quando a vela foi acesa. O "virar para apagar" é medido
+    // a partir daqui, e não da tela de agora: no iPad a tela gira junto quando a pessoa
+    // vira o aparelho, e aí a vela nunca ficaria "de cabeça para baixo".
+    private var topoDeReferencia: (x: Double, y: Double)?
     private let manager = CMMotionManager()
     private var mudouEm: Date?
     // Gravidade da última vez que contou como "mexeu". Usamos a gravidade inteira (x, y, z),
@@ -79,7 +83,7 @@ final class Movimento: ObservableObject {
 
             // De cabeça para baixo = a gravidade puxa para o TOPO da tela.
             // (Com a tela em pé, o topo é +y do aparelho: g.y ≈ +1.)
-            let topo = Movimento.topoDaTela(tela)
+            let topo = self.topoDeReferencia ?? Movimento.topoDaTela(tela)
             let estaInvertido = g.x * topo.x + g.y * topo.y > 0.8
 
             // Só muda depois de meio segundo, para um giro sem querer não apagar a vela
@@ -93,6 +97,29 @@ final class Movimento: ObservableObject {
                 self.mudouEm = nil
             }
         }
+        #endif
+    }
+
+    // Chamado quando a vela acende (e quando o app volta com ela acesa)
+    func fixarReferencia() {
+        #if os(iOS)
+        topoDeReferencia = Movimento.topoDaTela(Movimento.orientacaoDaTela())
+        #endif
+    }
+
+    // Chamado quando a vela apaga, acaba ou é descartada
+    func soltarReferencia() {
+        #if os(iOS)
+        topoDeReferencia = nil
+        #endif
+    }
+
+    // Volta tudo para "em pé" (usado quando o movimento é desligado nas Configurações)
+    func zerar() {
+        angulo = 0
+        invertido = false
+        #if os(iOS)
+        mudouEm = nil
         #endif
     }
 

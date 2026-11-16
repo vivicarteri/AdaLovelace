@@ -2,9 +2,9 @@
 //  A tela principal: a home E a vela queimando (é a mesma tela, muda a luz e os botões).
 //
 //  Antes de acender:            personalizar, acender (caixa de fósforos) e configurações
-//  Depois de acender:           descartar, zoom out e configurações
-//  Apagou antes de acabar:      descartar, acender, zoom out e configurações
-//  Depois de acabar:            descartar e configurações (a cortina desce)
+//  Depois de acender:           descartar (segurar = derrete rápido), zoom out e configurações
+//  Apagou antes de acabar:      descartar (segurar = derrete rápido), acender, zoom out e configurações
+//  Depois de acabar:            vela nova (segurar 1 s) e configurações (a cortina desce)
 
 import SwiftUI
 import TipKit
@@ -208,12 +208,18 @@ struct PalcoView: View {
                     if podeSair {
                         BotaoRedondo(icone: "arrow.down.right.and.arrow.up.left", rotulo: "Ver o teatro de sombras",
                                      tamanho: 44, acao: sairDaCaixa)
-                            .popoverTip(DicaSairDaCaixa(), arrowEdge: .top)
                             .transition(.opacity)
                     }
                     Spacer()
                     BotaoRedondo(icone: "gearshape", rotulo: "Configurações", tamanho: 44, acao: abrirConfiguracoes)
                 }
+                // Dicas EMBUTIDAS na tela (e não balões por cima): o balão (popoverTip) bloqueava
+                // a tela, e a pinça feita com ele aberto só fechava a dica.
+                TipView(DicaSairDaCaixa(), arrowEdge: .top)
+                    .frame(maxWidth: 340)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                TipView(DicaOutroJeitoDeApagar())
+                    .frame(maxWidth: 340)
                 Spacer()
             }
             .padding(.horizontal, 20)
@@ -227,8 +233,18 @@ struct PalcoView: View {
                         trocarComCortina { personalizando = true }
                     }
                     .transition(.move(edge: .leading).combined(with: .opacity))
-                } else if estado != .nova && !trocando && etapa == .guardado {
+                } else if estado == .acabou && !trocando {
+                    // Vela que acabou: segurar 1 segundo coloca uma vela nova
                     BotaoDescartar(tamanho: 60, haptics: sessao.haptics, descartar: descartar)
+                        .transition(.move(edge: .leading).combined(with: .opacity))
+                } else if estado != .nova && !trocando && etapa == .guardado {
+                    // Acesa ou apagada: segurar derrete a vela rápido; soltar para
+                    BotaoDescartar(tamanho: 60, haptics: sessao.haptics,
+                                   anel: sessao.progresso,
+                                   derreter: { segurando in
+                                       if segurando { sessao.comecarADerreter() } else { sessao.pararDeDerreter() }
+                                   },
+                                   descartar: { sessao.derreterAteOFim() })
                         .transition(.move(edge: .leading).combined(with: .opacity))
                 }
             }
@@ -459,7 +475,7 @@ struct PalcoView: View {
     // a pessoa precisa do fósforo, igual a virar o aparelho de cabeça para baixo.
     private func apagarTocandoNaChama() {
         guard sessao.estado == .acesa, !trocando, !trocandoCena else { return }
-        sessao.apagar()
+        sessao.apagar(jeito: .toque)
     }
 
     // A chama apaga, a vela afunda pelo alçapão, a cortina desce e sobe uma vela nova
@@ -494,6 +510,7 @@ struct PalcoView: View {
     private func atualizarDicas() {
         DicaSairDaCaixa.podeSair = sessao.estado == .acesa || sessao.estado == .apagada
         DicaEntrarNaCaixa.estaForaDaCaixa = sessao.foraDaCaixa
+        DicaOutroJeitoDeApagar.velaAcesa = sessao.estado == .acesa && !sessao.foraDaCaixa
     }
 
     // O que o VoiceOver fala sobre a vela (sem números, como na tela)

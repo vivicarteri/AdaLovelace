@@ -48,6 +48,20 @@ struct VelaConfig: Codable, Equatable {
     var minutos: Int { VelaConfig.minutos(para: posicaoSlider) }
     var duracao: TimeInterval { Double(minutos) * 60 }
 
+    // Onde está a CERA agora (0 = base, 1 = topo da vela inteira).
+    // O topo do desenho da vela é a ponta do pavio, e não a cera: sem descontar o pavio,
+    // o enfeite ficava "flutuando" no ar um tempinho antes de cair.
+    func topoDaCera(progresso: Double) -> Double {
+        let alturaDaVelaNaArte = Double(GeometriaVela.alturaCheia(posicao: posicaoSlider,
+                                                                  alturaMaxima: ArteVela.alturaMaxima))
+        return 1 - progresso - Double(ArteVela.pavio) / alturaDaVelaNaArte
+    }
+
+    // O enfeite já caiu? (a cera derreteu até a altura dele)
+    func caiu(_ enfeite: Enfeite, progresso: Double) -> Bool {
+        enfeite.altura >= topoDaCera(progresso: progresso)
+    }
+
     func quantos(_ tipo: TipoEnfeite) -> Int {
         enfeites.filter { $0.tipo == tipo }.count
     }
