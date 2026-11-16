@@ -64,7 +64,7 @@ struct TeatroSombrasView: View {
                 .accessibilityHidden(true)
 
                 Arte("letreiro") {
-                    Text("Shadow Theater")
+                    Text("Teatro de Sombras")
                         .font(.system(size: 22, weight: .bold, design: .serif).italic())
                         .foregroundStyle(Cores.tinta)
                         .padding(.horizontal, 18)

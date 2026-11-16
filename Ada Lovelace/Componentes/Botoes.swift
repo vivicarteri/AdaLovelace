@@ -30,7 +30,8 @@ struct BotaoRedondo: View {
 //  - Vela acesa ou apagada (passe "derreter"): ENQUANTO a pessoa segura, a vela derrete rápido.
 //    Soltou, para. Segurou até o fim, a vela acaba (estado Finalizada). O anel mostra o quanto
 //    da vela já foi embora ("anel", de 0 a 1).
-//  - Vela que já acabou (sem "derreter"): segurar por 1 segundo joga a vela fora e coloca uma nova.
+//  - Vela que já acabou (sem "derreter"): um TOQUE (ou segurar) coloca uma vela nova.
+//    Antes era só segurando 1 segundo, e ninguém descobria: parecia que o app tinha travado.
 //
 // Com o VoiceOver não dá para segurar, então pede confirmação.
 struct BotaoDescartar: View {
@@ -69,6 +70,12 @@ struct BotaoDescartar: View {
         .scaleEffect(segurando && modoDerreter ? 0.92 : 1)
         .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
         .contentShape(Circle())
+        // Vela acabada: um toque já basta (não tem mais nada a perder)
+        .simultaneousGesture(TapGesture().onEnded {
+            guard !modoDerreter else { return }
+            haptics.tique()
+            descartar()
+        })
         .onLongPressGesture(minimumDuration: modoDerreter ? 3600 : duracao, maximumDistance: 30) {
             // Só chega aqui no modo "vela nova" (no modo derreter o tempo é enorme de propósito)
             guard !modoDerreter else { return }

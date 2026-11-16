@@ -77,6 +77,9 @@ struct PalcoView: View {
                 CortinaView(fechada: cortinaTela)
             }
             .allowsHitTesting(!trocandoCena)
+            .onChange(of: alturaDaChamaNaTela(g, caixa, geo), initial: true) { _, altura in
+                sessao.chamaMudouDeLugar(altura)
+            }
         }
         .onAppear {
             cortinaFechada = sessao.estado == .acabou
@@ -96,6 +99,23 @@ struct PalcoView: View {
                 }
             }
         }
+    }
+
+    // Onde a chama está na tela: 0 = embaixo, 1 = em cima.
+    // O sopro usa isso para escolher o microfone mais perto da chama.
+    // Conta a tela inteira (com a barra de status e a de baixo), porque os microfones
+    // ficam nas pontas do aparelho, e não nas pontas da área segura.
+    private func alturaDaChamaNaTela(_ g: LayoutPalco, _ caixa: MedidasCaixa, _ geo: GeometryProxy) -> Double {
+        let y: CGFloat
+        if sessao.foraDaCaixa {
+            y = caixa.centroDaAbertura.y   // nas sombras a vela fica dentro da caixa, lá embaixo
+        } else {
+            let topoCera = g.baseY - g.alturaCheia(sessao.config.posicaoSlider) * CGFloat(1 - sessao.progresso)
+            y = topoCera + VelaView.centroDaChama(largura: g.larguraVela).y
+        }
+        let margens = geo.safeAreaInsets
+        let alturaDaTela = max(geo.size.height + margens.top + margens.bottom, 1)
+        return min(1, max(0, Double(1 - (y + margens.top) / alturaDaTela)))
     }
 
     // MARK: - Dentro da caixa (zoom in)
@@ -174,6 +194,13 @@ struct PalcoView: View {
 
             CortinaView(fechada: cortinaFechada)
 
+            // A vela acabou e a cortina fechou: letreiro de "Fim" e a cortina inteira vira
+            // um botão para começar de novo (antes não tinha nenhuma pista e parecia travado).
+            if estado == .acabou && cortinaFechada && !trocando && !miniatura {
+                fimDoEspetaculo(g)
+                    .transition(.opacity)
+            }
+
             if !miniatura {
                 botoes(g)
                     .opacity(mostrarBotoes ? 1 : 0)
@@ -193,6 +220,38 @@ struct PalcoView: View {
                 }
             }
         )
+    }
+
+    // Letreiro pendurado na cortina fechada. Tocar em qualquer lugar da cortina abre uma vela nova.
+    private func fimDoEspetaculo(_ g: LayoutPalco) -> some View {
+        ZStack {
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    sessao.haptics.tique()
+                    descartar()
+                }
+            VStack(spacing: 14) {
+                Text("Fim")
+                    .font(.system(size: 34, weight: .bold, design: .serif).italic())
+                    .foregroundStyle(Cores.tinta)
+                    .padding(.horizontal, 30)
+                    .padding(.vertical, 10)
+                    .background(Capsule().fill(Cores.papel))
+                    .overlay(Capsule().stroke(Cores.tinta, lineWidth: 2))
+                Text("Toque para acender uma vela nova")
+                    .font(.system(size: 17, weight: .semibold, design: .serif))
+                    .foregroundStyle(Cores.papel)
+                    .multilineTextAlignment(.center)
+            }
+            .position(x: g.tamanho.width / 2, y: g.tamanho.height * 0.42)
+            .allowsHitTesting(false)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Fim. A vela acabou")
+        .accessibilityHint("Toque duas vezes para colocar uma vela nova")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { descartar() }
     }
 
     // MARK: Botões

@@ -25,6 +25,10 @@ final class Movimento: ObservableObject {
     // Não é @Published de propósito: muda 30 vezes por segundo e só a chama precisa ler.
     private(set) var angulo: Double = 0
 
+    // O mesmo ângulo, só que bem mais devagar. As sombras usam este: a parede
+    // acompanha a chama com calma, sem tremer junto com cada mexidinha.
+    private(set) var anguloLento: Double = 0
+
     // 0 = em pé, 1 = deitado. Quem lê é a Sessao, para acelerar a vela.
     var inclinacao: Double {
         min(1, abs(angulo) / Movimento.anguloDaInclinacaoMaxima)
@@ -63,12 +67,21 @@ final class Movimento: ObservableObject {
             // O sensor mede em relação ao aparelho EM PÉ. Com a tela deitada (iPad),
             // descontamos o giro da tela, senão a chama ficaria torta 90°.
             let tela = Movimento.orientacaoDaTela()
-            let alvo = atan2(-g.x, -g.y) - Movimento.giroDaTela(tela)
+            let cru = atan2(-g.x, -g.y) - Movimento.giroDaTela(tela)
+
+            // Celular deitado (na mesa): a gravidade quase não aparece na tela e o ângulo
+            // vira ruído, pulando para todo lado — a chama e as sombras ficavam sacudindo
+            // com o aparelho parado. Então, quanto mais deitado, mais o ângulo volta para
+            // "em pé". (planar = quanto da gravidade está na tela: 1 em pé, 0 deitado.)
+            let planar = (g.x * g.x + g.y * g.y).squareRoot()
+            let firmeza = Movimento.suave((planar - 0.2) / 0.3)    // 0 até ~12°, 1 a partir de ~30°
+            let alvo = Movimento.aproximar(de: 0, para: cru, passo: firmeza)
 
             // Suavizado, para a chama não dar pulos.
             // A diferença é ajustada para o caminho curto: assim o giro não dá a volta
             // ao passar de +180° para -180° (celular de cabeça para baixo).
             self.angulo = Movimento.aproximar(de: self.angulo, para: alvo, passo: 0.2)
+            self.anguloLento = Movimento.aproximar(de: self.anguloLento, para: self.angulo, passo: 0.05)
 
             // Mexeu de verdade? (distância entre a gravidade de agora e a de referência)
             if let ref = self.gravidadeDeReferencia {
@@ -117,6 +130,7 @@ final class Movimento: ObservableObject {
     // Volta tudo para "em pé" (usado quando o movimento é desligado nas Configurações)
     func zerar() {
         angulo = 0
+        anguloLento = 0
         invertido = false
         #if os(iOS)
         mudouEm = nil
@@ -127,6 +141,12 @@ final class Movimento: ObservableObject {
         #if os(iOS)
         manager.stopDeviceMotionUpdates()
         #endif
+    }
+
+    // 0 → 0 e 1 → 1, com começo e fim macios (sem tranco)
+    static func suave(_ x: Double) -> Double {
+        let t = min(1, max(0, x))
+        return t * t * (3 - 2 * t)
     }
 
     // Caminha um pouquinho do ângulo atual até o alvo, sempre pelo lado mais curto do círculo.

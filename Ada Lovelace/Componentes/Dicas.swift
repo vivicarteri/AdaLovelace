@@ -33,7 +33,6 @@ struct DicaEntrarNaCaixa: Tip {
 
 // Quem apaga a vela do MESMO jeito 3 vezes seguidas ganha a dica de um jeito diferente
 // (regra de negócio do TipKit). Quem decide a sugestão é a Sessao.
-// ⚠️ Quando o sopro do Luca chegar no projeto, ele entra aqui como mais uma sugestão.
 struct DicaOutroJeitoDeApagar: Tip {
     // 0 = nada a sugerir, 1 = tocar na chama, 2 = virar o aparelho de cabeça para baixo
     @Parameter static var sugestao: Int = 0
