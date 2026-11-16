@@ -15,6 +15,7 @@ enum EstadoVela: String, Codable {
 enum Chaves {
     static let viuOnboarding = "viuOnboarding"
     static let somAmbiente = "somAmbiente"
+    static let apagarSoprando = "apagarSoprando"
     static let sessaoSalva = "sessaoSalva"
 }
 
@@ -38,7 +39,7 @@ final class Sessao: ObservableObject {
     // MARK: Estado que as telas leem
 
     @Published var config = VelaConfig() { didSet { salvar() } }
-    @Published private(set) var estado: EstadoVela = .nova
+    @Published private(set) var estado: EstadoVela = .nova { didSet { atualizarSopro() } }
     @Published private(set) var progresso: Double = 0          // 0 = inteira, 1 = acabou
     @Published private(set) var caidos: Set<UUID> = []         // enfeites que já caíram
     @Published private(set) var apagouEm: Date?                // para desenhar a fumaça
@@ -47,6 +48,8 @@ final class Sessao: ObservableObject {
     let movimento = Movimento()
     let haptics = Haptics()
     private let ambiente = SomAmbiente()
+    private let sopro = Sopro()
+    private var cenaAtiva = false
 
     // MARK: Tempo
 
@@ -142,6 +145,8 @@ final class Sessao: ObservableObject {
     // MARK: Ciclo do app (aberto, em segundo plano…)
 
     func mudouFase(_ fase: ScenePhase) {
+        cenaAtiva = fase == .active
+        defer { atualizarSopro() }
         switch fase {
         case .active:
             guard !ativo else { return }
@@ -165,6 +170,15 @@ final class Sessao: ObservableObject {
             haptics.desligarMotor()
         default:
             break
+        }
+    }
+
+    func atualizarSopro() {
+        let habilitado = UserDefaults.standard.object(forKey: Chaves.apagarSoprando) as? Bool ?? true
+        if cenaAtiva && estado == .acesa && habilitado {
+            sopro.iniciar { [weak self] in self?.apagar() }
+        } else {
+            sopro.parar()
         }
     }
 
