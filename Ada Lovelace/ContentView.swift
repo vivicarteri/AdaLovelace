@@ -7,6 +7,7 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject private var sessao: Sessao
     @AppStorage(Chaves.somAmbiente) private var somAmbiente = true
+    @AppStorage(Chaves.apagarSoprando) private var apagarSoprando = true
     @Environment(\.scenePhase) private var scenePhase
     @State private var mostrarConfiguracoes = false
 
@@ -15,8 +16,8 @@ struct ContentView: View {
             .sheet(isPresented: $mostrarConfiguracoes) {
                 ConfiguracoesView()
             }
-            .onAppear { sessao.mudouFase(.active) }
-            .onChange(of: scenePhase) { _, fase in sessao.mudouFase(fase) }
+            .onChange(of: scenePhase, initial: true) { _, fase in sessao.mudouFase(fase) }
+            .onChange(of: apagarSoprando) { _, _ in sessao.atualizarSopro() }
             .onChange(of: somAmbiente) { _, _ in sessao.atualizarAmbiente() }
     }
 }

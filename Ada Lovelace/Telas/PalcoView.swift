@@ -77,6 +77,9 @@ struct PalcoView: View {
                 CortinaView(fechada: cortinaTela)
             }
             .allowsHitTesting(!trocandoCena)
+            .onChange(of: alturaDaChamaNaTela(g, caixa, geo), initial: true) { _, altura in
+                sessao.chamaMudouDeLugar(altura)
+            }
         }
         .onAppear {
             cortinaFechada = sessao.estado == .acabou
@@ -96,6 +99,23 @@ struct PalcoView: View {
                 }
             }
         }
+    }
+
+    // Onde a chama está na tela: 0 = embaixo, 1 = em cima.
+    // O sopro usa isso para escolher o microfone mais perto da chama.
+    // Conta a tela inteira (com a barra de status e a de baixo), porque os microfones
+    // ficam nas pontas do aparelho, e não nas pontas da área segura.
+    private func alturaDaChamaNaTela(_ g: LayoutPalco, _ caixa: MedidasCaixa, _ geo: GeometryProxy) -> Double {
+        let y: CGFloat
+        if sessao.foraDaCaixa {
+            y = caixa.centroDaAbertura.y   // nas sombras a vela fica dentro da caixa, lá embaixo
+        } else {
+            let topoCera = g.baseY - g.alturaCheia(sessao.config.posicaoSlider) * CGFloat(1 - sessao.progresso)
+            y = topoCera + VelaView.centroDaChama(largura: g.larguraVela).y
+        }
+        let margens = geo.safeAreaInsets
+        let alturaDaTela = max(geo.size.height + margens.top + margens.bottom, 1)
+        return min(1, max(0, Double(1 - (y + margens.top) / alturaDaTela)))
     }
 
     // MARK: - Dentro da caixa (zoom in)

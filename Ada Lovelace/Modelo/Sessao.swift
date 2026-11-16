@@ -15,13 +15,27 @@ enum EstadoVela: String, Codable {
 enum Chaves {
     static let viuOnboarding = "viuOnboarding"
     static let somAmbiente = "somAmbiente"
+    static let apagarSoprando = "apagarSoprando"
+    static let acelerarTempo = "acelerarTempo"            // só para teste (Configurações, rodando pelo Xcode)
+    static let velocidadeDoTempo = "velocidadeDoTempo"    // 2 a 20: quantas vezes mais rápido
     static let sessaoSalva = "sessaoSalva"
 }
 
 final class Sessao: ObservableObject {
 
-    // ⚙️ Para testar rápido: 60 = cada minuto da vela dura 1 segundo. Voltem para 1 antes de entregar!
-    static let velocidadeDeTeste: Double = 1
+    // ⚙️ Para testar rápido: nas Configurações dá para acelerar o tempo de 2x a 20x
+    // (20x = cada minuto da vela dura 3 segundos). Isso só existe rodando pelo Xcode (Debug):
+    // no app de verdade (Release) o tempo é sempre normal, então não tem como esquecer ligado.
+    static var velocidadeDeTeste: Double {
+        #if DEBUG
+        let padrao = UserDefaults.standard
+        guard padrao.bool(forKey: Chaves.acelerarTempo) else { return 1 }
+        let escolhida = padrao.double(forKey: Chaves.velocidadeDoTempo)
+        return min(20, max(2, escolhida == 0 ? 2 : escolhida))
+        #else
+        return 1
+        #endif
+    }
 
     // ⚙️ Girar o celular faz a vela derreter mais rápido (regra de negócio).
     // 2 = bem inclinada derrete até 2x mais rápido. (Valor provisório: o time ainda vai decidir.)
@@ -38,7 +52,7 @@ final class Sessao: ObservableObject {
     // MARK: Estado que as telas leem
 
     @Published var config = VelaConfig() { didSet { salvar() } }
-    @Published private(set) var estado: EstadoVela = .nova
+    @Published private(set) var estado: EstadoVela = .nova { didSet { atualizarSopro() } }
     @Published private(set) var progresso: Double = 0          // 0 = inteira, 1 = acabou
     @Published private(set) var caidos: Set<UUID> = []         // enfeites que já caíram
     @Published private(set) var apagouEm: Date?                // para desenhar a fumaça
@@ -47,6 +61,8 @@ final class Sessao: ObservableObject {
     let movimento = Movimento()
     let haptics = Haptics()
     private let ambiente = SomAmbiente()
+    private let sopro = Sopro()
+    private var cenaAtiva = false
 
     // MARK: Tempo
 
@@ -142,6 +158,8 @@ final class Sessao: ObservableObject {
     // MARK: Ciclo do app (aberto, em segundo plano…)
 
     func mudouFase(_ fase: ScenePhase) {
+        cenaAtiva = fase == .active
+        defer { atualizarSopro() }
         switch fase {
         case .active:
             guard !ativo else { return }
@@ -166,6 +184,21 @@ final class Sessao: ObservableObject {
         default:
             break
         }
+    }
+
+    func atualizarSopro() {
+        let habilitado = UserDefaults.standard.object(forKey: Chaves.apagarSoprando) as? Bool ?? true
+        if cenaAtiva && estado == .acesa && habilitado {
+            sopro.iniciar { [weak self] in self?.apagar() }
+        } else {
+            sopro.parar()
+        }
+    }
+
+    // Chamado pela PalcoView quando a chama muda de lugar na tela (0 = embaixo, 1 = em cima).
+    // O sopro usa isso para ouvir pelo microfone mais perto da chama.
+    func chamaMudouDeLugar(_ altura: Double) {
+        sopro.alturaDaChama = altura
     }
 
     // Chamado quando a pessoa liga ou desliga o som ambiente nas Configurações
