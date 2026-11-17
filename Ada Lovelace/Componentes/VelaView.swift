@@ -83,7 +83,8 @@ struct VelaView: View {
                 if acesa {
                     Group {
                         if usaArte {
-                            ChamaView(tamanho: ArteVela.chamaAltura * escalaArte, movimento: movimento)
+                            ChamaView(tamanho: ArteVela.chamaAltura * escalaArte,
+                                      movimento: movimento, ancora: ArteVela.ancoraDaChama)
                                 .offset(x: ArteVela.chamaDesvioX * escalaArte, y: ArteVela.chamaDentro * escalaArte)
                         } else {
                             ChamaView(tamanho: largura * 1.2, movimento: movimento)
@@ -234,38 +235,50 @@ struct EnfeiteView: View {
 struct ChamaView: View {
     var tamanho: CGFloat
     var movimento: Movimento? = nil
+    var ancora: UnitPoint = .bottom
     @Environment(\.accessibilityReduceMotion) private var reduzirMovimento
+
+    // A ponta vai para a direita, volta pelo centro e repete para a esquerda.
+    private static let sequencia = [3, 1, 2, 1, 3, 6, 4, 5, 4, 6]
 
     var body: some View {
         TimelineView(.animation) { contexto in
             let t = contexto.date.timeIntervalSinceReferenceDate
+            let imagem = quadroDaChama(em: t)
             let tremor = reduzirMovimento ? 0 : 0.06 * sin(t * 11) + 0.04 * sin(t * 17.3)
             let f = 1 + tremor
             let angulo = (movimento?.angulo ?? 0) + (reduzirMovimento ? 0 : 0.04 * sin(t * 7))
 
             ZStack(alignment: .bottom) {
-                if arteExiste("velaChama") {
-                    Image("velaChama")
+                if arteExiste(imagem) {
+                    Image(imagem)
                         .resizable()
                         .frame(width: tamanho * ArteVela.chamaLargura / ArteVela.chamaAltura, height: tamanho)
                 } else {
-                Gota()
-                    .fill(LinearGradient(colors: [Color(red: 1, green: 0.86, blue: 0.42),
-                                                  Color(red: 0.96, green: 0.46, blue: 0.12)],
-                                         startPoint: .top, endPoint: .bottom))
-                    .frame(width: tamanho * 0.42, height: tamanho)
-                Gota()
-                    .fill(Color(red: 1, green: 0.98, blue: 0.85))
-                    .frame(width: tamanho * 0.2, height: tamanho * 0.45)
-                    .padding(.bottom, tamanho * 0.04)
+                    Gota()
+                        .fill(LinearGradient(colors: [Color(red: 1, green: 0.86, blue: 0.42),
+                                                      Color(red: 0.96, green: 0.46, blue: 0.12)],
+                                             startPoint: .top, endPoint: .bottom))
+                        .frame(width: tamanho * 0.42, height: tamanho)
+                    Gota()
+                        .fill(Color(red: 1, green: 0.98, blue: 0.85))
+                        .frame(width: tamanho * 0.2, height: tamanho * 0.45)
+                        .padding(.bottom, tamanho * 0.04)
                 }
             }
-            .scaleEffect(x: 1 / sqrt(f), y: f, anchor: .bottom)
-            .rotationEffect(.radians(angulo), anchor: .bottom)
+            .scaleEffect(x: 1 / sqrt(f), y: f, anchor: ancora)
+            .rotationEffect(.radians(angulo), anchor: ancora)
         }
         .frame(width: tamanho, height: tamanho, alignment: .bottom)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+
+    private func quadroDaChama(em t: TimeInterval) -> String {
+        guard !reduzirMovimento else { return "velaChama" }
+        let passo = Int(max(0, t) * ArteAnimada.fpsPadrao) % Self.sequencia.count
+        let nome = "velaChama_\(Self.sequencia[passo])"
+        return arteExiste(nome) ? nome : "velaChama"
     }
 }
 

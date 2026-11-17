@@ -19,7 +19,7 @@ final class Movimento: ObservableObject {
     // 90° = deitado de lado. (Valor provisório: o time ainda vai decidir.)
     static let anguloDaInclinacaoMaxima: Double = .pi / 2
 
-    // De cabeça para baixo (por mais de meio segundo) → a vela apaga
+    // Passou do ângulo para apagar por mais de meio segundo.
     @Published private(set) var invertido = false
 
     // Para onde fica "para cima" no mundo, em radianos (-π a π).
@@ -43,6 +43,8 @@ final class Movimento: ObservableObject {
     private(set) var mexeuEm = Date()
 
     #if os(iOS)
+    // Em pé é 0° e de lado é 90°. A projeção da gravidade no topo vale -cos(ângulo).
+    private static let gravidadeMinimaParaApagar = -cos(100 * Double.pi / 180)
     private let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "AdaLovelace", category: "Movimento")
     // Onde era o "para cima" da tela quando a vela foi acesa. O "virar para apagar" é medido
     // a partir daqui, e não da tela de agora: no iPad a tela gira junto quando a pessoa
@@ -115,10 +117,9 @@ final class Movimento: ObservableObject {
                 }
             }
 
-            // De cabeça para baixo = a gravidade puxa para o TOPO da tela.
-            // (Com a tela em pé, o topo é +y do aparelho: g.y ≈ +1.)
+            // Apaga quando a gravidade aponta o suficiente para o topo de referência.
             let topo = self.topoDeReferencia ?? topoAtual
-            let estaInvertido = g.x * topo.x + g.y * topo.y > 0.8
+            let estaInvertido = g.x * topo.x + g.y * topo.y > Movimento.gravidadeMinimaParaApagar
 
             // Só muda depois de meio segundo, para um giro sem querer não apagar a vela
             if estaInvertido != self.invertido {
