@@ -40,8 +40,9 @@ struct CenarioView: View {
                     .allowsHitTesting(false)
             }
         }
-        .animation(.easeInOut(duration: 1.2), value: acesa)
-        .animation(.easeInOut(duration: 1.2), value: mostrarPersonagens)
+        // Acender é quase instantâneo (a chama é a resposta do toque); apagar continua devagar.
+        .animation(.easeInOut(duration: acesa ? 0.1 : 1.2), value: acesa)
+        .animation(.easeInOut(duration: mostrarPersonagens ? 0.1 : 1.2), value: mostrarPersonagens)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(descricao)
     }
@@ -89,8 +90,8 @@ struct CenarioView: View {
                 .frame(width: w * 0.95, height: h * 0.13)
                 .position(x: w / 2, y: h * 0.83)
             }
-            .animation(.easeInOut(duration: 1.2), value: acesa)
-            .animation(.easeInOut(duration: 1.2), value: mostrarPersonagens)
+            .animation(.easeInOut(duration: acesa ? 0.1 : 1.2), value: acesa)
+            .animation(.easeInOut(duration: mostrarPersonagens ? 0.1 : 1.2), value: mostrarPersonagens)
         }
         .ignoresSafeArea()
         .accessibilityElement(children: .ignore)

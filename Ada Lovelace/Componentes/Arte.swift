@@ -24,14 +24,27 @@ enum Cores {
     static let madeira = Color(red: 0.36, green: 0.25, blue: 0.17)
 }
 
+// O Assets não muda enquanto o app roda. Guardar a resposta evita um UIImage(named:)
+// a cada quadro da chama (60 fps) e no primeiro desenho do cenário ao acender.
+@MainActor private enum CacheDeArte {
+    static var valores: [String: Bool] = [:]
+}
+
+@MainActor
 func arteExiste(_ nome: String) -> Bool {
+    if let existe = CacheDeArte.valores[nome] { return existe }
+
+    let existe: Bool
     #if canImport(UIKit)
-    return UIImage(named: nome) != nil
+    existe = UIImage(named: nome) != nil
     #elseif canImport(AppKit)
-    return NSImage(named: nome) != nil
+    existe = NSImage(named: nome) != nil
     #else
-    return false
+    existe = false
     #endif
+
+    CacheDeArte.valores[nome] = existe
+    return existe
 }
 
 // Usa a imagem do Assets se ela existir. Se não, mostra a forma provisória.

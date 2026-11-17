@@ -72,7 +72,9 @@ final class Sessao: ObservableObject {
     @Published private(set) var progresso: Double = 0          // 0 = inteira, 1 = acabou
     @Published private(set) var caidos: Set<UUID> = []         // enfeites que já caíram
     @Published private(set) var apagouEm: Date?                // para desenhar a fumaça
-    @Published var foraDaCaixa = false                         // true = teatro de sombras (zoom out)
+    // true = teatro de sombras (zoom out). Fora da caixa a vela nem está na tela:
+    // o microfone desliga junto para um sopro não apagar uma vela que a pessoa não vê.
+    @Published var foraDaCaixa = false { didSet { atualizarSopro() } }
     @Published private(set) var derretendoRapido = false       // a pessoa está segurando o Descartar
 
     // ⚙️ Segurando o Descartar, uma vela INTEIRA derrete em 4 segundos (uma pela metade, em 2).
@@ -162,7 +164,7 @@ final class Sessao: ObservableObject {
         atualizarRelogio()
         salvar()
     }
-
+    
     // TipKit: 3 vezes seguidas do mesmo jeito → sugere outro jeito de apagar.
     // Quando a pessoa usa o jeito sugerido, a dica some de vez (aprendeu).
     private func contar(_ jeito: JeitoDeApagar) {
@@ -283,7 +285,7 @@ final class Sessao: ObservableObject {
     private var movimentoLigado: Bool { Chaves.ligado(Chaves.movimento) }
     func atualizarSopro() {
         let habilitado = UserDefaults.standard.object(forKey: Chaves.apagarSoprando) as? Bool ?? true
-        if cenaAtiva && estado == .acesa && habilitado {
+        if cenaAtiva && estado == .acesa && habilitado && !foraDaCaixa {
             sopro.iniciar { [weak self] in self?.apagar(jeito: .sopro) }
         } else {
             sopro.parar()

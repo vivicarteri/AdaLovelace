@@ -55,7 +55,10 @@ enum ArteVela {
     static let chamaDentro: CGFloat = 22     // quanto a chama entra no pavio
     static let chamaLargura: CGFloat = 107
     static let chamaAltura: CGFloat = 247
-    static let chamaDesvioX: CGFloat = -6.5  // a chama fica um pouquinho à esquerda do centro
+    static let chamaDesvioX: CGFloat = -10   // centro da ponta do pavio em velaTopo
+    private static let pontaDoPavioY: CGFloat = 4
+    // A ponta fica dentro da base opaca da chama e vira o centro da rotação.
+    static let ancoraDaChama = UnitPoint(x: 0.5, y: 1 - (chamaDentro - pontaDoPavioY) / chamaAltura)
     static let pavio: CGFloat = 40           // do topo do desenho até onde a CERA começa (o resto é pavio)
 }
 
