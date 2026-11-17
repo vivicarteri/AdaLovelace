@@ -21,6 +21,25 @@ final class Sopro {
 
     private enum Lado { case cima, baixo }
 
+    // O resultado da parte cara (AVAudioSession + AVAudioEngine), montado fora da main thread.
+    // Só volta para a main quando está tudo pronto; a chama não espera por isso.
+    private struct CapturaAudio: @unchecked Sendable {
+        let motor: AVAudioEngine
+        let analisador: AnalisadorSopro
+        let fonteID: Int
+        let lado: Lado
+        let fonteAnterior: (AVAudioSessionPortDescription, AVAudioSessionDataSourceDescription?)
+    }
+
+    private enum FalhaSopro: Error {
+        case semMicrofone
+        case formatoInvalido(taxa: Double, canais: Int)
+        case audio(String)
+    }
+
+    // Uma fila só para áudio: ligar e desligar nunca se atropelam.
+    private let filaDeAudio = DispatchQueue(label: "AdaLovelace.Sopro.audio", qos: .userInitiated)
+
     private let sessaoAudio = AVAudioSession.sharedInstance()
     private let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "AdaLovelace", category: "Sopro")
     private var motor: AVAudioEngine?
@@ -31,6 +50,7 @@ final class Sopro {
     private var categoriaAnterior: (AVAudioSession.Category, AVAudioSession.Mode, AVAudioSession.CategoryOptions)?
     private var fonteAnterior: (AVAudioSessionPortDescription, AVAudioSessionDataSourceDescription?)?
     private var capturaID: UUID?
+    private var preparandoCaptura = false
     private var solicitandoPermissao = false
     private var aoSoprar: (() -> Void)?
     private var tempoSoprando = 0.0
@@ -48,7 +68,7 @@ final class Sopro {
             case .cima:  novo = alturaDaChama < Sopro.alturaDaTroca - Sopro.folgaDaTroca ? .baixo : .cima
             case .baixo: novo = alturaDaChama > Sopro.alturaDaTroca + Sopro.folgaDaTroca ? .cima : .baixo
             }
-            guard novo != lado else { return }
+            guard !Sopro.mesmoLado(novo, lado) else { return }
             lado = novo
             log.info("Chama a \(Int(self.alturaDaChama * 100))% da tela: microfone de \(novo == .cima ? "cima" : "baixo").")
             if capturaID != nil {
@@ -82,8 +102,13 @@ final class Sopro {
         pararCaptura(restaurarSessao: true)
     }
 
-    private func escolherFonte(em microfone: AVAudioSessionPortDescription) -> (Lado, AVAudioSessionDataSourceDescription)? {
-        let ladoAlternativo: Lado = lado == .cima ? .baixo : .cima
+    private nonisolated static func escolherFonte(_ lado: Lado, em microfone: AVAudioSessionPortDescription) -> (Lado, AVAudioSessionDataSourceDescription)? {
+        let ladoAlternativo: Lado
+        switch lado {
+        case .cima: ladoAlternativo = .baixo
+        case .baixo: ladoAlternativo = .cima
+        }
+
         if let preferido = fonte(lado, em: microfone) {
             return (lado, preferido)
         } else if let alternativo = fonte(ladoAlternativo, em: microfone) {
@@ -92,9 +117,25 @@ final class Sopro {
         return nil
     }
 
+    private nonisolated static func mesmoLado(_ a: Lado, _ b: Lado) -> Bool {
+        switch (a, b) {
+        case (.cima, .cima), (.baixo, .baixo): return true
+        default: return false
+        }
+    }
+
+    private nonisolated static func limiteDB(para lado: Lado) -> Double {
+        switch lado {
+        case .cima: return -30.0
+        case .baixo: return -36.0
+        }
+    }
+
     private func trocarCapsulaAtiva() {
+        // A montagem em segundo plano já está escolhendo a cápsula; não mexe na sessão ao mesmo tempo.
+        guard !preparandoCaptura else { return }
         guard let microfone = sessaoAudio.availableInputs?.first(where: { $0.portType == .builtInMic }),
-              let (ladoEscolhido, escolhido) = escolherFonte(em: microfone) else {
+              let (ladoEscolhido, escolhido) = Self.escolherFonte(lado, em: microfone) else {
             return
         }
         do {
@@ -105,7 +146,7 @@ final class Sopro {
             }
             try microfone.setPreferredDataSource(escolhido)
             fonteIDAtiva = escolhido.dataSourceID.intValue
-            analisador?.definirLimiteDB(ladoEscolhido == .baixo ? -36.0 : -30.0)
+            analisador?.definirLimiteDB(Sopro.limiteDB(para: ladoEscolhido))
             log.info("Ouvindo o sopro pelo microfone \(escolhido.dataSourceName, privacy: .public).")
         } catch {
             log.warning("Reiniciando captura para concluir troca de cápsula: \(error.localizedDescription)")
@@ -117,11 +158,123 @@ final class Sopro {
     private func iniciarCaptura() {
         let id = UUID()
         capturaID = id
+        preparandoCaptura = true
         tempoSoprando = 0
         tempoQuieto = 0
         if categoriaAnterior == nil {
             categoriaAnterior = (sessaoAudio.category, sessaoAudio.mode, sessaoAudio.categoryOptions)
         }
+
+        let ladoPedido = lado
+        let log = self.log
+        let aoDetectar: @Sendable (Bool, Double) -> Void = { [weak self] detectou, duracao in
+            DispatchQueue.main.async {
+                guard let self, self.capturaID == id else { return }
+                let entradaAtiva = self.sessaoAudio.currentRoute.inputs.first
+                let usaMicrofoneEscolhido = entradaAtiva?.portType == .builtInMic
+                    && (self.fonteIDAtiva == nil || entradaAtiva?.selectedDataSource?.dataSourceID.intValue == self.fonteIDAtiva)
+                self.receber(detectou && usaMicrofoneEscolhido, duracao: duracao)
+            }
+        }
+
+        // A chama e os haptics não esperam a sessão de áudio: ela liga em segundo plano.
+        filaDeAudio.async { [weak self] in
+            let resultado = Sopro.montarCaptura(lado: ladoPedido, log: log, aoDetectar: aoDetectar)
+            DispatchQueue.main.async {
+                self?.concluirInicio(resultado, id: id)
+            }
+        }
+    }
+
+    private func concluirInicio(_ resultado: Result<CapturaAudio, FalhaSopro>, id: UUID) {
+        guard capturaID == id else {
+            // A vela apagou (ou alguém pediu para parar) enquanto o motor subia.
+            if case .success(let captura) = resultado {
+                let motor = captura.motor
+                filaDeAudio.async { Sopro.desmontar(motor) }
+            }
+            return
+        }
+
+        preparandoCaptura = false
+
+        switch resultado {
+        case .success(let captura):
+            motor = captura.motor
+            analisador = captura.analisador
+            fonteIDAtiva = captura.fonteID
+            if fonteAnterior == nil { fonteAnterior = captura.fonteAnterior }
+            observarMudancaDeConfiguracao(id: id)
+            if aoSoprar == nil {
+                pararCaptura(restaurarSessao: true)
+            } else if !Sopro.mesmoLado(captura.lado, lado) {
+                // A chama mudou de lado enquanto o motor subia.
+                trocarCapsulaAtiva()
+            }
+        case .failure(let falha):
+            pararCaptura(restaurarSessao: true)
+            switch falha {
+            case .semMicrofone:
+                log.notice("Nenhum microfone embutido disponível para detectar sopro.")
+            case .formatoInvalido(let taxa, let canais):
+                log.warning("Formato de áudio inválido na entrada (taxa: \(taxa), canais: \(canais)).")
+            case .audio(let mensagem):
+                log.error("Falha ao iniciar o microfone: \(mensagem, privacy: .public)")
+            }
+        }
+    }
+
+    private func observarMudancaDeConfiguracao(id: UUID) {
+        guard let motor else { return }
+        observador = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange, object: motor, queue: nil
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, self.capturaID == id, self.aoSoprar != nil, !self.ignorarMudancaConfiguracao else { return }
+                self.pararCaptura(restaurarSessao: false)
+                self.iniciarCaptura()
+            }
+        }
+    }
+
+    private func pararCaptura(restaurarSessao: Bool = true) {
+        capturaID = nil
+        preparandoCaptura = false
+        fonteIDAtiva = nil
+        analisador = nil
+        if let observador {
+            NotificationCenter.default.removeObserver(observador)
+            self.observador = nil
+        }
+
+        let motor = self.motor
+        self.motor = nil
+        let fonteAnterior = self.fonteAnterior
+        let categoriaAnterior = self.categoriaAnterior
+        let sessaoAudio = self.sessaoAudio
+
+        // Parar o motor e devolver a sessão de áudio também pode demorar: fora da main.
+        filaDeAudio.async {
+            if let motor { Sopro.desmontar(motor) }
+            guard restaurarSessao else { return }
+            if let (microfone, fonte) = fonteAnterior {
+                try? microfone.setPreferredDataSource(fonte)
+            }
+            if let (categoria, modo, opcoes) = categoriaAnterior {
+                try? sessaoAudio.setCategory(categoria, mode: modo, options: opcoes)
+            }
+        }
+    }
+
+    // Monta tudo o que pode demorar (sessão de áudio + motor) fora da main thread.
+    // Chamado depois que o primeiro quadro com a chama já foi desenhado.
+    private nonisolated static func montarCaptura(
+        lado: Lado,
+        log: Logger,
+        aoDetectar: @escaping @Sendable (Bool, Double) -> Void
+    ) -> Result<CapturaAudio, FalhaSopro> {
+        let sessaoAudio = AVAudioSession.sharedInstance()
+        let comeco = CFAbsoluteTimeGetCurrent()
 
         do {
             // O modo measurement preserva o vento que bate no microfone.
@@ -131,95 +284,60 @@ final class Sopro {
 
             // Se o aparelho não tiver o microfone do lado da chama, usa o do outro lado
             guard let microfone = sessaoAudio.availableInputs?.first(where: { $0.portType == .builtInMic }),
-                  let (ladoEscolhido, escolhido) = escolherFonte(em: microfone) else {
-                log.notice("Nenhum microfone embutido disponível para detectar sopro.")
-                pararCaptura(restaurarSessao: true)
-                return
+                  let (ladoEscolhido, escolhido) = escolherFonte(lado, em: microfone) else {
+                return .failure(.semMicrofone)
             }
 
-            if fonteAnterior == nil {
-                fonteAnterior = (microfone, microfone.preferredDataSource)
-            }
+            let fonteAnterior: (AVAudioSessionPortDescription, AVAudioSessionDataSourceDescription?) =
+                (microfone, microfone.preferredDataSource)
             if escolhido.supportedPolarPatterns?.contains(.omnidirectional) == true {
                 try escolhido.setPreferredPolarPattern(.omnidirectional)
             }
             try microfone.setPreferredDataSource(escolhido)
             try sessaoAudio.setPreferredInput(microfone)
             try sessaoAudio.setPreferredInputNumberOfChannels(1)
-            fonteIDAtiva = escolhido.dataSourceID.intValue
             log.info("Ouvindo o sopro pelo microfone \(escolhido.dataSourceName, privacy: .public).")
 
             let motor = AVAudioEngine()
             let entrada = motor.inputNode
             let formato = entrada.outputFormat(forBus: 0)
             guard formato.sampleRate > 0, formato.channelCount >= 1 else {
-                log.warning("Formato de áudio inválido na entrada (taxa: \(formato.sampleRate), canais: \(formato.channelCount)).")
-                pararCaptura(restaurarSessao: true)
-                return
+                return .failure(.formatoInvalido(taxa: formato.sampleRate, canais: Int(formato.channelCount)))
             }
 
-            let limiteDB = ladoEscolhido == .baixo ? -36.0 : -30.0
+            let limiteDB = Sopro.limiteDB(para: ladoEscolhido)
             let analisador = AnalisadorSopro(
                 taxa: formato.sampleRate,
                 canais: Int(formato.channelCount),
                 limiteDB: limiteDB
             )
-            self.analisador = analisador
             entrada.installTap(onBus: 0, bufferSize: 1024, format: formato,
-                               block: analisador.blocoDoTap { [weak self] detectou, duracao in
-                Task { @MainActor [weak self] in
-                    guard let self, self.capturaID == id else { return }
-                    let entradaAtiva = self.sessaoAudio.currentRoute.inputs.first
-                    let usaMicrofoneEscolhido = entradaAtiva?.portType == .builtInMic
-                        && (self.fonteIDAtiva == nil || entradaAtiva?.selectedDataSource?.dataSourceID.intValue == self.fonteIDAtiva)
-                    self.receber(detectou && usaMicrofoneEscolhido, duracao: duracao)
-                }
-            })
-            self.motor = motor
+                               block: analisador.blocoDoTap(aoDetectar))
             try motor.start()
 
-            observador = NotificationCenter.default.addObserver(
-                forName: .AVAudioEngineConfigurationChange, object: motor, queue: nil
-            ) { [weak self] _ in
-                Task { @MainActor [weak self] in
-                    guard let self, self.capturaID == id, self.aoSoprar != nil, !self.ignorarMudancaConfiguracao else { return }
-                    self.pararCaptura(restaurarSessao: false)
-                    self.iniciarCaptura()
-                }
-            }
+            #if DEBUG
+            let ms = Int((CFAbsoluteTimeGetCurrent() - comeco) * 1000)
+            log.debug("Sopro: captura pronta em \(ms) ms.")
+            #endif
+
+            return .success(CapturaAudio(motor: motor,
+                                         analisador: analisador,
+                                         fonteID: escolhido.dataSourceID.intValue,
+                                         lado: lado,
+                                         fonteAnterior: fonteAnterior))
         } catch {
-            pararCaptura(restaurarSessao: true)
-            log.error("Falha ao iniciar o microfone: \(error.localizedDescription)")
+            return .failure(.audio(error.localizedDescription))
         }
     }
 
-    private func pararCaptura(restaurarSessao: Bool = true) {
-        capturaID = nil
-        fonteIDAtiva = nil
-        analisador = nil
-        if let observador {
-            NotificationCenter.default.removeObserver(observador)
-            self.observador = nil
-        }
-        motor?.stop()
-        motor?.inputNode.removeTap(onBus: 0)
-        motor = nil
-
-        guard restaurarSessao else { return }
-
-        if let (microfone, fonte) = fonteAnterior {
-            try? microfone.setPreferredDataSource(fonte)
-            fonteAnterior = nil
-        }
-        if let (categoria, modo, opcoes) = categoriaAnterior {
-            try? sessaoAudio.setCategory(categoria, mode: modo, options: opcoes)
-            categoriaAnterior = nil
-        }
+    private nonisolated static func desmontar(_ motor: AVAudioEngine) {
+        motor.stop()
+        motor.inputNode.removeTap(onBus: 0)
     }
 
     // Cima: o microfone do alto, do lado da tela (perto do alto-falante de ligação).
     // Baixo: o microfone do lado do conector.
-    private func fonte(_ lado: Lado, em microfone: AVAudioSessionPortDescription) -> AVAudioSessionDataSourceDescription? {
+    private nonisolated static func fonte(_ lado: Lado, em microfone: AVAudioSessionPortDescription) -> AVAudioSessionDataSourceDescription? {
         let fontes = microfone.dataSources ?? []
         switch lado {
         case .cima:

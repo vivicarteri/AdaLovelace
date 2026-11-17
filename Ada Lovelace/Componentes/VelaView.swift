@@ -100,7 +100,8 @@ struct VelaView: View {
         }
         .frame(width: largura * 3, height: alturaCheia + espacoChama, alignment: .bottom)
         .animation(.easeIn(duration: Haptics.tempoQueda), value: caidos)
-        .animation(.easeOut(duration: 0.4), value: acesa)
+        // Acender tem que parecer instantâneo (~100 ms); apagar pode continuar macio (a fumaça cobre).
+        .animation(.easeOut(duration: acesa ? 0.1 : 0.4), value: acesa)
     }
 
     // Vela da Georgia, montada com as DUAS peças que ela desenhou:
