@@ -162,7 +162,7 @@ final class Sessao: ObservableObject {
         atualizarRelogio()
         salvar()
     }
-
+    
     // TipKit: 3 vezes seguidas do mesmo jeito → sugere outro jeito de apagar.
     // Quando a pessoa usa o jeito sugerido, a dica some de vez (aprendeu).
     private func contar(_ jeito: JeitoDeApagar) {
