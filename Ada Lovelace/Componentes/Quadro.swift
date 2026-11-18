@@ -186,14 +186,24 @@ struct CenaArte: View {
             // chama), senão a parede inteira ficava pulando.
             let chama = sombra && !reduzirMovimento ? (luz?.anguloLento ?? 0) : 0
             ZStack {
-                camada("tenda", PosicaoArte.tenda, t: t, indice: 0)
-                // A lua antiga saiu: no lugar dela passam as peças novas da Georgia (lua e passarinho).
-                // Elas só aparecem com a vela acesa (somem devagar quando apaga).
-                FaixaInfinitaView(quadro: quadro, t: t, sombra: sombra)
-                    .offset(x: sombra && !reduzirMovimento ? CenaArte.tremor(t: t, indice: 1).dx : 0)
-                    .opacity(mostrarPersonagens ? 1 : 0)
+                if Floresta.ligada {
+                    // Cenário novo da Georgia: a floresta, com o céu (sol, lua, nuvens, passarinhos).
+                    // Veja Floresta.swift. Ela só aparece com a vela acesa.
+                    FlorestaView(quadro: quadro, t: t, sombra: sombra, acesa: mostrarPersonagens)
+                        .offset(x: sombra && !reduzirMovimento ? CenaArte.tremor(t: t, indice: 1).dx : 0)
+                } else {
+                    camada("tenda", PosicaoArte.tenda, t: t, indice: 0)
+                    // A lua antiga saiu: no lugar dela passam as peças novas da Georgia (lua e passarinho).
+                    // Elas só aparecem com a vela acesa (somem devagar quando apaga).
+                    FaixaInfinitaView(quadro: quadro, t: t, sombra: sombra)
+                        .offset(x: sombra && !reduzirMovimento ? CenaArte.tremor(t: t, indice: 1).dx : 0)
+                        .opacity(mostrarPersonagens ? 1 : 0)
+                }
                 // Os acrobatas saíram do cenário (pedido do time). As imagens continuam no Assets.
-                camada("picadeiro", PosicaoArte.picadeiro, t: t, indice: 4)
+                // O picadeiro é do circo: na floresta ele não aparece (não está no mockup).
+                if !Floresta.ligada {
+                    camada("picadeiro", PosicaoArte.picadeiro, t: t, indice: 4)
+                }
             }
             .rotationEffect(.radians(-chama * CenaArte.giroDaSombra), anchor: .bottom)
             .offset(x: -CGFloat(sin(chama)) * CenaArte.andarDaSombra * quadro.escala)

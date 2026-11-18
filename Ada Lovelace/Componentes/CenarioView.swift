@@ -99,12 +99,13 @@ struct CenarioView: View {
 
     // O que o VoiceOver fala sobre o cenário (sem números)
     private var descricao: String {
-        guard mostrarPersonagens else { return "Circo de papel, no escuro" }
+        let lugar = Floresta.ligada ? "Floresta de papel" : "Circo de papel"
+        guard mostrarPersonagens else { return "\(lugar), no escuro" }
         switch progresso {
-        case ..<0.25: return "Circo de papel. Amanhecendo, o sol está alto"
-        case ..<0.5: return "Circo de papel. O sol está descendo"
-        case ..<0.75: return "Circo de papel. Anoitecendo, a lua está subindo"
-        default: return "Circo de papel. Noite, a lua está alta"
+        case ..<0.25: return "\(lugar). Amanhecendo, o sol está alto"
+        case ..<0.5: return "\(lugar). O sol está descendo"
+        case ..<0.75: return "\(lugar). Anoitecendo, a lua está subindo"
+        default: return "\(lugar). Noite, a lua está alta"
         }
     }
 }
