@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 #if os(iOS)
 import CoreHaptics
@@ -10,6 +11,7 @@ final class Haptics {
     // Tempo que o alfinete leva para cair. Tem que ser igual ao "Time": 0.45 do Prego.ahap.
     static let tempoQueda: TimeInterval = 0.45
 
+    private let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "AdaLovelace", category: "Haptics")
     private var engine: CHHapticEngine?
     private var precisaLigar = true
     private var players: [String: CHHapticPatternPlayer] = [:]
@@ -32,22 +34,26 @@ final class Haptics {
 
             // Se o motor parar (app em segundo plano, ligação…), lembramos de ligar de novo
             motor.stoppedHandler = { [weak self] _ in
-                self?.precisaLigar = true
+                Task { @MainActor [weak self] in
+                    self?.precisaLigar = true
+                }
             }
 
             // Se o sistema reiniciar o motor, os players antigos não valem mais: carregamos tudo de novo
             motor.resetHandler = { [weak self] in
-                guard let self else { return }
-                self.precisaLigar = true
-                self.carregarPadroes()
-                if self.chamaTocando { self.iniciarChama() }
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    self.precisaLigar = true
+                    self.carregarPadroes()
+                    if self.chamaTocando { self.iniciarChama() }
+                }
             }
 
             engine = motor
             try ligarSePreciso()
             carregarPadroes()
         } catch {
-            print("Erro ao criar o motor de vibração: \(error)")
+            log.error("Erro ao criar o motor de vibração: \(error.localizedDescription)")
         }
     }
 
@@ -63,7 +69,13 @@ final class Haptics {
 
     func desligarMotor() {
         pararChama()
-        engine?.stop { [weak self] _ in self?.precisaLigar = true }
+        cancelarSegurar()
+        precisaLigar = true
+        engine?.stop { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.precisaLigar = true
+            }
+        }
     }
 
     // MARK: Arquivos .ahap
@@ -83,7 +95,7 @@ final class Haptics {
 
     private func padrao(_ nome: String) -> CHHapticPattern? {
         guard let url = Bundle.main.url(forResource: nome, withExtension: "ahap") else {
-            print("⚠️ Não achei \(nome).ahap na pasta Recursos/SonsEVibracoes")
+            log.warning("Arquivo \(nome, privacy: .public).ahap não encontrado no bundle.")
             return nil
         }
         do {
@@ -92,7 +104,7 @@ final class Haptics {
             guard let dicionario = json as? [CHHapticPattern.Key: Any] else { return nil }
             return try CHHapticPattern(dictionary: dicionario)
         } catch {
-            print("Erro ao ler \(nome).ahap: \(error)")
+            log.error("Erro ao ler \(nome, privacy: .public).ahap: \(error.localizedDescription)")
             return nil
         }
     }
@@ -100,15 +112,17 @@ final class Haptics {
     // Toca um .ahap. "forca" muda a vibração e "volume" muda o som (os dois de 0 a 1).
     private func tocar(_ nome: String, forca: Float = 1, volume: Float = 1) {
         guard suportado, let player = players[nome] else { return }
+        let f = max(0, min(1, forca))
+        let v = max(0, min(1, volume))
         do {
             try ligarSePreciso()
             try player.sendParameters([
-                CHHapticDynamicParameter(parameterID: .hapticIntensityControl, value: forca, relativeTime: 0),
-                CHHapticDynamicParameter(parameterID: .audioVolumeControl, value: volume, relativeTime: 0)
+                CHHapticDynamicParameter(parameterID: .hapticIntensityControl, value: f, relativeTime: 0),
+                CHHapticDynamicParameter(parameterID: .audioVolumeControl, value: v, relativeTime: 0)
             ], atTime: CHHapticTimeImmediate)
             try player.start(atTime: CHHapticTimeImmediate)
         } catch {
-            print("Erro ao tocar \(nome): \(error)")
+            log.error("Erro ao tocar \(nome, privacy: .public): \(error.localizedDescription)")
         }
     }
 
@@ -118,13 +132,13 @@ final class Haptics {
         do {
             try ligarSePreciso()
             let evento = CHHapticEvent(eventType: .hapticTransient, parameters: [
-                CHHapticEventParameter(parameterID: .hapticIntensity, value: forca),
-                CHHapticEventParameter(parameterID: .hapticSharpness, value: nitidez)
+                CHHapticEventParameter(parameterID: .hapticIntensity, value: max(0, min(1, forca))),
+                CHHapticEventParameter(parameterID: .hapticSharpness, value: max(0, min(1, nitidez)))
             ], relativeTime: 0)
             try engine.makePlayer(with: CHHapticPattern(events: [evento], parameters: []))
                 .start(atTime: CHHapticTimeImmediate)
         } catch {
-            print("Erro na vibração: \(error)")
+            log.error("Erro na vibração curta: \(error.localizedDescription)")
         }
     }
 
@@ -162,7 +176,8 @@ final class Haptics {
     // MARK: Segurar para descartar (vibração que vai crescendo durante 1 segundo)
 
     func iniciarSegurar(duracao: TimeInterval) {
-        guard suportado, let engine else { return }
+        guard suportado, duracao > 0, let engine else { return }
+        cancelarSegurar()
         do {
             try ligarSePreciso()
             let continua = CHHapticEvent(eventType: .hapticContinuous, parameters: [
@@ -177,7 +192,7 @@ final class Haptics {
             try player.start(atTime: CHHapticTimeImmediate)
             segurar = player
         } catch {
-            print("Erro na vibração de segurar: \(error)")
+            log.error("Erro na vibração de segurar: \(error.localizedDescription)")
         }
     }
 
@@ -198,13 +213,13 @@ final class Haptics {
             try chama.start(atTime: CHHapticTimeImmediate)
             chamaTocando = true
         } catch {
-            print("Erro na chama: \(error)")
+            log.error("Erro na chama: \(error.localizedDescription)")
         }
     }
 
     // inclinacao: 0 (em pé) a 1 (bem inclinado). Mais inclinado = chama mais forte.
     func atualizarChama(inclinacao: Float) {
-        guard suportado, let chama else { return }
+        guard suportado, chamaTocando, let chama else { return }
         let forca = 0.35 + 0.45 * max(0, min(1, inclinacao))
         try? chama.sendParameters([
             CHHapticDynamicParameter(parameterID: .hapticIntensityControl, value: forca, relativeTime: 0)
@@ -221,6 +236,7 @@ final class Haptics {
 
 // Fora do iPhone/iPad (Mac, Vision Pro) o app funciona, só sem vibração
 final class Haptics {
+    let suportado = false
     static let tempoQueda: TimeInterval = 0.45
     func ligarMotor() {}
     func desligarMotor() {}

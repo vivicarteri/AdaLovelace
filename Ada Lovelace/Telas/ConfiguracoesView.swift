@@ -64,7 +64,14 @@ struct ConfiguracoesView: View {
                 } header: {
                     Text("Para testar")
                 } footer: {
-                    Text("As dicas voltam a aparecer depois de fechar e abrir o app. Acelerar o tempo só aparece rodando pelo Xcode.")
+                    // Texto do Luca: mostra a velocidade escolhida (tinha se perdido na junção de 16/11)
+                    #if DEBUG
+                    Text("As dicas voltam a aparecer depois de fechar e abrir o app. " + (acelerarTempo
+                         ? "A vela queima \(Int(velocidadeDoTempo)) vezes mais rápido. Só aparece rodando pelo Xcode."
+                         : "Acelerar o tempo: para testar a vela sem esperar. Só aparece rodando pelo Xcode."))
+                    #else
+                    Text("As dicas voltam a aparecer depois de fechar e abrir o app.")
+                    #endif
                 }
             }
             .navigationTitle("Configurações")

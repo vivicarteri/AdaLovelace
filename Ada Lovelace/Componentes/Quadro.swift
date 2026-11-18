@@ -55,7 +55,10 @@ enum ArteVela {
     static let chamaDentro: CGFloat = 22     // quanto a chama entra no pavio
     static let chamaLargura: CGFloat = 107
     static let chamaAltura: CGFloat = 247
-    static let chamaDesvioX: CGFloat = -6.5  // a chama fica um pouquinho à esquerda do centro
+    static let chamaDesvioX: CGFloat = -10   // centro da ponta do pavio em velaTopo
+    private static let pontaDoPavioY: CGFloat = 4
+    // A ponta fica dentro da base opaca da chama e vira o centro da rotação.
+    static let ancoraDaChama = UnitPoint(x: 0.5, y: 1 - (chamaDentro - pontaDoPavioY) / chamaAltura)
     static let pavio: CGFloat = 40           // do topo do desenho até onde a CERA começa (o resto é pavio)
 }
 
@@ -165,6 +168,7 @@ struct CenaArte: View {
     var sombra = false
     var congelado = false   // durante a transição de zoom tudo para, para o movimento ficar liso
     var luz: Movimento? = nil   // só nas sombras: a chama inclina, a luz muda de lugar e as sombras andam
+    var camadaDaSombra: CamadaDaSombra? = nil   // na floresta: só uma camada de sombras (nil = todas)
 
     // ⚙️ Quanto as sombras andam quando a chama deita (em pixels do Quadro) e quanto elas giram
     static let andarDaSombra: CGFloat = 110
@@ -189,7 +193,8 @@ struct CenaArte: View {
                 if Floresta.ligada {
                     // Cenário novo da Georgia: a floresta, com o céu (sol, lua, nuvens, passarinhos).
                     // Veja Floresta.swift. Ela só aparece com a vela acesa.
-                    FlorestaView(quadro: quadro, t: t, sombra: sombra, acesa: mostrarPersonagens)
+                    FlorestaView(quadro: quadro, t: t, sombra: sombra, acesa: mostrarPersonagens,
+                                 camada: camadaDaSombra)
                         .offset(x: sombra && !reduzirMovimento ? CenaArte.tremor(t: t, indice: 1).dx : 0)
                 } else {
                     camada("tenda", PosicaoArte.tenda, t: t, indice: 0)

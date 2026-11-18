@@ -30,7 +30,8 @@ struct TeatroSombrasView: View {
 
                 if acesa {
                     // Luz saindo da caixa
-                    RadialGradient(colors: [Cores.dourado.opacity(0.75), .clear],
+                    // (mais fraca na floresta: na referência a parede é quase lisa)
+                    RadialGradient(colors: [Cores.dourado.opacity(Floresta.ligada ? 0.35 : 0.75), .clear],
                                    center: luz.ancora,
                                    startRadius: 10, endRadius: h * 0.7)
                         .ignoresSafeArea()
@@ -38,18 +39,35 @@ struct TeatroSombrasView: View {
                     // Sombras: as mesmas figuras do circo, pretas, maiores e borradas.
                     // A tela fica parada: só cada sombra tremula sozinha, por causa da chama.
                     Group {
-                        if arteExiste("tendasombra") {
-                            // Sombras desenhadas pela Georgia
+                        if Floresta.ligada {
+                            // Floresta: uma camada de sombras por distância. Perto da parede (céu) =
+                            // nítida; perto da chama (mata) = borrada, maior e mais pesada.
+                            let fator = min(w, h) / 400   // o borrão cresce junto com a tela (iPad)
+                            ZStack {
+                                ForEach(CamadaDaSombra.allCases, id: \.self) { camada in
+                                    CenaArte(quadro: Quadro(geo: geo), mostrarPersonagens: true,
+                                             sombra: true, congelado: congelado, luz: sessao.movimento,
+                                             camadaDaSombra: camada)
+                                        .compositingGroup()   // sombras da mesma camada não escurecem umas às outras
+                                        .opacity(camada.opacidade)
+                                        .blur(radius: camada.borrao * fator)
+                                        .scaleEffect(camada.escala, anchor: UnitPoint(x: 0.5, y: camada.ancoraY))
+                                }
+                            }
+                        } else if arteExiste("tendasombra") {
+                            // Sombras desenhadas pela Georgia (circo)
                             CenaArte(quadro: Quadro(geo: geo), mostrarPersonagens: true,
                                      sombra: true, congelado: congelado, luz: sessao.movimento)
+                                .opacity(0.7)
+                                .blur(radius: 2.5)
                         } else {
                             // Sem arte: as figuras provisórias pintadas de preto
                             CenarioView(acesa: true, progresso: sessao.progresso, mostrarPersonagens: true, comFundo: false)
                                 .colorMultiply(.black)
+                                .opacity(0.7)
+                                .blur(radius: 2.5)
                         }
                     }
-                    .opacity(0.7)
-                    .blur(radius: 2.5)
                     // Projetadas a partir da CHAMA: vela alta = sombras mais compactas;
                     // vela baixa (pequena ou no fim) = sombras que sobem e esticam na parede.
                     .offset(y: luz.descida)
@@ -193,7 +211,7 @@ struct Projecao {
         // O alto do céu (eclipse) vai parar em: ancora + (topo + descida - ancora) × escalaY.
         // A descida é a menor que deixa esse ponto abaixo da cortina.
         let a = ancora.y
-        let topo = Floresta.ligada ? Floresta.topoDasSombras : 0
+        let topo = Floresta.ligada ? CamadaDaSombra.topoDoCeu : 0
         descida = max(0, a - topo - (a - limite) / escalaY) * h
     }
 }

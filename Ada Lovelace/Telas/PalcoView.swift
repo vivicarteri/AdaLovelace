@@ -134,20 +134,21 @@ struct PalcoView: View {
             // As peças do cenário (lua, passarinho…) só aparecem com a vela ACESA
             CenarioView(acesa: acesa, progresso: sessao.progresso, mostrarPersonagens: estado == .acesa, quadro: g.quadro)
 
-            // Vela apagada = tudo escuro, só a vela e os botões em destaque
+            // Vela apagada = tudo escuro, só a vela e os botões em destaque.
+            // Acendendo, o escuro sai rápido; apagando, ele desce devagar.
             Color.black.opacity(acesa ? 0 : 0.55)
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
-                .animation(.easeInOut(duration: 1.2), value: acesa)
+                .animation(.easeInOut(duration: acesa ? 0.1 : 1.2), value: acesa)
 
-            // Luz da vela
+            // Luz da vela (entra junto com a chama, sem esperar a animação do palco)
             if acesa {
                 RadialGradient(colors: [Cores.dourado.opacity(0.55), .clear],
                                center: .center, startRadius: 4, endRadius: g.larguraVela * 4)
                     .frame(width: g.larguraVela * 8, height: g.larguraVela * 8)
                     .position(x: g.centroX, y: topoCera - g.larguraVela * 0.7)
                     .allowsHitTesting(false)
-                    .transition(.opacity)
+                    .transition(.opacity.animation(.easeOut(duration: 0.1)))
             }
 
             // Vela (cortada no palco, para ela poder afundar pelo alçapão)
