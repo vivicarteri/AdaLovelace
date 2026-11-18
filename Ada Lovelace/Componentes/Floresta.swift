@@ -85,10 +85,13 @@ enum Floresta {
 
     static let fundo = Peca(nome: "florestaFundo", x: 0, y: 0, w: 2732, h: 2048)   // o céu de fundo não faz sombra
 
+    // A faixa da frente continua espelhada à esquerda, com as raízes na mesma altura.
     static let arvores: [Peca] = [
-        Peca(nome: "florestaFundoArvores2", x: 42, y: 660, w: 2522, h: 1381,
+        Peca(nome: "florestaFundoArvores2", x: 80, y: 1047, w: 1816, h: 994,
              tinta: azulNoite, sombra: .arvoresDeTras),
-        Peca(nome: "florestaFundoArvores1", x: 42, y: 408, w: 2655, h: 1598,
+        Peca(nome: "florestaFundoArvores1", x: 893 - 1586, y: 1051, w: 1586, h: 955,
+             tinta: cinzaNoite, espelho: true, sombra: .arvoresDaFrente),
+        Peca(nome: "florestaFundoArvores1", x: 893, y: 1051, w: 1586, h: 955,
              tinta: cinzaNoite, sombra: .arvoresDaFrente)
     ]
 
@@ -104,24 +107,29 @@ enum Floresta {
 
     // MARK: Céu
 
-    // Estrelas: no protótipo da Georgia elas SOBEM E DESCEM bastante (do céu até o meio da mata),
-    // cada uma no seu ritmo, quase sem andar para o lado. Também piscam devagar.
-    // (centro "y" = meio do caminho; "subida" = quanto sobe e desce para cada lado; pixels da Georgia)
+    // Centro e amplitude em pixels da arte. O movimento inteiro fica acima das copas.
     struct Estrela {
         let nome: String
         let x: CGFloat, y: CGFloat, altura: CGFloat
         let fase: Double
-        var subida: CGFloat = 380
+        let subida: CGFloat
+        var picoDeBrilho: Double? = nil
+
+        func visibilidade(_ t: Double) -> Double {
+            guard let picoDeBrilho else { return 1 }
+            let onda = cos(2 * .pi * (t - picoDeBrilho) / RelogioDaHistoria.ciclo)
+            return min(1, max(0, (onda - 0.56) * 4))
+        }
     }
 
     static let estrelas: [Estrela] = [
-        Estrela(nome: "florestaEstrela1", x: 730, y: 620, altura: 175, fase: 0, subida: 420),
-        Estrela(nome: "florestaEstrela2", x: 195, y: 820, altura: 135, fase: 1.7, subida: 380),
-        Estrela(nome: "florestaEstrela1", x: 2085, y: 700, altura: 146, fase: 3.1, subida: 400),
-        Estrela(nome: "florestaEstrela2", x: 2460, y: 640, altura: 120, fase: 4.4, subida: 360),
-        Estrela(nome: "florestaEstrela2", x: 1915, y: 980, altura: 105, fase: 5.2, subida: 330),
-        Estrela(nome: "florestaEstrela2", x: 1180, y: 560, altura: 90, fase: 2.6, subida: 360),
-        Estrela(nome: "florestaEstrela1", x: 980, y: 900, altura: 120, fase: 0.9, subida: 400)
+        Estrela(nome: "florestaEstrela1", x: 730, y: 342, altura: 138, fase: 0, subida: 38, picoDeBrilho: 0),
+        Estrela(nome: "florestaEstrela2", x: 195, y: 560, altura: 112, fase: 1.7, subida: 42, picoDeBrilho: 311),
+        Estrela(nome: "florestaEstrela1", x: 2085, y: 140, altura: 142, fase: 3.1, subida: 18),
+        Estrela(nome: "florestaEstrela2", x: 2460, y: 410, altura: 120, fase: 4.4, subida: 38, picoDeBrilho: 300),
+        Estrela(nome: "florestaEstrela2", x: 1915, y: 670, altura: 116, fase: 5.2, subida: 46, picoDeBrilho: -12),
+        Estrela(nome: "florestaEstrela2", x: 1180, y: 142, altura: 100, fase: 2.6, subida: 30),
+        Estrela(nome: "florestaEstrela1", x: 980, y: 754, altura: 132, fase: 0.9, subida: 54, picoDeBrilho: 22)
     ]
 
     // Peça que anda no céu (sol, lua, nuvem, passarinho)
@@ -132,7 +140,21 @@ enum Floresta {
         let caminho: Caminho
         var balanco: CGFloat = 0
         var fase: Double = 0
-        var ondula: CGFloat = 0      // sobe e desce enquanto anda (passarinhos), pixels da Georgia
+        var ondula: CGFloat = 0      // ondulação do percurso, em pixels da Georgia
+
+        var arco: (subida: CGFloat, pontoAlto: Double)? = nil
+
+        func centroY(_ t: Double, parado: Bool = false) -> CGFloat {
+            var centro = y
+            if let arco {
+                // Uma curva longa entre duas passagens pelo alto, no ritmo próprio da peça.
+                let descida = (1 - cos(4 * .pi * (t - arco.pontoAlto) / RelogioDaHistoria.ciclo)) / 2
+                centro += arco.subida * descida * descida
+            }
+            guard !parado else { return centro }
+            return centro + balanco * Floresta.onda(57, t, fase: fase * 4)
+                + ondula * Floresta.onda(12, t, fase: fase)
+        }
 
         var largura: CGFloat { altura * peca.peca.width / peca.peca.height }
     }
@@ -154,36 +176,47 @@ enum Floresta {
     // SOL E LUA: começam escondidos dos lados, vão se aproximando e se encontram no
     // ECLIPSE no meio do ciclo (5 min), bem quando a câmera do iPhone passa pelo centro.
     // Depois se separam e somem; aos 10 min a história recomeça.
-    // ⚙️ Um pouco mais altos que no mockup, para a lua não passar atrás da chama da vela.
-    static let sol = Andante(peca: CenarioNovo.sol, altura: 732, y: 650,
-                             caminho: .atravessa(x: 1462, quando: 300, voltas: 1, sentido: -1),
-                             balanco: 8, fase: 1.3)
-    static let lua = Andante(peca: CenarioNovo.lua, altura: 763, y: 647,
-                             caminho: .atravessa(x: 1349, quando: 300, voltas: 1, sentido: 1),
-                             balanco: 8, fase: 0)
+    static func astros(no quadro: Quadro) -> (sol: Andante, lua: Andante) {
+        let escalaNaTela = escala * quadro.escala
+        let fimDaBarra = MedidasBarraDoPalco.margemSuperior + MedidasBarraDoPalco.diametro
+        let topo = max(altura * topoDasSombras, (fimDaBarra + 8 - quadro.origem.y) / max(escalaNaTela, 0.001))
+        // Os astros terminam acima das copas. Reservamos espaço para o balanço nas duas extremidades.
+        let balanco: CGFloat = 8
+        let alturaLua = max(0, 968 - topo - 2 * balanco)
+        let centro = topo + balanco + alturaLua / 2
+        let sol = Andante(peca: CenarioNovo.sol, altura: alturaLua * 0.96, y: centro,
+                          caminho: .atravessa(x: centroX + alturaLua * 0.15, quando: 300, voltas: 1, sentido: -1),
+                          balanco: balanco, fase: 1.3)
+        let lua = Andante(peca: CenarioNovo.lua, altura: alturaLua, y: centro,
+                          caminho: .atravessa(x: centroX, quando: 300, voltas: 1, sentido: 1),
+                          balanco: balanco)
+        return (sol, lua)
+    }
 
-    // NUVENS: no protótipo elas ATRAVESSAM a cena devagar, umas para cada lado, em alturas diferentes
-    // (uma volta a cada 10 min, espalhadas no tempo para nunca ficar sem nuvem)
+    // As nuvens atravessam em momentos diferentes, com curvas abertas pelo meio do céu.
+    // A nuvem baixa faz duas voltas e pode tocar a borda inferior do sol ou da lua.
     static let nuvens: [Andante] = [
-        Andante(peca: CenarioNovo.nuvem3, altura: 184, y: 330,
-                caminho: .atravessa(x: 1366, quando: 120, voltas: 1, sentido: -1), balanco: 5, fase: 0.4),
-        Andante(peca: CenarioNovo.nuvem2, altura: 144, y: 980,
-                caminho: .atravessa(x: 1366, quando: 270, voltas: 1, sentido: 1), balanco: 5, fase: 1.1),
-        Andante(peca: CenarioNovo.nuvem1, altura: 229, y: 1316,
-                caminho: .atravessa(x: 1366, quando: 420, voltas: 1, sentido: -1), balanco: 5, fase: 2.5),
-        Andante(peca: CenarioNovo.nuvem3, altura: 191, y: 560,
-                caminho: .atravessa(x: 1366, quando: 560, voltas: 1, sentido: 1), balanco: 5, fase: 3.2)
+        Andante(peca: CenarioNovo.nuvem3, altura: 158, y: 106,
+                caminho: .atravessa(x: centroX, quando: 56, voltas: 1, sentido: -1),
+                balanco: 4, fase: 0.4, arco: (530, 178)),
+        Andante(peca: CenarioNovo.nuvem2, altura: 136, y: 102,
+                caminho: .atravessa(x: centroX, quando: 177, voltas: 1, sentido: 1),
+                balanco: 5, fase: 1.1, arco: (430, 246)),
+        Andante(peca: CenarioNovo.nuvem1, altura: 144, y: 1054,
+                caminho: .atravessa(x: centroX, quando: 420, voltas: 2, sentido: -1),
+                fase: 2.5, ondula: 32),
+        Andante(peca: CenarioNovo.nuvem3, altura: 176, y: 108,
+                caminho: .atravessa(x: centroX, quando: 465, voltas: 1, sentido: 1),
+                balanco: 4, fase: 3.2, arco: (664, 390))
     ]
 
-    // PASSARINHOS: um alto, outro baixo, em sentidos contrários (nunca na faixa do sol e da lua).
-    // Cruzam a cena 2 vezes por ciclo e se "quase encontram" no meio aos 2min30 e aos 7min30.
     static let passarinhos: [Andante] = [
-        Andante(peca: CenarioNovo.passarinho, altura: 300, y: 290,
-                caminho: .atravessa(x: 1366, quando: 150, voltas: 2, sentido: 1), balanco: 18, fase: 0.7,
-                ondula: 110),
-        Andante(peca: CenarioNovo.passarinho2, altura: 300, y: 1330,
-                caminho: .atravessa(x: 1366, quando: 150, voltas: 2, sentido: -1), balanco: 16, fase: 2.1,
-                ondula: 120)
+        Andante(peca: CenarioNovo.passarinho, altura: 214, y: 112,
+                caminho: .atravessa(x: centroX, quando: 25, voltas: 1, sentido: 1),
+                balanco: 4, fase: 0.7, ondula: 5, arco: (690, 170)),
+        Andante(peca: CenarioNovo.passarinho2, altura: 202, y: 110,
+                caminho: .atravessa(x: centroX, quando: 525, voltas: 1, sentido: -1),
+                balanco: 4, fase: 2.1, ondula: 5, arco: (540, 413))
     ]
 
     // Onde está o centro da peça no instante "relogio" (segundos do ciclo), em x da Georgia
@@ -208,7 +241,7 @@ enum Floresta {
 // O RELÓGIO DA HISTÓRIA
 // A história do cenário dura 10 minutos (o tempo da vela mais curta) e recomeça igualzinha.
 // Ela só anda com a vela ACESA: pausa quando a vela apaga e volta do zero com uma vela nova.
-// Assim a vela de 10 min mostra a história exatamente uma vez; as maiores repetem.
+// No ritmo normal, o ciclo completo leva 10 minutos de vela acesa.
 @MainActor
 enum RelogioDaHistoria {
     // ⚙️ Duração da história, em segundos
@@ -216,14 +249,23 @@ enum RelogioDaHistoria {
 
     private static var acumulado: TimeInterval = 0
     private static var acesaDesde: Date?
+    #if DEBUG
+    private static var velocidade: Double = 1
+    #else
+    private static let velocidade: Double = 1
+    #endif
 
     static func acender(agora: Date = Date()) {
-        if acesaDesde == nil { acesaDesde = agora }
+        guard acesaDesde == nil else { return }
+        #if DEBUG
+        atualizarVelocidadeDeTeste(agora: agora)
+        #endif
+        acesaDesde = agora
     }
 
     static func pausar(agora: Date = Date()) {
-        guard let desde = acesaDesde else { return }
-        acumulado += max(0, agora.timeIntervalSince(desde))
+        guard acesaDesde != nil else { return }
+        acumulado = tempo(em: agora)
         acesaDesde = nil
     }
 
@@ -234,9 +276,27 @@ enum RelogioDaHistoria {
 
     // Em que ponto da história estamos (0 a 600 segundos)
     static func tempo(em data: Date) -> Double {
-        let total = acumulado + (acesaDesde.map { max(0, data.timeIntervalSince($0)) } ?? 0)
+        let decorrido = acesaDesde.map { max(0, data.timeIntervalSince($0)) } ?? 0
+        let total = acumulado + decorrido * velocidade
         return total.truncatingRemainder(dividingBy: ciclo)
     }
+
+    #if DEBUG
+    static func atualizarVelocidadeDeTeste(agora: Date = Date()) {
+        let padrao = UserDefaults.standard
+        let novaVelocidade = padrao.bool(forKey: Chaves.acelerarCenario)
+            ? min(20, max(2, padrao.double(forKey: Chaves.velocidadeDoCenario)))
+            : 1
+        guard novaVelocidade != velocidade else { return }
+
+        // Guarda a posição no ritmo anterior antes de começar a contar no novo.
+        if acesaDesde != nil {
+            acumulado = tempo(em: agora)
+            acesaDesde = agora
+        }
+        velocidade = novaVelocidade
+    }
+    #endif
 }
 
 // A floresta inteira, desenhada dentro da cena (que já tem relógio e Quadro).
@@ -276,8 +336,9 @@ struct FlorestaView: View {
             }
             if mostra(.ceu) {
                 estrelas(relogio)
-                andante(Floresta.sol, relogio)
-                andante(Floresta.lua, relogio)      // na frente do sol: é ela que faz o eclipse
+                let astros = Floresta.astros(no: quadro)
+                andante(astros.sol, relogio)
+                andante(astros.lua, relogio)      // na frente do sol: é ela que faz o eclipse
                 ForEach(Floresta.nuvens.indices, id: \.self) { i in andante(Floresta.nuvens[i], relogio) }
             }
 
@@ -310,11 +371,8 @@ struct FlorestaView: View {
 
     // Uma peça do céu andando (sol, lua, nuvem, passarinho)
     private func andante(_ a: Floresta.Andante, _ relogio: Double) -> some View {
-        // Balancinho de boneco de papel + (passarinhos) o voo ondulado: sobe e desce 12 vezes por ciclo
-        let sobe = reduzirMovimento ? 0 : a.balanco * CGFloat(Floresta.onda(57, relogio, fase: a.fase * 4))
-            + a.ondula * CGFloat(Floresta.onda(12, relogio, fase: a.fase))
         let x = Floresta.noQuadro(x: Floresta.x(a, relogio: relogio))
-        let y = Floresta.noQuadro(y: a.y + sobe)
+        let y = Floresta.noQuadro(y: a.centroY(relogio, parado: reduzirMovimento))
         return PecaAnimadaView(peca: a.peca, t: relogio, fase: a.fase, sombra: sombra)
             .frame(width: a.largura * Floresta.escala * quadro.escala,
                    height: a.altura * Floresta.escala * quadro.escala)
@@ -335,7 +393,7 @@ struct FlorestaView: View {
                     .scaledToFit()
                     .frame(width: tamanho, height: tamanho)
                     .rotationEffect(.degrees(reduzirMovimento ? 0 : 6 * Floresta.onda(19, relogio, fase: e.fase)))
-                    .opacity(sombra ? 1 : brilho)   // a sombra da estrela não pisca
+                    .opacity((sombra ? 1 : brilho) * e.visibilidade(relogio))
                     .position(x: quadro.x(Floresta.noQuadro(x: e.x)),
                               y: quadro.y(Floresta.noQuadro(y: e.y + flutua)))
             }

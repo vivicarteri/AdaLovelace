@@ -15,6 +15,8 @@ struct ConfiguracoesView: View {
     #if DEBUG
     @AppStorage(Chaves.acelerarTempo) private var acelerarTempo = false
     @AppStorage(Chaves.velocidadeDoTempo) private var velocidadeDoTempo = 2.0
+    @AppStorage(Chaves.acelerarCenario) private var acelerarCenario = false
+    @AppStorage(Chaves.velocidadeDoCenario) private var velocidadeDoCenario = 2.0
     #endif
     @Environment(\.dismiss) private var dismiss
 
@@ -45,35 +47,25 @@ struct ConfiguracoesView: View {
                     }
                     .disabled(resetarDicas)
                     #if DEBUG
-                    // Só para o time testar: não aparece no app de verdade (Release)
-                    Toggle("Acelerar o tempo", isOn: $acelerarTempo)
+                    Toggle("Acelerar a vela", isOn: $acelerarTempo)
                     if acelerarTempo {
-                        VStack(alignment: .leading) {
-                            Text("Velocidade: \(Int(velocidadeDoTempo))x")
-                            Slider(value: $velocidadeDoTempo, in: 2...20, step: 1) {
-                                Text("Velocidade")
-                            } minimumValueLabel: {
-                                Text("2x")
-                            } maximumValueLabel: {
-                                Text("20x")
-                            }
-                            .accessibilityValue("\(Int(velocidadeDoTempo)) vezes mais rápido")
-                        }
+                        controleDeVelocidade("Velocidade da vela", valor: $velocidadeDoTempo)
+                    }
+                    Toggle("Acelerar o cenário", isOn: $acelerarCenario)
+                    if acelerarCenario {
+                        controleDeVelocidade("Velocidade do cenário", valor: $velocidadeDoCenario)
                     }
                     #endif
                 } header: {
                     Text("Para testar")
                 } footer: {
-                    // Texto do Luca: mostra a velocidade escolhida (tinha se perdido na junção de 16/11)
-                    #if DEBUG
-                    Text("As dicas voltam a aparecer depois de fechar e abrir o app. " + (acelerarTempo
-                         ? "A vela queima \(Int(velocidadeDoTempo)) vezes mais rápido. Só aparece rodando pelo Xcode."
-                         : "Acelerar o tempo: para testar a vela sem esperar. Só aparece rodando pelo Xcode."))
-                    #else
                     Text("As dicas voltam a aparecer depois de fechar e abrir o app.")
-                    #endif
                 }
             }
+            #if DEBUG
+            .onChange(of: acelerarCenario) { RelogioDaHistoria.atualizarVelocidadeDeTeste() }
+            .onChange(of: velocidadeDoCenario) { RelogioDaHistoria.atualizarVelocidadeDeTeste() }
+            #endif
             .navigationTitle("Configurações")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -83,6 +75,23 @@ struct ConfiguracoesView: View {
         }
         .tint(Cores.cortina)
     }
+
+    #if DEBUG
+    private func controleDeVelocidade(_ titulo: LocalizedStringKey, valor: Binding<Double>) -> some View {
+        let multiplicador = Int(valor.wrappedValue)
+        return VStack(alignment: .leading) {
+            Text("\(Text(titulo)) (\(multiplicador)×)")
+            Slider(value: valor, in: 2...100, step: 1) {
+                Text(titulo)
+            } minimumValueLabel: {
+                Text("2×")
+            } maximumValueLabel: {
+                Text("100×")
+            }
+            .accessibilityValue("\(multiplicador) vezes mais rápido")
+        }
+    }
+    #endif
 }
 
 #Preview {

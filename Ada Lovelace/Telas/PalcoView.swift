@@ -9,6 +9,11 @@
 import SwiftUI
 import TipKit
 
+enum MedidasBarraDoPalco {
+    static let margemSuperior: CGFloat = 8
+    static let diametro: CGFloat = 44
+}
+
 struct PalcoView: View {
     @EnvironmentObject private var sessao: Sessao
     var abrirConfiguracoes: () -> Void
@@ -282,14 +287,14 @@ struct PalcoView: View {
             HStack {
                 if sessao.foraDaCaixa {
                     BotaoRedondo(icone: "arrow.up.left.and.arrow.down.right", rotulo: "Entrar na caixa",
-                                 tamanho: 44, acao: entrarNaCaixa)
+                                 tamanho: MedidasBarraDoPalco.diametro, acao: entrarNaCaixa)
                 } else if podeSairDaCaixa {
                     BotaoRedondo(icone: "arrow.down.right.and.arrow.up.left", rotulo: "Ver o teatro de sombras",
-                                 tamanho: 44, acao: sairDaCaixa)
+                                 tamanho: MedidasBarraDoPalco.diametro, acao: sairDaCaixa)
                         .transition(.opacity)
                 }
                 Spacer()
-                BotaoRedondo(icone: "gearshape", rotulo: "Configurações", tamanho: 44, acao: abrirConfiguracoes)
+                BotaoRedondo(icone: "gearshape", rotulo: "Configurações", tamanho: MedidasBarraDoPalco.diametro, acao: abrirConfiguracoes)
             }
             .animation(.spring(duration: 0.6), value: podeSairDaCaixa)
 
@@ -300,7 +305,7 @@ struct PalcoView: View {
             Spacer()
         }
         .padding(.horizontal, 20)
-        .padding(.top, 8)
+        .padding(.top, MedidasBarraDoPalco.margemSuperior)
     }
 
     private func botoesInferiores(_ g: LayoutPalco) -> some View {
