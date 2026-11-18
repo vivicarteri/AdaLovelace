@@ -1,20 +1,15 @@
 //  TeatroSombrasView.swift
 //  Fora da caixa (zoom out): a luz da vela projeta as sombras do circo na parede.
-//  Para voltar: botão no canto superior esquerdo, tocar na caixa ou fazer pinça para dentro.
+//  Tocar na caixa volta para o palco.
 
 import SwiftUI
-import TipKit
 
 struct TeatroSombrasView: View {
     @EnvironmentObject private var sessao: Sessao
     var entrar: () -> Void
-    var abrirConfiguracoes: () -> Void
     var aberturaCaixa: CGFloat = 0        // cortina da caixa: 0 = fechada (normal), 1 = aberta (só na animação)
     var conteudoDaCaixa: AnyView? = nil   // palco em miniatura (só na animação de entrar e sair)
-    var mostrarBotoes = true              // os botões saem de cena durante o zoom
     var congelado = false                 // durante o zoom as sombras param, para o movimento ficar liso
-
-    @Environment(\.accessibilityReduceMotion) private var reduzirMovimento
 
     var body: some View {
         let acesa = sessao.estado == .acesa
@@ -106,35 +101,7 @@ struct TeatroSombrasView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Entrar na caixa")
                 .position(caixa.centro)
-
-                // Em cima: voltar para dentro (esquerda) e configurações (direita)
-                VStack {
-                    HStack {
-                        BotaoRedondo(icone: "arrow.up.left.and.arrow.down.right", rotulo: "Entrar na caixa",
-                                     tamanho: 44, acao: entrar)
-                        Spacer()
-                        BotaoRedondo(icone: "gearshape", rotulo: "Configurações", tamanho: 44, acao: abrirConfiguracoes)
-                    }
-                    // Dica EMBUTIDA na tela (e não um balão por cima): o balão (popoverTip) bloqueava
-                    // a tela, e a pinça feita com ele aberto só fechava a dica.
-                    TipView(DicaEntrarNaCaixa(), arrowEdge: .top)
-                        .frame(maxWidth: 340)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    Spacer()
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 8)
-                .opacity(mostrarBotoes ? 1 : 0)   // no zoom eles somem: senão cresceriam junto
             }
-            .contentShape(Rectangle())
-            .gesture(
-                MagnifyGesture().onEnded { valor in
-                    if valor.magnification > 1.3 {
-                        DicaEntrarNaCaixa().invalidate(reason: .actionPerformed)   // já aprendeu a pinça
-                        entrar()
-                    }
-                }
-            )
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(acesa ? "Teatro de sombras. As sombras do circo aparecem na parede"

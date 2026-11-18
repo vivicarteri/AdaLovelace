@@ -1,10 +1,6 @@
 //  Dicas.swift
-//  Dicas do TipKit: ensinam o movimento de pinça para trocar de tela.
-//
-//  Cada dica some sozinha quando a pessoa usa a pinça (ou fecha a dica).
-//  As "regras" (rules) abaixo também fazem a dica sumir quando o botão dela sai da tela:
-//  sem isso, o balãozinho fica preso apontando para um botão que não existe mais
-//  (acontecia quando a vela acabava e a cortina descia).
+//  Dicas do TipKit: ensinam os gestos de pinça e os jeitos de apagar a vela.
+//  As regras definem quando cada dica faz sentido. A PalcoView exibe uma por vez.
 
 import SwiftUI
 import TipKit
