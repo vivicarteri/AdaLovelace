@@ -86,7 +86,7 @@ struct ConfiguracoesView: View {
             } minimumValueLabel: {
                 Text("2×")
             } maximumValueLabel: {
-                Text("100×")
+                Text("10/0×")
             }
             .accessibilityValue("\(multiplicador) vezes mais rápido")
         }
