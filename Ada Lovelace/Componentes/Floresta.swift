@@ -110,11 +110,11 @@ enum Floresta {
 
     // A Georgia mandou dois arbustos; do lado direito eles se repetem espelhados (como no mockup)
     static let arbustos: [Peca] = [
-        Peca(nome: "florestaArbusto1", x: 0, y: 1426, w: 1158, h: 622, tinta: arbustoEscuro, sombra: .arbustos),
-        Peca(nome: "florestaArbusto1", x: 1574, y: 1426, w: 1158, h: 622, tinta: arbustoEscuro, espelho: true,
+        Peca(nome: "florestaArbusto1", x: 0, y: 1613, w: 811, h: 435, tinta: arbustoEscuro, sombra: .arbustos),
+        Peca(nome: "florestaArbusto1", x: 1921, y: 1613, w: 811, h: 435, tinta: arbustoEscuro, espelho: true,
              sombra: .arbustos),
-        Peca(nome: "florestaArbusto2", x: 474, y: 1691, w: 1144, h: 357, tinta: arbustoClaro, sombra: .arbustos),
-        Peca(nome: "florestaArbusto2", x: 1114, y: 1691, w: 1144, h: 357, tinta: arbustoClaro, espelho: true,
+        Peca(nome: "florestaArbusto2", x: 646, y: 1798, w: 800, h: 250, tinta: arbustoClaro, sombra: .arbustos),
+        Peca(nome: "florestaArbusto2", x: 1286, y: 1798, w: 800, h: 250, tinta: arbustoClaro, espelho: true,
              sombra: .arbustos)
     ]
 
