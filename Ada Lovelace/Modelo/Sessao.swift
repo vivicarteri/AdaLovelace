@@ -24,6 +24,10 @@ enum Chaves {
     static let apagarSoprando = "apagarSoprando"
     static let acelerarTempo = "acelerarTempo"            // só para teste (Configurações, rodando pelo Xcode)
     static let velocidadeDoTempo = "velocidadeDoTempo"    // 2 a 20: quantas vezes mais rápido
+    #if DEBUG
+    static let acelerarCenario = "acelerarCenario"
+    static let velocidadeDoCenario = "velocidadeDoCenario"
+    #endif
     static let sessaoSalva = "sessaoSalva"
     static let somObjetos = "somObjetos"          // sons dos alfinetes e penduricalhos caindo
     static let movimento = "movimentoLigado"      // Core Motion: inclinar e virar o aparelho
