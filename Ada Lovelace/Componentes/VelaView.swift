@@ -384,7 +384,7 @@ extension TamanhoEnfeite {
                 SuporteView(largura: largura)
                     .offset(x: SuporteView.desvioX(largura: largura))
                 Text("\(VelaConfig.minutos(para: posicao)) min")
-                    .font(.caption)
+                    .font(.custom("ViaodaLibre-Regular", size: 12, relativeTo: .caption))
                     .foregroundStyle(Cores.papel)
                     .padding(.top, 8)
             }
@@ -452,7 +452,7 @@ extension TamanhoEnfeite {
             VStack(spacing: 20) {
                 EnfeiteView(tipo: tipo, lado: -1, largura: 60)
                 EnfeiteView(tipo: tipo, lado: 1, largura: 60)
-                Text(tipo.nome).font(.caption)
+                Text(tipo.nome).font(.custom("ViaodaLibre-Regular", size: 12, relativeTo: .caption))
             }
         }
     }

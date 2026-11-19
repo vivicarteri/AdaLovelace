@@ -52,11 +52,11 @@ struct OnboardingView: View {
 
                 VStack(spacing: 12) {
                     Text(passos[passo].titulo)
-                        .font(.system(.title2, design: .serif).bold())
+                        .font(.custom("ViaodaLibre-Regular", size: 22, relativeTo: .title2))
                         .multilineTextAlignment(.center)
                         .accessibilityAddTraits(.isHeader)
                     Text(passos[passo].texto)
-                        .font(.body)
+                        .font(.custom("ViaodaLibre-Regular", size: 17, relativeTo: .body))
                         .multilineTextAlignment(.center)
                         .opacity(0.85)
                 }
@@ -86,7 +86,7 @@ struct OnboardingView: View {
                     }
                 } label: {
                     Text(passo < passos.count - 1 ? "Próximo" : "Começar")
-                        .font(.headline)
+                        .font(.custom("ViaodaLibre-Regular", size: 17, relativeTo: .headline))
                         .foregroundStyle(Cores.tinta)
                         .padding(.horizontal, 32)
                         .padding(.vertical, 12)
@@ -126,7 +126,7 @@ struct OnboardingView: View {
                 let t = contexto.date.timeIntervalSinceReferenceDate
                 let virar = reduzirMovimento ? 1 : (sin(t * 1.2) + 1) / 2   // 0 = em pé, 1 = de cabeça para baixo
                 Image(systemName: "iphone")
-                    .font(.system(size: 140, weight: .thin))
+                    .font(.custom("ViaodaLibre-Regular", size: 140))
                     .foregroundStyle(Cores.papel)
                     .rotationEffect(.degrees(180 * virar))
             }

@@ -256,14 +256,14 @@ struct PalcoView: View {
                 }
             VStack(spacing: 14) {
                 Text("Fim")
-                    .font(.system(size: 34, weight: .bold, design: .serif).italic())
+                    .font(.custom("ViaodaLibre-Regular", size: 34))
                     .foregroundStyle(Cores.tinta)
                     .padding(.horizontal, 30)
                     .padding(.vertical, 10)
                     .background(Capsule().fill(Cores.papel))
                     .overlay(Capsule().stroke(Cores.tinta, lineWidth: 2))
                 Text("Toque para acender uma vela nova")
-                    .font(.system(size: 17, weight: .semibold, design: .serif))
+                    .font(.custom("ViaodaLibre-Regular", size: 17))
                     .foregroundStyle(Cores.papel)
                     .multilineTextAlignment(.center)
             }

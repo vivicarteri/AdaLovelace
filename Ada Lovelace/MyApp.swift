@@ -3,11 +3,19 @@
 
 import SwiftUI
 import TipKit
+import CoreText
 
 @main struct MyApp: App {
     @StateObject private var sessao = Sessao()
 
     init() {
+        // Registra a fonte incluída em Recursos para poder experimentá-la nas telas.
+        if let url = Bundle.main.url(forResource: "ViaodaLibre-Regular", withExtension: "ttf") {
+            if !CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil) {
+                print("Não foi possível registrar ViaodaLibre-Regular.ttf")
+            }
+        }
+
         // Liga o TipKit. SEM esta linha as dicas da pinça nunca aparecem.
         // .immediate = a dica aparece assim que o lugar dela entra na tela.
         // Para ver as dicas de novo durante o teste: Configurações → "Mostrar as dicas de novo".
