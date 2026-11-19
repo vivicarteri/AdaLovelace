@@ -13,7 +13,11 @@ struct BotaoRedondo: View {
     var body: some View {
         Button(action: acao) {
             Image(systemName: icone)
+//<<<<<<< Updated upstream
                 .font(.custom("ViaodaLibre-Regular", size: tamanho * 0.4))
+//=======
+                .adaFont(.iconButton, containerSize: tamanho)
+//>>>>>>> Stashed changes
                 .foregroundStyle(Cores.tinta)
                 .frame(width: tamanho, height: tamanho)
                 .background(Circle().fill(Cores.papel))
@@ -58,9 +62,10 @@ struct BotaoDescartar: View {
             Arte("iconeDescartar") {
                 ZStack {
                     Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.custom("ViaodaLibre-Regular", size: tamanho * 0.5))
                     Image(systemName: "flame.fill")
-                        .font(.custom("ViaodaLibre-Regular", size: tamanho * 0.2))
+                        .adaFont(.iconButtonProminent, containerSize: tamanho)
+                    Image(systemName: "flame.fill")
+                        .adaFont(.iconButtonDetail, containerSize: tamanho)
                 }
                 .foregroundStyle(Cores.tinta)
             }
@@ -199,7 +204,7 @@ struct CaixaFosforoView: View {
                         .frame(width: lixa.width, height: lixa.height)
                         .position(x: lixa.midX, y: lixa.midY)
                     Image(systemName: "flame")
-                        .font(.custom("ViaodaLibre-Regular", size: h * 0.26))
+                        .adaFont(.matchboxIcon, containerSize: h)
                         .foregroundStyle(Cores.cortina)
                         .offset(y: h * 0.18)
                     RoundedRectangle(cornerRadius: 5).stroke(Cores.tinta, lineWidth: 2)
@@ -313,7 +318,7 @@ struct FosforoView: View {
     VStack(spacing: 12) {
         BotaoDescartar(tamanho: 60, haptics: Haptics()) { print("Descartou a vela") }
         Text("Segure por 1 segundo")
-            .font(.custom("ViaodaLibre-Regular", size: 12, relativeTo: .caption))
+            .adaFont(.caption)
             .foregroundStyle(Cores.papel)
     }
     .padding(30)
@@ -342,7 +347,7 @@ struct FosforoView: View {
             .padding(.leading, CaixaFosforoView.corrida(largura: largura))
         Slider(value: $aberta, in: 0...1) { Text("Gaveta") }
         Text("aberta: \(Double(aberta), specifier: "%.2f")  (em repouso: \(Double(CaixaFosforoView.emRepouso), specifier: "%.2f"))")
-            .font(.custom("ViaodaLibre-Regular", size: 12, relativeTo: .caption))
+            .adaFont(.caption)
             .foregroundStyle(Cores.papel)
     }
     .padding(30)

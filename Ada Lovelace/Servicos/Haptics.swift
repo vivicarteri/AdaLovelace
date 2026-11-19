@@ -4,6 +4,66 @@ import Foundation
 import CoreHaptics
 import AVFoundation
 
+/// Reproduz o som de raspagem em sincronia com a distância percorrida na lixa.
+private final class SomRiscoFosforo {
+    private let engine = AVAudioEngine()
+    private let player = AVAudioPlayerNode()
+    private let timePitch = AVAudioUnitTimePitch()
+    private var arquivo: AVAudioFile?
+    private var audioAgendado = false
+
+    init() {
+        guard let url = Bundle.main.url(forResource: "Acender", withExtension: "wav") else {
+            print("Não achei Acender.wav no bundle do app")
+            return
+        }
+        do {
+            let arquivo = try AVAudioFile(forReading: url)
+            self.arquivo = arquivo
+            engine.attach(player)
+            engine.attach(timePitch)
+            engine.connect(player, to: timePitch, format: arquivo.processingFormat)
+            engine.connect(timePitch, to: engine.mainMixerNode, format: arquivo.processingFormat)
+        } catch {
+            print("Erro ao preparar Acender.wav: \(error)")
+        }
+    }
+
+    func preparar() {
+        guard let arquivo else { return }
+        do {
+            if !engine.isRunning { try engine.start() }
+            if !audioAgendado {
+                timePitch.rate = 1.0 / 32.0
+                player.scheduleFile(arquivo, at: nil, completionHandler: nil)
+                audioAgendado = true
+            }
+        } catch {
+            print("Erro ao preparar o risco do fósforo: \(error)")
+        }
+    }
+
+    func atualizar(velocidade: CGFloat, distanciaNecessaria: CGFloat) {
+        guard let arquivo, distanciaNecessaria > 0 else { return }
+        let duracaoAudio = Double(arquivo.length) / arquivo.processingFormat.sampleRate
+        let taxaDesejada = duracaoAudio * Double(max(0, velocidade)) / Double(distanciaNecessaria)
+        timePitch.rate = Float(min(32, max(1.0 / 32.0, taxaDesejada)))
+
+        preparar()
+        if !player.isPlaying { player.play() }
+    }
+
+    func pausar() {
+        player.pause()
+    }
+
+    func cancelar() {
+        player.stop()
+        audioAgendado = false
+        timePitch.rate = 1
+    }
+}
+
 final class Haptics {
     let suportado = CHHapticEngine.capabilitiesForHardware().supportsHaptics
 
@@ -16,7 +76,11 @@ final class Haptics {
     private var chama: CHHapticAdvancedPatternPlayer?
     private var chamaTocando = false   // para religar a chama se o sistema reiniciar o motor
     private var segurar: CHHapticAdvancedPatternPlayer?
+//<<<<<<< Updated upstream
     private var audioPrego: AVAudioPlayer?
+//=======
+    private let somRiscoFosforo = SomRiscoFosforo()
+//>>>>>>> Stashed changes
 
     init() {
         criarMotor()
@@ -156,7 +220,7 @@ final class Haptics {
 
     // MARK: Momentos da vela
 
-    func acender() { tocar("Acender") }
+    func acender() { tocar("Acender", volume: 0) }
 
     func apagar() { tocar("Apagar") }
 
@@ -177,6 +241,16 @@ final class Haptics {
 
     // Batidinha leve (slider, encaixar enfeite…)
     func tique() { toque(forca: 0.5, nitidez: 0.5) }
+
+    // O padrão Acender continua dando a vibração, mas seu áudio é raspado pelo gesto.
+    func prepararSomRiscoFosforo() { somRiscoFosforo.preparar() }
+
+    func atualizarSomRiscoFosforo(velocidade: CGFloat, distanciaNecessaria: CGFloat) {
+        somRiscoFosforo.atualizar(velocidade: velocidade, distanciaNecessaria: distanciaNecessaria)
+    }
+
+    func pausarSomRiscoFosforo() { somRiscoFosforo.pausar() }
+    func cancelarSomRiscoFosforo() { somRiscoFosforo.cancelar() }
 
     // Fósforo riscando na caixa: batida seca e áspera
     func riscar() { toque(forca: 0.9, nitidez: 0.2) }
@@ -250,6 +324,10 @@ final class Haptics {
     func ligarMotor() {}
     func desligarMotor() {}
     func acender() {}
+    func prepararSomRiscoFosforo() {}
+    func atualizarSomRiscoFosforo(velocidade: CGFloat, distanciaNecessaria: CGFloat) {}
+    func pausarSomRiscoFosforo() {}
+    func cancelarSomRiscoFosforo() {}
     func apagar() {}
     func fim() {}
     func prego(forca: Float) {}

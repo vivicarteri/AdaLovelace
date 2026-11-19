@@ -7,7 +7,6 @@ import CoreText
 
 @main struct MyApp: App {
     @StateObject private var sessao = Sessao()
-
     init() {
         // Registra a fonte incluída em Recursos para poder experimentá-la nas telas.
         if let url = Bundle.main.url(forResource: "ViaodaLibre-Regular", withExtension: "ttf") {
@@ -36,6 +35,7 @@ import CoreText
             ContentView()
                 .environmentObject(sessao)
                 .preferredColorScheme(.dark)
+                .environment(\.font, ADAFont.font(for: .body))
         }
     }
 }

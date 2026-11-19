@@ -38,6 +38,7 @@ struct PalcoView: View {
     @State private var inicioArraste: CGPoint?
     @State private var riscado: CGFloat = 0
     @State private var ultimoPontoRisco: CGPoint?
+    @State private var ultimoInstanteRisco: TimeInterval?
 
     private var tamanhoFosforo: CGFloat { FosforoView.tamanhoNoPalco }
 
@@ -233,14 +234,14 @@ struct PalcoView: View {
                 }
             VStack(spacing: 14) {
                 Text("Fim")
-                    .font(.custom("ViaodaLibre-Regular", size: 34))
+                    .adaFont(.screenTitle)
                     .foregroundStyle(Cores.tinta)
                     .padding(.horizontal, 30)
                     .padding(.vertical, 10)
                     .background(Capsule().fill(Cores.papel))
                     .overlay(Capsule().stroke(Cores.tinta, lineWidth: 2))
                 Text("Toque para acender uma vela nova")
-                    .font(.custom("ViaodaLibre-Regular", size: 17))
+                    .adaFont(.body)
                     .foregroundStyle(Cores.papel)
                     .multilineTextAlignment(.center)
             }
@@ -350,6 +351,10 @@ struct PalcoView: View {
             }
         } else {
             // Guarda o fósforo de volta e fecha a gaveta
+            sessao.haptics.cancelarSomRiscoFosforo()
+            ultimoPontoRisco = nil
+            ultimoInstanteRisco = nil
+            riscado = 0
             withAnimation(.easeIn(duration: 0.3)) { etapa = .guardado }
             withAnimation(.easeInOut(duration: 0.4).delay(0.1)) { caixaAberta = CaixaFosforoView.emRepouso }
         }
@@ -376,6 +381,7 @@ struct PalcoView: View {
                 try? await Task.sleep(for: .seconds(duracaoDoFosforo))
                 guard !Task.isCancelled, etapa == .aceso else { return }
                 sessao.haptics.tique()   // TODO: som do fósforo apagando, quando chegar
+                sessao.haptics.cancelarSomRiscoFosforo()
                 withAnimation(.easeOut(duration: 0.4)) { etapa = .guardado }
                 withAnimation(.easeInOut(duration: 0.4).delay(0.1)) { caixaAberta = CaixaFosforoView.emRepouso }
             }
@@ -392,13 +398,27 @@ struct PalcoView: View {
         case .fora:
             // Riscar: esfregar a cabeça do fósforo na lixa
             if g.lixa.insetBy(dx: -10, dy: -14).contains(ponto) {
+                if ultimoPontoRisco == nil {
+                    sessao.haptics.prepararSomRiscoFosforo()
+                }
+                let agora = ProcessInfo.processInfo.systemUptime
                 if let ultimo = ultimoPontoRisco {
+                    let delta = hypot(ponto.x - ultimo.x, ponto.y - ultimo.y)
                     let antes = riscado
-                    riscado += hypot(ponto.x - ultimo.x, ponto.y - ultimo.y)
-                    // Uma vibração áspera a cada pedacinho riscado
+                    riscado += delta
+                    // Uma vibração áspera a cada pedacinho riscado.
                     if Int(riscado / 26) > Int(antes / 26) { sessao.haptics.raspar() }
+
+                    if delta > 0 {
+                        let intervalo = max(agora - (ultimoInstanteRisco ?? agora), 1.0 / 120.0)
+                        sessao.haptics.atualizarSomRiscoFosforo(
+                            velocidade: delta / CGFloat(intervalo),
+                            distanciaNecessaria: g.lixa.width * 0.55
+                        )
+                    }
                 }
                 ultimoPontoRisco = ponto
+                ultimoInstanteRisco = agora
                 if riscado > g.lixa.width * 0.55 {
                     etapa = .aceso
                     riscado = 0
@@ -406,6 +426,8 @@ struct PalcoView: View {
                 }
             } else {
                 ultimoPontoRisco = nil
+                ultimoInstanteRisco = nil
+                sessao.haptics.pausarSomRiscoFosforo()
             }
         case .aceso:
             // Encostar no pavio: acende a vela
@@ -414,6 +436,7 @@ struct PalcoView: View {
                                 y: g.baseY - alturaCheia * CGFloat(1 - sessao.progresso))
             if hypot(ponto.x - pavio.x, ponto.y - pavio.y) < max(40, g.larguraVela * 0.6) {
                 inicioArraste = nil
+                sessao.haptics.cancelarSomRiscoFosforo()
                 withAnimation(.easeOut(duration: 0.3)) { etapa = .guardado }
                 withAnimation(.easeInOut(duration: 0.4).delay(0.1)) { caixaAberta = CaixaFosforoView.emRepouso }
                 sessao.acender()
@@ -426,7 +449,11 @@ struct PalcoView: View {
     private func soltarFosforo(_ g: LayoutPalco) {
         inicioArraste = nil
         ultimoPontoRisco = nil
-        if etapa == .fora { riscado = 0 }
+        ultimoInstanteRisco = nil
+        if etapa == .fora {
+            riscado = 0
+            sessao.haptics.cancelarSomRiscoFosforo()
+        }
         guard etapa != .guardado else { return }
         withAnimation(.spring(duration: 0.5)) { posFosforo = repousoFosforo(g) }
     }

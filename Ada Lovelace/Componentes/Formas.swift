@@ -133,7 +133,7 @@ struct Bonequinho: Shape {
                     .stroke(Cores.tinta, style: StrokeStyle(lineWidth: 3, lineCap: .round))
                     .frame(width: 54, height: 90)
                 Text("braços \(bracos, specifier: "%.1f")")
-                    .font(.custom("ViaodaLibre-Regular", size: 11, relativeTo: .caption2))
+                    .adaFont(.microCaption)
             }
         }
     }
