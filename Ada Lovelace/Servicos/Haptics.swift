@@ -16,6 +16,7 @@ final class Haptics {
     private var chama: CHHapticAdvancedPatternPlayer?
     private var chamaTocando = false   // para religar a chama se o sistema reiniciar o motor
     private var segurar: CHHapticAdvancedPatternPlayer?
+    private var audioPrego: AVAudioPlayer?
 
     init() {
         criarMotor()
@@ -26,6 +27,7 @@ final class Haptics {
     private func criarMotor() {
         // .ambient: o som do app não para a música da pessoa
         try? AVAudioSession.sharedInstance().setCategory(.ambient)
+        carregarAudioDoPrego()
         guard suportado else { return }
         do {
             let motor = try CHHapticEngine(audioSession: .sharedInstance())
@@ -49,6 +51,30 @@ final class Haptics {
         } catch {
             print("Erro ao criar o motor de vibração: \(error)")
         }
+    }
+
+    private func carregarAudioDoPrego() {
+        guard let url = Bundle.main.url(forResource: "Prego", withExtension: "wav") else {
+            print("Não achei Prego.wav no bundle do app")
+            return
+        }
+        do {
+            let player = try AVAudioPlayer(contentsOf: url)
+            player.prepareToPlay()
+            audioPrego = player
+        } catch {
+            print("Erro ao carregar Prego.wav: \(error)")
+        }
+    }
+
+    // O enfeite leva 0,45 s para cair. Agenda o WAV original para tocar ao atingir o pote.
+    private func tocarAudioDoPrego(forca: Float) {
+        guard Chaves.ligado(Chaves.somObjetos), let player = audioPrego else { return }
+        player.stop()
+        player.currentTime = 0
+        player.volume = max(0, min(1, forca))
+        player.prepareToPlay()
+        player.play(atTime: player.deviceCurrentTime + Self.tempoQueda)
     }
 
     private func ligarSePreciso() throws {
@@ -139,16 +165,15 @@ final class Haptics {
     // forca: 0 a 1 (enfeite mais alto = cai de mais alto = batida mais forte e som mais alto)
     func prego(forca: Float) {
         let f = max(0, min(1, forca))
-        tocar("Prego", forca: 0.5 + 0.5 * f, volume: (0.4 + 0.6 * f) * volumeDosObjetos)
+        tocar("Prego", forca: 0.5 + 0.5 * f, volume: 0)
+        tocarAudioDoPrego(forca: 0.4 + 0.6 * f)
     }
 
     // Enfeite que não encostou na vela e caiu no pote
     func caiuNoPote() {
-        tocar("Prego", forca: 0.3, volume: 0.25 * volumeDosObjetos)
+        tocar("Prego", forca: 0.3, volume: 0)
+        tocarAudioDoPrego(forca: 0.25)
     }
-
-    // "Sons dos objetos" desligado nas Configurações: a vibração continua, o som some
-    private var volumeDosObjetos: Float { Chaves.ligado(Chaves.somObjetos) ? 1 : 0 }
 
     // Batidinha leve (slider, encaixar enfeite…)
     func tique() { toque(forca: 0.5, nitidez: 0.5) }

@@ -65,7 +65,7 @@ struct TeatroSombrasView: View {
 
                 Arte("letreiro") {
                     Text("Teatro de Sombras")
-                        .font(.system(size: 22, weight: .bold, design: .serif).italic())
+                        .font(.custom("ViaodaLibre-Regular", size: 22))
                         .foregroundStyle(Cores.tinta)
                         .padding(.horizontal, 18)
                         .padding(.vertical, 10)

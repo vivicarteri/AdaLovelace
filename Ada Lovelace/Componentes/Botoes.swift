@@ -13,7 +13,7 @@ struct BotaoRedondo: View {
     var body: some View {
         Button(action: acao) {
             Image(systemName: icone)
-                .font(.system(size: tamanho * 0.4, weight: .semibold))
+                .font(.custom("ViaodaLibre-Regular", size: tamanho * 0.4))
                 .foregroundStyle(Cores.tinta)
                 .frame(width: tamanho, height: tamanho)
                 .background(Circle().fill(Cores.papel))
@@ -58,9 +58,9 @@ struct BotaoDescartar: View {
             Arte("iconeDescartar") {
                 ZStack {
                     Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.system(size: tamanho * 0.5, weight: .regular))
+                        .font(.custom("ViaodaLibre-Regular", size: tamanho * 0.5))
                     Image(systemName: "flame.fill")
-                        .font(.system(size: tamanho * 0.2))
+                        .font(.custom("ViaodaLibre-Regular", size: tamanho * 0.2))
                 }
                 .foregroundStyle(Cores.tinta)
             }
@@ -199,7 +199,7 @@ struct CaixaFosforoView: View {
                         .frame(width: lixa.width, height: lixa.height)
                         .position(x: lixa.midX, y: lixa.midY)
                     Image(systemName: "flame")
-                        .font(.system(size: h * 0.26))
+                        .font(.custom("ViaodaLibre-Regular", size: h * 0.26))
                         .foregroundStyle(Cores.cortina)
                         .offset(y: h * 0.18)
                     RoundedRectangle(cornerRadius: 5).stroke(Cores.tinta, lineWidth: 2)
@@ -313,7 +313,7 @@ struct FosforoView: View {
     VStack(spacing: 12) {
         BotaoDescartar(tamanho: 60, haptics: Haptics()) { print("Descartou a vela") }
         Text("Segure por 1 segundo")
-            .font(.caption)
+            .font(.custom("ViaodaLibre-Regular", size: 12, relativeTo: .caption))
             .foregroundStyle(Cores.papel)
     }
     .padding(30)
@@ -342,7 +342,7 @@ struct FosforoView: View {
             .padding(.leading, CaixaFosforoView.corrida(largura: largura))
         Slider(value: $aberta, in: 0...1) { Text("Gaveta") }
         Text("aberta: \(Double(aberta), specifier: "%.2f")  (em repouso: \(Double(CaixaFosforoView.emRepouso), specifier: "%.2f"))")
-            .font(.caption)
+            .font(.custom("ViaodaLibre-Regular", size: 12, relativeTo: .caption))
             .foregroundStyle(Cores.papel)
     }
     .padding(30)

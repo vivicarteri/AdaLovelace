@@ -251,7 +251,7 @@ struct PersonalizacaoView: View {
                 }
             } else {
                 Text("Arraste a bolinha para mudar o tamanho")
-                    .font(.footnote)
+                    .font(.custom("ViaodaLibre-Regular", size: 13, relativeTo: .footnote))
                     .foregroundStyle(Cores.tinta.opacity(0.7))
                     .padding(.horizontal)
             }
@@ -275,7 +275,7 @@ struct PersonalizacaoView: View {
             haptics.tique()
         } label: {
             Image(systemName: icone)
-                .font(.system(size: 22, weight: .semibold))
+                .font(.custom("ViaodaLibre-Regular", size: 22))
                 .foregroundStyle(Cores.tinta)
                 .frame(width: 56, height: 56)
                 .background(Circle().fill(aba == qual ? Cores.dourado : Cores.papel))
