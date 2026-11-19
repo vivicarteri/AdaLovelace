@@ -66,7 +66,7 @@ enum CenarioNovo {
     // Esses vídeos vieram com fundo PRETO (sem transparência): o preto de fora do
     // contorno branco foi apagado e virou transparente.
 
-    // Sol: o corpo fica parado, só o rosto (olhos e bochechas) muda. 40 s, 12 quadros por segundo.
+    // Sol: as hélices giram atrás do rosto, que anima os olhos e as bochechas. 40 s, 12 quadros por segundo.
     static let sol = PecaAnimada(
         nome: "cenarioSol",
         peca: CGRect(x: 1344, y: 374, width: 1628, height: 1765),
@@ -130,11 +130,11 @@ struct PecaAnimadaView: View {
     var body: some View {
         GeometryReader { geo in
             if let t {
-                desenho(geo.size, quadro: reduzirMovimento ? 0 : peca.quadro(t: t + fase))
+                desenho(geo.size, tempo: reduzirMovimento ? 0 : t + fase)
             } else {
                 TimelineView(.animation(minimumInterval: 1 / peca.fps, paused: reduzirMovimento)) { contexto in
                     let agora = contexto.date.timeIntervalSinceReferenceDate + fase
-                    desenho(geo.size, quadro: reduzirMovimento ? 0 : peca.quadro(t: agora))
+                    desenho(geo.size, tempo: reduzirMovimento ? 0 : agora)
                 }
             }
         }
@@ -142,12 +142,21 @@ struct PecaAnimadaView: View {
         .accessibilityHidden(true)
     }
 
-    private func desenho(_ tamanho: CGSize, quadro q: Int) -> some View {
+    private func desenho(_ tamanho: CGSize, tempo: Double) -> some View {
+        let q = peca.quadro(t: tempo)
         // Quanto a peça encolheu/cresceu da tela da Georgia para a tela do aparelho
         let ex = tamanho.width / peca.peca.width
         let ey = tamanho.height / peca.peca.height
         let p = peca.pedaco
         return ZStack(alignment: .topLeading) {
+            if peca.nome == CenarioNovo.sol.nome {
+                // As duas imagens têm o mesmo recorte. O eixo do vídeo fica fora do centro dele.
+                Image("cenarioSolHelices")
+                    .resizable()
+                    .frame(width: tamanho.width, height: tamanho.height)
+                    .rotationEffect(.degrees(-360 * tempo.truncatingRemainder(dividingBy: 40) / 40),
+                                    anchor: UnitPoint(x: 0.4711, y: 0.4819))
+            }
             Image(peca.nome)
                 .resizable()
                 .frame(width: tamanho.width, height: tamanho.height)

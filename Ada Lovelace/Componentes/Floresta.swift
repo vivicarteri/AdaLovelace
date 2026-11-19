@@ -323,7 +323,7 @@ struct FlorestaView: View {
                         let p = Floresta.arvores[i]
                         if mostra(p.sombra) { peca(p) }
                     }
-                    if mostra(.ceu) { estrelas(relogio) }
+                    if mostra(.ceu) { estrelas() }
                 }
                 if mostra(.ceu) {
                     estrelasEmTravessia(relogio, larguraVisivel)
@@ -388,7 +388,8 @@ struct FlorestaView: View {
     private func andante(_ a: Floresta.Andante, _ relogio: Double, _ larguraVisivel: CGFloat) -> some View {
         if let x = Floresta.x(a, relogio: relogio, larguraVisivel: larguraVisivel) {
             let y = a.centroY(relogio, parado: reduzirMovimento)
-            PecaAnimadaView(peca: a.peca, t: relogio, fase: a.fase, sombra: sombra)
+            // Os quadros da peça seguem o tempo real, inclusive durante o eclipse.
+            PecaAnimadaView(peca: a.peca, t: t, fase: a.fase, sombra: sombra)
                 .frame(width: a.largura * escala, height: a.altura * escala)
                 .position(x: quadro.x(Floresta.noQuadro(x: x)), y: quadro.y(Floresta.noQuadro(y: y)))
                 .clipped()
@@ -396,11 +397,11 @@ struct FlorestaView: View {
     }
 
     // Estrelas: pulsando e flutuando devagarinho
-    private func estrelas(_ relogio: Double) -> some View {
+    private func estrelas() -> some View {
         ZStack {
             ForEach(Floresta.estrelas.indices, id: \.self) { i in
                 let e = Floresta.estrelas[i]
-                estrela(e, relogio)
+                estrela(e)
                     .position(x: e.x * escala, y: e.y * escala)
             }
         }
@@ -415,7 +416,7 @@ struct FlorestaView: View {
                     let progresso = (tempo - passagem.lowerBound) / (passagem.upperBound - passagem.lowerBound)
                     // A estrela inteira sai de cena mesmo no maior tamanho da pulsação.
                     let x = e.x + (0.5 - progresso) * (larguraVisivel + e.altura * 1.06)
-                    estrela(e, relogio)
+                    estrela(e)
                         .position(x: quadro.x(Floresta.noQuadro(x: x)), y: quadro.y(Floresta.noQuadro(y: e.y)))
                         .clipped()
                 }
@@ -423,10 +424,10 @@ struct FlorestaView: View {
         }
     }
 
-    private func estrela(_ e: Floresta.Estrela, _ relogio: Double) -> some View {
-        let pulso = reduzirMovimento ? 0 : (1 + Floresta.onda(86, relogio, fase: e.fase)) / 2
+    private func estrela(_ e: Floresta.Estrela) -> some View {
+        let pulso = reduzirMovimento ? 0 : (1 + Floresta.onda(86, t, fase: e.fase)) / 2
         let tamanho = e.altura * escala * (1 + 0.06 * pulso)
-        let flutua = reduzirMovimento ? 0 : 8 * Floresta.onda(48, relogio, fase: e.fase)
+        let flutua = reduzirMovimento ? 0 : 8 * Floresta.onda(48, t, fase: e.fase)
         return Image(e.nome)
             .resizable()
             .scaledToFit()
