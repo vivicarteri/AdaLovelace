@@ -75,14 +75,37 @@ enum Floresta {
 
     static let fundo = Peca(nome: "florestaFundo", x: 0, y: 0, w: 2732, h: 2048)   // o céu de fundo não faz sombra
 
-    // A faixa da frente continua espelhada à esquerda, com as raízes na mesma altura.
+    static let bosqueDeTras = Peca(nome: "florestaFundoArvores2", x: 80, y: 1047, w: 1816, h: 994,
+             tinta: azulNoite, sombra: .arvoresDeTras)
+    static let bosqueDaFrente = Peca(nome: "florestaFundoArvores1", x: 893, y: 1051, w: 1586, h: 955,
+             tinta: cinzaNoite, sombra: .arvoresDaFrente)
+
+    // Composição estática do mockup.
     static let arvores: [Peca] = [
-        Peca(nome: "florestaFundoArvores2", x: 80, y: 1047, w: 1816, h: 994,
-             tinta: azulNoite, sombra: .arvoresDeTras),
+        bosqueDeTras,
         Peca(nome: "florestaFundoArvores1", x: 893 - 1586, y: 1051, w: 1586, h: 955,
              tinta: cinzaNoite, espelho: true, sombra: .arvoresDaFrente),
-        Peca(nome: "florestaFundoArvores1", x: 893, y: 1051, w: 1586, h: 955,
-             tinta: cinzaNoite, sombra: .arvoresDaFrente)
+        bosqueDaFrente
+    ]
+
+    // No rolo do iPhone, árvores individuais completam o espaço entre os dois bosques.
+    static let arvoresDoRolo: [Peca] = [
+        bosqueDeTras,
+        Peca(nome: "florestaArvore3Cinza", x: 1910, y: 1138, w: 295, h: 862,
+             tinta: azulNoite, sombra: .arvoresDeTras),
+        Peca(nome: "florestaArvore1Cinza", x: 2246, y: 1174, w: 299, h: 830,
+             tinta: azulNoite, sombra: .arvoresDeTras),
+        Peca(nome: "florestaArvore2Cinza", x: 2514, y: 1198, w: 207, h: 808,
+             tinta: azulNoite, sombra: .arvoresDeTras),
+        Peca(nome: "florestaArvore2", x: 42, y: 1090, w: 233, h: 910,
+             tinta: cinzaNoite, sombra: .arvoresDaFrente),
+        Peca(nome: "florestaArvore3", x: 338, y: 1038, w: 330, h: 964,
+             tinta: cinzaNoite, sombra: .arvoresDaFrente),
+        Peca(nome: "florestaArvore1", x: 622, y: 1112, w: 320, h: 890,
+             tinta: cinzaNoite, sombra: .arvoresDaFrente),
+        bosqueDaFrente,
+        Peca(nome: "florestaArvore1", x: 2376, y: 1056, w: 343, h: 952,
+             tinta: cinzaNoite, espelho: true, sombra: .arvoresDaFrente)
     ]
 
     // A Georgia mandou dois arbustos; do lado direito eles se repetem espelhados (como no mockup)
@@ -317,10 +340,14 @@ struct FlorestaView: View {
                 : Floresta.tempoDoCenario(tempo, larguraVisivel: larguraVisivel,
                                          larguraDosAstros: astros.sol.largura + astros.lua.largura)
             ZStack {
-                faixa(relogio, larguraVisivel: larguraVisivel) {
-                    if !sombra { peca(Floresta.fundo) }
-                    ForEach(Floresta.arvores.indices, id: \.self) { i in
-                        let p = Floresta.arvores[i]
+                let emRolagem = Floresta.desliza && !reduzirMovimento
+                let arvores = emRolagem ? Floresta.arvoresDoRolo : Floresta.arvores
+                if !sombra {
+                    faixa(relogio, larguraVisivel: larguraVisivel) { peca(Floresta.fundo) }
+                }
+                faixa(relogio, larguraVisivel: larguraVisivel, alternaEspelho: !emRolagem) {
+                    ForEach(arvores.indices, id: \.self) { i in
+                        let p = arvores[i]
                         if mostra(p.sombra) { peca(p) }
                     }
                     if mostra(.ceu) { estrelas() }
@@ -354,6 +381,7 @@ struct FlorestaView: View {
 
     // Cada par de painéis fecha uma volta. O espelho une bordas idênticas.
     private func faixa<Conteudo: View>(_ relogio: Double, larguraVisivel: CGFloat,
+                                       alternaEspelho: Bool = true,
                                        @ViewBuilder conteudo: () -> Conteudo) -> some View {
         let largura = Floresta.largura * escala
         let voltas = Floresta.desliza && !reduzirMovimento ? 2 * relogio / RelogioDaHistoria.ciclo : 0
@@ -367,7 +395,7 @@ struct FlorestaView: View {
                 painelDeArte
                     .frame(width: largura, height: Floresta.altura * escala)
                     .clipped()
-                    .scaleEffect(x: (painel + i).isMultiple(of: 2) ? 1 : -1, y: 1)
+                    .scaleEffect(x: alternaEspelho && !(painel + i).isMultiple(of: 2) ? -1 : 1, y: 1)
                     .position(x: centro + (CGFloat(i) - fracao) * largura,
                               y: quadro.y(Quadro.altura / 2))
             }
