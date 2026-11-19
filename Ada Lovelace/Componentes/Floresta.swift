@@ -13,9 +13,9 @@
 //    fundo (céu + silhuetas bem apagadas) → árvores azul-escuras → árvores cinza (com contorno)
 //    → estrelas → SOL e LUA (eclipse) → nuvens → arbustos → passarinhos
 //
-//  A HISTÓRIA dura 10 minutos (a vela mais curta) e recomeça igual, em loop (RelogioDaHistoria).
+//  A história recomeça em loop ao terminar o roteiro.
 //  Ela só anda com a vela acesa. O sol vem da direita e a lua da esquerda; eles só se encontram
-//  no ECLIPSE, aos 5 minutos (a cena do mockup). Nuvens e passarinhos passam em sentidos
+//  no ECLIPSE, no meio do roteiro (a cena do mockup). Nuvens e passarinhos passam em sentidos
 //  contrários, cada um com seu tempo em cena.
 //
 //  Se "florestaFundo" não estiver no Assets, o app volta para a tenda do circo.
@@ -149,20 +149,21 @@ enum Floresta {
         var largura: CGFloat { altura * peca.peca.width / peca.peca.height }
     }
 
-    // O par divide a mesma passagem: entra aos 3min30 e sai aos 6min30.
+    // O par divide a mesma passagem: entra aos 3min30 e sai aos 6min30 do roteiro.
     static let passagemDosAstros = 210.0..<390.0
 
-    // No minuto central, o cenário avança a 1/4 da velocidade. A transição
-    // preserva os horários de entrada, encontro e saída dos astros.
-    static func tempoDoCenario(_ tempo: Double) -> Double {
-        guard passagemDosAstros.contains(tempo) else { return tempo }
-        let meiaPassagem = (passagemDosAstros.upperBound - passagemDosAstros.lowerBound) / 2
-        let encontro = passagemDosAstros.lowerBound + meiaPassagem
-        let distancia = tempo - encontro
-        let meiaJanelaLenta = 30.0
-        let u = max(0, (abs(distancia) - meiaJanelaLenta) / (meiaPassagem - meiaJanelaLenta))
-        let transicao = u * u * (3 - 2 * u)
-        return encontro + distancia * (0.25 + 0.75 * transicao)
+    // A distância entre os centros diminui à soma das velocidades dos astros.
+    // As bordas se tocam quando essa distância chega à soma das meias larguras.
+    static func tempoDoCenario(_ tempo: Double, larguraVisivel: CGFloat, larguraDosAstros: CGFloat) -> Double {
+        let passagem = passagemDosAstros.upperBound - passagemDosAstros.lowerBound
+        let percursoRelativo = 2 * larguraVisivel + larguraDosAstros
+        let sobreposicao = percursoRelativo > 0 ? passagem * larguraDosAstros / percursoRelativo : 0
+        let inicio = passagemDosAstros.lowerBound + (passagem - sobreposicao) / 2
+        let duracaoLenta = sobreposicao * 4
+        let atraso = duracaoLenta - sobreposicao
+        let fase = tempo.truncatingRemainder(dividingBy: RelogioDaHistoria.ciclo + atraso)
+        let tempoEmSobreposicao = min(duracaoLenta, max(0, fase - inicio))
+        return fase - tempoEmSobreposicao * 0.75
     }
 
     static func astros(no quadro: Quadro) -> (sol: Andante, lua: Andante) {
@@ -226,9 +227,9 @@ enum Floresta {
 }
 
 // O RELÓGIO DA HISTÓRIA
-// A história do cenário dura 10 minutos (o tempo da vela mais curta) e recomeça igualzinha.
+// O roteiro tem 600 segundos de animação.
 // Ela só anda com a vela ACESA: pausa quando a vela apaga e volta do zero com uma vela nova.
-// No ritmo normal, o ciclo completo leva 10 minutos de vela acesa.
+// A vista converte o tempo acumulado em tempo de cena conforme a largura visível.
 @MainActor
 enum RelogioDaHistoria {
     // ⚙️ Duração da história, em segundos
@@ -261,11 +262,10 @@ enum RelogioDaHistoria {
         acesaDesde = nil
     }
 
-    // Em que ponto da história estamos (0 a 600 segundos)
+    // Tempo acumulado de reprodução desde o início da história.
     static func tempo(em data: Date) -> Double {
         let decorrido = acesaDesde.map { max(0, data.timeIntervalSince($0)) } ?? 0
-        let total = acumulado + decorrido * velocidade
-        return total.truncatingRemainder(dividingBy: ciclo)
+        return acumulado + decorrido * velocidade
     }
 
     #if DEBUG
@@ -306,13 +306,16 @@ struct FlorestaView: View {
     }
 
     var body: some View {
-        // O relógio da história (10 min, em loop, só anda com a vela acesa). O cenário e as
+        // O relógio da história só anda com a vela acesa. O cenário e as
         // sombras usam o mesmo, então andam juntos. Com "Reduzir movimento", tudo fica parado
         // no eclipse (a cena do mockup).
-        let relogio = reduzirMovimento ? RelogioDaHistoria.ciclo / 2
-            : Floresta.tempoDoCenario(RelogioDaHistoria.tempo(em: Date(timeIntervalSinceReferenceDate: t)))
+        let tempo = RelogioDaHistoria.tempo(em: Date(timeIntervalSinceReferenceDate: t))
         GeometryReader { geo in
             let larguraVisivel = geo.size.width / max(Floresta.escala * quadro.escala, 0.001)
+            let astros = Floresta.astros(no: quadro)
+            let relogio = reduzirMovimento ? RelogioDaHistoria.ciclo / 2
+                : Floresta.tempoDoCenario(tempo, larguraVisivel: larguraVisivel,
+                                         larguraDosAstros: astros.sol.largura + astros.lua.largura)
             ZStack {
                 faixa(relogio, larguraVisivel: larguraVisivel) {
                     if !sombra { peca(Floresta.fundo) }
@@ -324,7 +327,6 @@ struct FlorestaView: View {
                 }
                 if mostra(.ceu) {
                     estrelasEmTravessia(relogio, larguraVisivel)
-                    let astros = Floresta.astros(no: quadro)
                     andante(astros.sol, relogio, larguraVisivel)
                     andante(astros.lua, relogio, larguraVisivel)
                     ForEach(Floresta.nuvens.indices, id: \.self) { i in
