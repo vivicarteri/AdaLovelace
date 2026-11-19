@@ -75,14 +75,17 @@ enum Floresta {
 
     static let fundo = Peca(nome: "florestaFundo", x: 0, y: 0, w: 2732, h: 2048)   // o céu de fundo não faz sombra
 
-    static let bosqueDeTras = Peca(nome: "florestaFundoArvores2", x: 80, y: 1047, w: 1816, h: 994,
+    static func bosqueDeTras(x: CGFloat) -> Peca {
+        Peca(nome: "florestaFundoArvores2", x: x, y: 1047, w: 1816, h: 994,
              tinta: azulNoite, sombra: .arvoresDeTras)
+    }
+
     static let bosqueDaFrente = Peca(nome: "florestaFundoArvores1", x: 893, y: 1051, w: 1586, h: 955,
              tinta: cinzaNoite, sombra: .arvoresDaFrente)
 
     // Composição estática do mockup.
     static let arvores: [Peca] = [
-        bosqueDeTras,
+        bosqueDeTras(x: 168),
         Peca(nome: "florestaFundoArvores1", x: 893 - 1586, y: 1051, w: 1586, h: 955,
              tinta: cinzaNoite, espelho: true, sombra: .arvoresDaFrente),
         bosqueDaFrente
@@ -90,12 +93,12 @@ enum Floresta {
 
     // No rolo do iPhone, árvores individuais completam o espaço entre os dois bosques.
     static let arvoresDoRolo: [Peca] = [
-        bosqueDeTras,
-        Peca(nome: "florestaArvore3Cinza", x: 1910, y: 1138, w: 295, h: 862,
+        bosqueDeTras(x: 230),
+        Peca(nome: "florestaArvore3Cinza", x: 1948, y: 1138, w: 295, h: 862,
              tinta: azulNoite, sombra: .arvoresDeTras),
-        Peca(nome: "florestaArvore1Cinza", x: 2246, y: 1174, w: 299, h: 830,
+        Peca(nome: "florestaArvore1Cinza", x: 2190, y: 1174, w: 299, h: 830,
              tinta: azulNoite, sombra: .arvoresDeTras),
-        Peca(nome: "florestaArvore2Cinza", x: 2514, y: 1198, w: 207, h: 808,
+        Peca(nome: "florestaArvore2Cinza", x: 2402, y: 1198, w: 207, h: 808,
              tinta: azulNoite, sombra: .arvoresDeTras),
         Peca(nome: "florestaArvore2", x: 42, y: 1090, w: 233, h: 910,
              tinta: cinzaNoite, sombra: .arvoresDaFrente),
@@ -197,7 +200,7 @@ enum Floresta {
         let balanco: CGFloat = 8
         let alturaLua = max(0, 968 - topo - 2 * balanco)
         let centro = topo + balanco + alturaLua / 2
-        let sol = Andante(peca: CenarioNovo.sol, altura: alturaLua * 0.96, y: centro,
+        let sol = Andante(peca: CenarioNovo.sol, altura: alturaLua * 1.152, y: centro,
                           passagem: passagemDosAstros, sentido: -1,
                           balanco: balanco, fase: 1.3)
         let lua = Andante(peca: CenarioNovo.lua, altura: alturaLua, y: centro,
@@ -227,10 +230,10 @@ enum Floresta {
     ]
 
     static let passarinhos: [Andante] = [
-        Andante(peca: CenarioNovo.passarinho, altura: 214, y: 362,
+        Andante(peca: CenarioNovo.passarinho, altura: 288.9, y: 362,
                 passagem: 0..<52, sentido: 1,
                 balanco: 4, fase: 0.7, ondula: 5, arco: (325, 175)),
-        Andante(peca: CenarioNovo.passarinho2, altura: 202, y: 358,
+        Andante(peca: CenarioNovo.passarinho2, altura: 272.7, y: 358,
                 passagem: 534..<600, sentido: -1,
                 balanco: 4, fase: 2.1, ondula: 5, arco: (350, 420))
     ]
