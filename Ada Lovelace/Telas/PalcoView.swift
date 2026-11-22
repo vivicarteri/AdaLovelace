@@ -9,6 +9,11 @@
 import SwiftUI
 import TipKit
 
+enum MedidasBarraDoPalco {
+    static let margemSuperior: CGFloat = 8
+    static let diametro: CGFloat = 44
+}
+
 struct PalcoView: View {
     @EnvironmentObject private var sessao: Sessao
     var abrirConfiguracoes: () -> Void
@@ -30,6 +35,11 @@ struct PalcoView: View {
     @State private var cortinaTela = false      // cortina que desce para trocar de tela (personalização)
     @State private var mostrarBotoes = true     // os botões saem de cena durante o zoom
     @State private var caixaAberta: CGFloat = CaixaFosforoView.emRepouso   // gaveta da caixa de fósforos
+    @State private var dicas = TipGroup(.firstAvailable) {
+        DicaSairDaCaixa()
+        DicaEntrarNaCaixa()
+        DicaOutroJeitoDeApagar()
+    }
 
     // Fósforo: 1) toca na caixa → o fósforo sai  2) risca na caixa → acende  3) arrasta até o pavio
     private enum EtapaFosforo { case guardado, fora, aceso }
@@ -54,10 +64,8 @@ struct PalcoView: View {
                 if sessao.foraDaCaixa || cameraAtiva {
                     // Vista de fora. A "câmera" (EfeitoCamera) aproxima ou afasta da caixa.
                     TeatroSombrasView(entrar: entrarNaCaixa,
-                                      abrirConfiguracoes: abrirConfiguracoes,
                                       aberturaCaixa: aberturaCaixa,
                                       conteudoDaCaixa: mostrarMiniatura ? AnyView(dentroDaCaixa(g, miniatura: true)) : nil,
-                                      mostrarBotoes: mostrarBotoes,
                                       congelado: trocandoCena)
                         .modifier(EfeitoCamera(z: camera, zoomFinal: caixa.zoomFinal,
                                                alvo: caixa.centroDaAbertura, tela: geo.size))
@@ -74,9 +82,25 @@ struct PalcoView: View {
                         .transition(.opacity)
                 }
 
+                if !personalizando {
+                    barraSuperior
+                        .opacity(mostrarBotoes ? 1 : 0)
+                        .transition(.opacity)
+                }
+
                 // Cortina que desce para trocar de tela
                 CortinaView(fechada: cortinaTela)
             }
+            .simultaneousGesture(MagnifyGesture().onEnded { valor in
+                guard !personalizando, !trocandoCena, !trocando else { return }
+                if sessao.foraDaCaixa && valor.magnification > 1.3 {
+                    DicaEntrarNaCaixa().invalidate(reason: .actionPerformed)
+                    entrarNaCaixa()
+                } else if podeSairDaCaixa && valor.magnification < 0.75 {
+                    DicaSairDaCaixa().invalidate(reason: .actionPerformed)
+                    sairDaCaixa()
+                }
+            })
             .allowsHitTesting(!trocandoCena)
             .onChange(of: alturaDaChamaNaTela(g, caixa, geo), initial: true) { _, altura in
                 sessao.chamaMudouDeLugar(altura)
@@ -84,11 +108,17 @@ struct PalcoView: View {
         }
         .onAppear {
             cortinaFechada = sessao.estado == .acabou
-            atualizarDicas()
         }
-        .onChange(of: sessao.foraDaCaixa) { _, _ in atualizarDicas() }
+        .onChange(of: podeSairDaCaixa, initial: true) { _, podeSair in
+            DicaSairDaCaixa.podeSair = podeSair
+        }
+        .onChange(of: sessao.foraDaCaixa, initial: true) { _, fora in
+            DicaEntrarNaCaixa.estaForaDaCaixa = fora
+        }
+        .onChange(of: podeApagarNaCaixa, initial: true) { _, podeApagar in
+            DicaOutroJeitoDeApagar.velaAcesa = podeApagar
+        }
         .onChange(of: sessao.estado) { _, novo in
-            atualizarDicas()
             if novo != .nova && novo != .apagada { etapa = .guardado }
             if novo == .acabou && sessao.foraDaCaixa {
                 entrarNaCaixa()   // a vela acabou nas sombras: entra na caixa
@@ -135,20 +165,21 @@ struct PalcoView: View {
             // As peças do cenário (lua, passarinho…) só aparecem com a vela ACESA
             CenarioView(acesa: acesa, progresso: sessao.progresso, mostrarPersonagens: estado == .acesa, quadro: g.quadro)
 
-            // Vela apagada = tudo escuro, só a vela e os botões em destaque
+            // Vela apagada = tudo escuro, só a vela e os botões em destaque.
+            // Acendendo, o escuro sai rápido; apagando, ele desce devagar.
             Color.black.opacity(acesa ? 0 : 0.55)
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
-                .animation(.easeInOut(duration: 1.2), value: acesa)
+                .animation(.easeInOut(duration: acesa ? 0.1 : 1.2), value: acesa)
 
-            // Luz da vela
+            // Luz da vela (entra junto com a chama, sem esperar a animação do palco)
             if acesa {
                 RadialGradient(colors: [Cores.dourado.opacity(0.55), .clear],
                                center: .center, startRadius: 4, endRadius: g.larguraVela * 4)
                     .frame(width: g.larguraVela * 8, height: g.larguraVela * 8)
                     .position(x: g.centroX, y: topoCera - g.larguraVela * 0.7)
                     .allowsHitTesting(false)
-                    .transition(.opacity)
+                    .transition(.opacity.animation(.easeOut(duration: 0.1)))
             }
 
             // Vela (cortada no palco, para ela poder afundar pelo alçapão)
@@ -203,7 +234,7 @@ struct PalcoView: View {
             }
 
             if !miniatura {
-                botoes(g)
+                botoesInferiores(g)
                     .opacity(mostrarBotoes ? 1 : 0)
 
                 if etapa != .guardado {
@@ -213,14 +244,6 @@ struct PalcoView: View {
             }
         }
         .coordinateSpace(.named("palco"))
-        .gesture(
-            MagnifyGesture().onEnded { valor in
-                if valor.magnification < 0.75 {
-                    DicaSairDaCaixa().invalidate(reason: .actionPerformed)   // já aprendeu a pinça
-                    sairDaCaixa()
-                }
-            }
-        )
     }
 
     // Letreiro pendurado na cortina fechada. Tocar em qualquer lugar da cortina abre uma vela nova.
@@ -257,34 +280,39 @@ struct PalcoView: View {
 
     // MARK: Botões
 
-    private func botoes(_ g: LayoutPalco) -> some View {
+    private var barraSuperior: some View {
+        let dica = dicaAtual
+        let mostraSeta = dica is DicaSairDaCaixa || dica is DicaEntrarNaCaixa
+
+        return VStack {
+            HStack {
+                if sessao.foraDaCaixa {
+                    BotaoRedondo(icone: "arrow.up.left.and.arrow.down.right", rotulo: "Entrar na caixa",
+                                 tamanho: MedidasBarraDoPalco.diametro, acao: entrarNaCaixa)
+                } else if podeSairDaCaixa {
+                    BotaoRedondo(icone: "arrow.down.right.and.arrow.up.left", rotulo: "Ver o teatro de sombras",
+                                 tamanho: MedidasBarraDoPalco.diametro, acao: sairDaCaixa)
+                        .transition(.opacity)
+                }
+                Spacer()
+                BotaoRedondo(icone: "gearshape", rotulo: "Configurações", tamanho: MedidasBarraDoPalco.diametro, acao: abrirConfiguracoes)
+            }
+            .animation(.spring(duration: 0.6), value: podeSairDaCaixa)
+
+            // As duas cenas compartilham o mesmo espaço para dicas, inclusive durante o zoom.
+            TipView(dica, arrowEdge: mostraSeta ? .top : nil)
+                .frame(maxWidth: 340)
+                .frame(maxWidth: .infinity, alignment: mostraSeta ? .leading : .center)
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, MedidasBarraDoPalco.margemSuperior)
+    }
+
+    private func botoesInferiores(_ g: LayoutPalco) -> some View {
         let estado = sessao.estado
-        let podeSair = (estado == .acesa || estado == .apagada) && !trocando
 
         return ZStack {
-            // Em cima: zoom out (esquerda) e configurações (direita)
-            VStack {
-                HStack {
-                    if podeSair {
-                        BotaoRedondo(icone: "arrow.down.right.and.arrow.up.left", rotulo: "Ver o teatro de sombras",
-                                     tamanho: 44, acao: sairDaCaixa)
-                            .transition(.opacity)
-                    }
-                    Spacer()
-                    BotaoRedondo(icone: "gearshape", rotulo: "Configurações", tamanho: 44, acao: abrirConfiguracoes)
-                }
-                // Dicas EMBUTIDAS na tela (e não balões por cima): o balão (popoverTip) bloqueava
-                // a tela, e a pinça feita com ele aberto só fechava a dica.
-                TipView(DicaSairDaCaixa(), arrowEdge: .top)
-                    .frame(maxWidth: 340)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                TipView(DicaOutroJeitoDeApagar())
-                    .frame(maxWidth: 340)
-                Spacer()
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 8)
-
             // Embaixo à esquerda: personalizar (vela nova) ou descartar (depois de acender).
             // Some enquanto o fósforo está fora (a lixa aparece nesse lugar).
             Group {
@@ -591,12 +619,27 @@ struct PalcoView: View {
         }
     }
 
-    // Avisa o TipKit quais dicas fazem sentido agora.
-    // Quando a regra deixa de valer, a dica que está na tela some junto com o botão dela.
-    private func atualizarDicas() {
-        DicaSairDaCaixa.podeSair = sessao.estado == .acesa || sessao.estado == .apagada
-        DicaEntrarNaCaixa.estaForaDaCaixa = sessao.foraDaCaixa
-        DicaOutroJeitoDeApagar.velaAcesa = sessao.estado == .acesa && !sessao.foraDaCaixa
+    private var podeSairDaCaixa: Bool {
+        !sessao.foraDaCaixa && !trocando && (sessao.estado == .acesa || sessao.estado == .apagada)
+    }
+
+    private var podeApagarNaCaixa: Bool {
+        podeSairDaCaixa && sessao.estado == .acesa
+    }
+
+    private var dicaAtual: (any Tip)? {
+        guard !trocandoCena else { return nil }
+        // O contexto da tela muda antes de o TipKit reavaliar as regras.
+        switch dicas.currentTip {
+        case let dica as DicaEntrarNaCaixa where sessao.foraDaCaixa:
+            return dica
+        case let dica as DicaSairDaCaixa where podeSairDaCaixa:
+            return dica
+        case let dica as DicaOutroJeitoDeApagar where podeApagarNaCaixa:
+            return dica
+        default:
+            return nil
+        }
     }
 
     // O que o VoiceOver fala sobre a vela (sem números, como na tela)

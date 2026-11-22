@@ -25,6 +25,12 @@ if [ -z "$meu_time" ]; then
     exit 1
 fi
 
+if ! printf '%s\n' "$meu_time" | grep -Eq '^[A-Z0-9]{10}$'; then
+    echo "Erro: Team ID inválido ('$meu_time'). O Team ID da Apple deve ter 10 caracteres (letras maiúsculas A-Z e números 0-9)." >&2
+    echo "Exemplo: sh scripts/configurar-time.sh ABC123XYZ9" >&2
+    exit 1
+fi
+
 # Guardado só neste computador (.git/config), nunca vai para o GitHub
 git config time-apple.meuTime "$meu_time"
 git config filter.time-apple.clean "sh scripts/filtro-time-apple.sh clean"
@@ -61,8 +67,13 @@ fi
 
 # Coloca o seu time no projeto que já está aqui, sem perder nenhuma outra mudança sua
 git ls-files '*.xcproj' '*.pbxproj' | while IFS= read -r arquivo; do
-    sh scripts/filtro-time-apple.sh smudge < "$arquivo" > "$arquivo.tmp"
-    mv "$arquivo.tmp" "$arquivo"
+    temporario="$arquivo.time-apple-tmp"
+    if sh scripts/filtro-time-apple.sh smudge < "$arquivo" > "$temporario"; then
+        mv "$temporario" "$arquivo"
+    else
+        rm -f "$temporario"
+        exit 1
+    fi
 done
 
 echo "Pronto! Neste computador o projeto usa o time $meu_time."

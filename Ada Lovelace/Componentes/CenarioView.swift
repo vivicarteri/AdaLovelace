@@ -40,8 +40,9 @@ struct CenarioView: View {
                     .allowsHitTesting(false)
             }
         }
-        .animation(.easeInOut(duration: 1.2), value: acesa)
-        .animation(.easeInOut(duration: 1.2), value: mostrarPersonagens)
+        // Acender é quase instantâneo (a chama é a resposta do toque); apagar continua devagar.
+        .animation(.easeInOut(duration: acesa ? 0.1 : 1.2), value: acesa)
+        .animation(.easeInOut(duration: mostrarPersonagens ? 0.1 : 1.2), value: mostrarPersonagens)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(descricao)
     }
@@ -89,8 +90,8 @@ struct CenarioView: View {
                 .frame(width: w * 0.95, height: h * 0.13)
                 .position(x: w / 2, y: h * 0.83)
             }
-            .animation(.easeInOut(duration: 1.2), value: acesa)
-            .animation(.easeInOut(duration: 1.2), value: mostrarPersonagens)
+            .animation(.easeInOut(duration: acesa ? 0.1 : 1.2), value: acesa)
+            .animation(.easeInOut(duration: mostrarPersonagens ? 0.1 : 1.2), value: mostrarPersonagens)
         }
         .ignoresSafeArea()
         .accessibilityElement(children: .ignore)
@@ -99,12 +100,13 @@ struct CenarioView: View {
 
     // O que o VoiceOver fala sobre o cenário (sem números)
     private var descricao: String {
-        guard mostrarPersonagens else { return "Circo de papel, no escuro" }
+        let lugar = Floresta.ligada ? "Floresta de papel" : "Circo de papel"
+        guard mostrarPersonagens else { return "\(lugar), no escuro" }
         switch progresso {
-        case ..<0.25: return "Circo de papel. Amanhecendo, o sol está alto"
-        case ..<0.5: return "Circo de papel. O sol está descendo"
-        case ..<0.75: return "Circo de papel. Anoitecendo, a lua está subindo"
-        default: return "Circo de papel. Noite, a lua está alta"
+        case ..<0.25: return "\(lugar). Amanhecendo, o sol está alto"
+        case ..<0.5: return "\(lugar). O sol está descendo"
+        case ..<0.75: return "\(lugar). Anoitecendo, a lua está subindo"
+        default: return "\(lugar). Noite, a lua está alta"
         }
     }
 }

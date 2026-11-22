@@ -61,6 +61,58 @@ enum CenarioNovo {
                 34, 34, 34, 34, 34, 34, 34, 35, 32, 31, 30, 29, 23, 24, 25, 26, 36, 27, 37, 28,
                 28, 28, 28, 37, 27, 36, 26, 25, 24, 23, 29, 30, 31, 32, 33, 34]
     )
+
+    // Peças que chegaram em 17/11 (pasta da Georgia: sol.mov e passarinho2.mov).
+    // Esses vídeos vieram com fundo PRETO (sem transparência): o preto de fora do
+    // contorno branco foi apagado e virou transparente.
+
+    // Sol: o corpo fica parado, só o rosto (olhos e bochechas) muda. 40 s, 12 quadros por segundo.
+    static let sol = PecaAnimada(
+        nome: "cenarioSol",
+        peca: CGRect(x: 1344, y: 374, width: 1628, height: 1765),
+        pedaco: CGRect(x: 1724, y: 1152, width: 576, height: 360),
+        ritmo: [0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6, 7, 7, 8, 8, 8, 9, 9,
+                8, 10, 10, 11, 12, 13, 13, 14, 14, 15, 16, 16, 17, 17, 17, 17, 17, 18, 18, 18, 18, 19, 19, 19,
+                19, 19, 19, 20, 20, 20, 20, 21, 21, 21, 21, 22, 22, 22, 22, 22, 22, 23, 23, 23, 24, 25, 25, 26,
+                26, 27, 27, 28, 28, 29, 29, 29, 30, 30, 31, 31, 32, 32, 33, 33, 34, 34, 35, 35, 36, 37, 37, 38,
+                38, 38, 38, 38, 38, 39, 39, 39, 39, 39, 39, 40, 40, 40, 40, 40, 41, 41, 41, 41, 41, 41, 42, 42,
+                42, 42, 42, 42, 42, 43, 43, 43, 43, 44, 45, 45, 46, 46, 47, 47, 48, 7, 49, 8, 50, 50, 9, 50,
+                51, 10, 52, 11, 12, 13, 53, 14, 54, 15, 16, 17, 17, 17, 55, 55, 18, 18, 18, 55, 19, 19, 19, 56,
+                56, 56, 20, 20, 20, 21, 21, 21, 21, 21, 22, 22, 22, 22, 57, 23, 23, 23, 23, 23, 24, 25, 58, 26,
+                59, 27, 60, 28, 61, 29, 62, 62, 30, 30, 31, 62, 32, 63, 33, 64, 34, 65, 35, 66, 36, 37, 38, 38,
+                38, 38, 38, 39, 39, 39, 39, 39, 39, 40, 40, 40, 40, 40, 40, 41, 41, 41, 41, 67, 42, 42, 42, 42,
+                42, 42, 68, 43, 43, 43, 43, 43, 69, 44, 45, 70, 46, 71, 47, 72, 48, 7, 49, 8, 50, 73, 9, 73,
+                51, 10, 52, 11, 12, 13, 53, 14, 54, 15, 16, 17, 17, 17, 55, 55, 18, 18, 18, 74, 19, 19, 19, 56,
+                56, 56, 20, 20, 20, 21, 21, 21, 21, 21, 22, 22, 22, 22, 57, 23, 23, 23, 23, 23, 24, 25, 58, 26,
+                59, 27, 60, 28, 61, 29, 62, 75, 30, 30, 31, 76, 32, 63, 33, 64, 34, 65, 35, 66, 36, 37, 38, 38,
+                38, 38, 38, 39, 39, 39, 39, 39, 39, 40, 40, 40, 40, 40, 40, 41, 41, 41, 41, 67, 42, 42, 42, 42,
+                42, 42, 68, 43, 43, 43, 43, 43, 69, 44, 45, 70, 46, 71, 47, 72, 48, 7, 49, 8, 50, 73, 9, 77,
+                51, 10, 52, 11, 12, 13, 53, 14, 54, 15, 16, 17, 17, 17, 55, 55, 18, 18, 18, 74, 19, 19, 19, 56,
+                56, 56, 20, 20, 20, 21, 21, 21, 21, 21, 22, 22, 22, 22, 57, 23, 23, 23, 23, 23, 24, 25, 58, 26,
+                59, 27, 60, 28, 61, 29, 62, 75, 30, 30, 31, 76, 32, 63, 33, 64, 34, 65, 35, 66, 36, 37, 38, 38,
+                38, 38, 38, 39, 39, 39, 39, 39, 39, 40, 40, 40, 40, 40, 40, 41, 41, 41, 41, 67, 42, 42, 42, 42]
+    )
+
+    // Passarinho cinza, voando para a ESQUERDA (o outro voa para a direita)
+    static let passarinho2 = PecaAnimada(
+        nome: "cenarioPassarinho2",
+        peca: CGRect(x: 1126, y: 204, width: 1192, height: 2452),
+        pedaco: CGRect(x: 1279, y: 1361, width: 72, height: 55),
+        ritmo: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 14, 13, 15, 16, 17, 18, 19, 20, 21,
+                22, 23, 24, 25, 26, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27,
+                28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 41, 40, 39, 38, 37, 36, 42, 43, 44, 45,
+                46, 47, 48, 49, 50, 50, 50, 50, 50, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 52, 53, 54, 55, 56,
+                57, 58, 59, 60, 61, 62, 63, 64, 65, 65, 64, 63, 62, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76]
+    )
+
+    // Nuvens: peças paradas (ritmo vazio = sem animação desenhada).
+    // Aqui só a proporção do retângulo importa (é a tela de 2732 × 2048 da floresta).
+    static let nuvem1 = PecaAnimada(nome: "florestaNuvem1", peca: CGRect(x: 174, y: 1319, width: 936, height: 462),
+                                    pedaco: .zero, ritmo: [])
+    static let nuvem2 = PecaAnimada(nome: "florestaNuvem2", peca: CGRect(x: 1350, y: 693, width: 1348, height: 419),
+                                    pedaco: .zero, ritmo: [])
+    static let nuvem3 = PecaAnimada(nome: "florestaNuvem3", peca: CGRect(x: 728, y: 560, width: 812, height: 336),
+                                    pedaco: .zero, ritmo: [])
 }
 
 // Desenha uma PecaAnimada no tamanho pedido (a peça inteira ocupa o frame).
@@ -126,6 +178,7 @@ struct ElementoDaFaixa {
     let velocidade: CGFloat    // pixels do Quadro por segundo. Positivo = para a direita.
     var balanco: CGFloat = 0   // sobe e desce de leve, como boneco de papel (pixels do Quadro)
     var fase: Double = 0
+    var frente = false         // na floresta: true = passa NA FRENTE das árvores (passarinhos)
 
     var largura: CGFloat { altura * peca.peca.width / peca.peca.height }
 }
@@ -141,6 +194,7 @@ enum FaixaInfinita {
 
     // ⚙️ Comprimento da volta. Com 2 peças e volta de 2 telas, elas ficam a 1 tela de distância:
     // quando uma está saindo, a outra está entrando, e a tela nunca fica vazia.
+    // (Esta esteira só vale para o cenário antigo do circo. Na floresta quem manda é Floresta.swift.)
     static let volta: CGFloat = Quadro.largura * 2
 
     // O relógio da faixa começa quando o app abre: assim as peças sempre começam
@@ -154,7 +208,7 @@ enum FaixaInfinita {
                         inicio: 950, velocidade: passo, balanco: 10, fase: 0),
         // Passarinho: 1 tela atrás da lua. Começa logo fora da tela, à esquerda, e entra em seguida.
         ElementoDaFaixa(peca: CenarioNovo.passarinho, altura: 460, y: 1000,
-                        inicio: 950 - Quadro.largura, velocidade: passo, balanco: 24, fase: 0.7)
+                        inicio: 950 - Quadro.largura, velocidade: passo, balanco: 24, fase: 0.7, frente: true)
     ]
 
     // Onde está o centro da peça agora (em x do Quadro). Dá a volta sem pulo:
@@ -172,15 +226,23 @@ struct FaixaInfinitaView: View {
     let quadro: Quadro
     let t: Double
     var sombra = false
+    var elementos: [ElementoDaFaixa] = FaixaInfinita.elementos
+    var frente: Bool? = nil   // na floresta: só as peças de trás (false) ou só as da frente (true). nil = todas
 
     @Environment(\.accessibilityReduceMotion) private var reduzirMovimento
 
+    private var lista: [ElementoDaFaixa] {
+        guard let frente else { return elementos }
+        return elementos.filter { $0.frente == frente }
+    }
+
     var body: some View {
-        // Com "Reduzir movimento", as peças ficam paradas onde começam (as duas dentro da tela)
+        // Com "Reduzir movimento", as peças ficam paradas onde começam
         let relogio = reduzirMovimento ? 0 : max(0, t - FaixaInfinita.comeco)
+        let lista = self.lista
         ZStack {
-            ForEach(FaixaInfinita.elementos.indices, id: \.self) { i in
-                let e = FaixaInfinita.elementos[i]
+            ForEach(lista.indices, id: \.self) { i in
+                let e = lista[i]
                 let sobe = reduzirMovimento ? 0 : e.balanco * CGFloat(sin(relogio * 0.6 + e.fase * 4))
                 PecaAnimadaView(peca: e.peca, t: relogio, fase: e.fase, sombra: sombra)
                     .frame(width: e.largura * quadro.escala, height: e.altura * quadro.escala)
@@ -197,6 +259,8 @@ struct FaixaInfinitaView: View {
     HStack(spacing: 24) {
         PecaAnimadaView(peca: CenarioNovo.lua)
         PecaAnimadaView(peca: CenarioNovo.passarinho, fase: 0.7)
+        PecaAnimadaView(peca: CenarioNovo.sol, fase: 1.3)
+        PecaAnimadaView(peca: CenarioNovo.passarinho2, fase: 2.1)
     }
     .padding()
     .background(Color(red: 0.1, green: 0.08, blue: 0.08))
