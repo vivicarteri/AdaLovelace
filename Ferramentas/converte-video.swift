@@ -24,7 +24,16 @@ guard a.count >= 4 else {
 }
 let url = URL(fileURLWithPath: a[1])
 let nome = a[2]
-let assets = a[3]
+// Ao reconverter uma peça, mantenha os quadros no grupo onde ela já está.
+let destino = URL(fileURLWithPath: a[3], isDirectory: true)
+let assets: String
+if destino.pathExtension == "xcassets",
+   let itens = FileManager.default.enumerator(at: destino, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]),
+   let pecaExistente = itens.lazy.compactMap({ $0 as? URL }).first(where: { $0.lastPathComponent == "\(nome).imageset" }) {
+    assets = pecaExistente.deletingLastPathComponent().path
+} else {
+    assets = destino.path
+}
 
 guard FileManager.default.fileExists(atPath: url.path) else {
     falhar("arquivo de vídeo não encontrado em '\(url.path)'.")

@@ -75,23 +75,49 @@ enum Floresta {
 
     static let fundo = Peca(nome: "florestaFundo", x: 0, y: 0, w: 2732, h: 2048)   // o céu de fundo não faz sombra
 
-    // A faixa da frente continua espelhada à esquerda, com as raízes na mesma altura.
+    static func bosqueDeTras(x: CGFloat) -> Peca {
+        Peca(nome: "florestaFundoArvores2", x: x, y: 1047, w: 1816, h: 994,
+             tinta: azulNoite, sombra: .arvoresDeTras)
+    }
+
+    static let bosqueDaFrente = Peca(nome: "florestaFundoArvores1", x: 893, y: 1051, w: 1586, h: 955,
+             tinta: cinzaNoite, sombra: .arvoresDaFrente)
+
+    // Composição estática do mockup.
     static let arvores: [Peca] = [
-        Peca(nome: "florestaFundoArvores2", x: 80, y: 1047, w: 1816, h: 994,
-             tinta: azulNoite, sombra: .arvoresDeTras),
+        bosqueDeTras(x: 168),
         Peca(nome: "florestaFundoArvores1", x: 893 - 1586, y: 1051, w: 1586, h: 955,
              tinta: cinzaNoite, espelho: true, sombra: .arvoresDaFrente),
-        Peca(nome: "florestaFundoArvores1", x: 893, y: 1051, w: 1586, h: 955,
-             tinta: cinzaNoite, sombra: .arvoresDaFrente)
+        bosqueDaFrente
+    ]
+
+    // No rolo do iPhone, árvores individuais completam o espaço entre os dois bosques.
+    static let arvoresDoRolo: [Peca] = [
+        bosqueDeTras(x: 230),
+        Peca(nome: "florestaArvore3Cinza", x: 1948, y: 1138, w: 295, h: 862,
+             tinta: azulNoite, sombra: .arvoresDeTras),
+        Peca(nome: "florestaArvore1Cinza", x: 2190, y: 1174, w: 299, h: 830,
+             tinta: azulNoite, sombra: .arvoresDeTras),
+        Peca(nome: "florestaArvore2Cinza", x: 2402, y: 1198, w: 207, h: 808,
+             tinta: azulNoite, sombra: .arvoresDeTras),
+        Peca(nome: "florestaArvore2", x: 42, y: 1090, w: 233, h: 910,
+             tinta: cinzaNoite, sombra: .arvoresDaFrente),
+        Peca(nome: "florestaArvore3", x: 338, y: 1038, w: 330, h: 964,
+             tinta: cinzaNoite, sombra: .arvoresDaFrente),
+        Peca(nome: "florestaArvore1", x: 622, y: 1112, w: 320, h: 890,
+             tinta: cinzaNoite, sombra: .arvoresDaFrente),
+        bosqueDaFrente,
+        Peca(nome: "florestaArvore1", x: 2376, y: 1056, w: 343, h: 952,
+             tinta: cinzaNoite, espelho: true, sombra: .arvoresDaFrente)
     ]
 
     // A Georgia mandou dois arbustos; do lado direito eles se repetem espelhados (como no mockup)
     static let arbustos: [Peca] = [
-        Peca(nome: "florestaArbusto1", x: 0, y: 1426, w: 1158, h: 622, tinta: arbustoEscuro, sombra: .arbustos),
-        Peca(nome: "florestaArbusto1", x: 1574, y: 1426, w: 1158, h: 622, tinta: arbustoEscuro, espelho: true,
+        Peca(nome: "florestaArbusto1", x: 0, y: 1613, w: 811, h: 435, tinta: arbustoEscuro, sombra: .arbustos),
+        Peca(nome: "florestaArbusto1", x: 1921, y: 1613, w: 811, h: 435, tinta: arbustoEscuro, espelho: true,
              sombra: .arbustos),
-        Peca(nome: "florestaArbusto2", x: 474, y: 1691, w: 1144, h: 357, tinta: arbustoClaro, sombra: .arbustos),
-        Peca(nome: "florestaArbusto2", x: 1114, y: 1691, w: 1144, h: 357, tinta: arbustoClaro, espelho: true,
+        Peca(nome: "florestaArbusto2", x: 646, y: 1798, w: 800, h: 250, tinta: arbustoClaro, sombra: .arbustos),
+        Peca(nome: "florestaArbusto2", x: 1286, y: 1798, w: 800, h: 250, tinta: arbustoClaro, espelho: true,
              sombra: .arbustos)
     ]
 
@@ -174,7 +200,7 @@ enum Floresta {
         let balanco: CGFloat = 8
         let alturaLua = max(0, 968 - topo - 2 * balanco)
         let centro = topo + balanco + alturaLua / 2
-        let sol = Andante(peca: CenarioNovo.sol, altura: alturaLua * 0.96, y: centro,
+        let sol = Andante(peca: CenarioNovo.sol, altura: alturaLua * 1.152, y: centro,
                           passagem: passagemDosAstros, sentido: -1,
                           balanco: balanco, fase: 1.3)
         let lua = Andante(peca: CenarioNovo.lua, altura: alturaLua, y: centro,
@@ -204,10 +230,10 @@ enum Floresta {
     ]
 
     static let passarinhos: [Andante] = [
-        Andante(peca: CenarioNovo.passarinho, altura: 214, y: 362,
+        Andante(peca: CenarioNovo.passarinho, altura: 288.9, y: 362,
                 passagem: 0..<52, sentido: 1,
                 balanco: 4, fase: 0.7, ondula: 5, arco: (325, 175)),
-        Andante(peca: CenarioNovo.passarinho2, altura: 202, y: 358,
+        Andante(peca: CenarioNovo.passarinho2, altura: 272.7, y: 358,
                 passagem: 534..<600, sentido: -1,
                 balanco: 4, fase: 2.1, ondula: 5, arco: (350, 420))
     ]
@@ -317,13 +343,17 @@ struct FlorestaView: View {
                 : Floresta.tempoDoCenario(tempo, larguraVisivel: larguraVisivel,
                                          larguraDosAstros: astros.sol.largura + astros.lua.largura)
             ZStack {
-                faixa(relogio, larguraVisivel: larguraVisivel) {
-                    if !sombra { peca(Floresta.fundo) }
-                    ForEach(Floresta.arvores.indices, id: \.self) { i in
-                        let p = Floresta.arvores[i]
+                let emRolagem = Floresta.desliza && !reduzirMovimento
+                let arvores = emRolagem ? Floresta.arvoresDoRolo : Floresta.arvores
+                if !sombra {
+                    faixa(relogio, larguraVisivel: larguraVisivel) { peca(Floresta.fundo) }
+                }
+                faixa(relogio, larguraVisivel: larguraVisivel, alternaEspelho: !emRolagem) {
+                    ForEach(arvores.indices, id: \.self) { i in
+                        let p = arvores[i]
                         if mostra(p.sombra) { peca(p) }
                     }
-                    if mostra(.ceu) { estrelas(relogio) }
+                    if mostra(.ceu) { estrelas() }
                 }
                 if mostra(.ceu) {
                     estrelasEmTravessia(relogio, larguraVisivel)
@@ -354,6 +384,7 @@ struct FlorestaView: View {
 
     // Cada par de painéis fecha uma volta. O espelho une bordas idênticas.
     private func faixa<Conteudo: View>(_ relogio: Double, larguraVisivel: CGFloat,
+                                       alternaEspelho: Bool = true,
                                        @ViewBuilder conteudo: () -> Conteudo) -> some View {
         let largura = Floresta.largura * escala
         let voltas = Floresta.desliza && !reduzirMovimento ? 2 * relogio / RelogioDaHistoria.ciclo : 0
@@ -367,7 +398,7 @@ struct FlorestaView: View {
                 painelDeArte
                     .frame(width: largura, height: Floresta.altura * escala)
                     .clipped()
-                    .scaleEffect(x: (painel + i).isMultiple(of: 2) ? 1 : -1, y: 1)
+                    .scaleEffect(x: alternaEspelho && !(painel + i).isMultiple(of: 2) ? -1 : 1, y: 1)
                     .position(x: centro + (CGFloat(i) - fracao) * largura,
                               y: quadro.y(Quadro.altura / 2))
             }
@@ -388,7 +419,8 @@ struct FlorestaView: View {
     private func andante(_ a: Floresta.Andante, _ relogio: Double, _ larguraVisivel: CGFloat) -> some View {
         if let x = Floresta.x(a, relogio: relogio, larguraVisivel: larguraVisivel) {
             let y = a.centroY(relogio, parado: reduzirMovimento)
-            PecaAnimadaView(peca: a.peca, t: relogio, fase: a.fase, sombra: sombra)
+            // Os quadros da peça seguem o tempo real, inclusive durante o eclipse.
+            PecaAnimadaView(peca: a.peca, t: t, fase: a.fase, sombra: sombra)
                 .frame(width: a.largura * escala, height: a.altura * escala)
                 .position(x: quadro.x(Floresta.noQuadro(x: x)), y: quadro.y(Floresta.noQuadro(y: y)))
                 .clipped()
@@ -396,11 +428,11 @@ struct FlorestaView: View {
     }
 
     // Estrelas: pulsando e flutuando devagarinho
-    private func estrelas(_ relogio: Double) -> some View {
+    private func estrelas() -> some View {
         ZStack {
             ForEach(Floresta.estrelas.indices, id: \.self) { i in
                 let e = Floresta.estrelas[i]
-                estrela(e, relogio)
+                estrela(e)
                     .position(x: e.x * escala, y: e.y * escala)
             }
         }
@@ -415,7 +447,7 @@ struct FlorestaView: View {
                     let progresso = (tempo - passagem.lowerBound) / (passagem.upperBound - passagem.lowerBound)
                     // A estrela inteira sai de cena mesmo no maior tamanho da pulsação.
                     let x = e.x + (0.5 - progresso) * (larguraVisivel + e.altura * 1.06)
-                    estrela(e, relogio)
+                    estrela(e)
                         .position(x: quadro.x(Floresta.noQuadro(x: x)), y: quadro.y(Floresta.noQuadro(y: e.y)))
                         .clipped()
                 }
@@ -423,10 +455,10 @@ struct FlorestaView: View {
         }
     }
 
-    private func estrela(_ e: Floresta.Estrela, _ relogio: Double) -> some View {
-        let pulso = reduzirMovimento ? 0 : (1 + Floresta.onda(86, relogio, fase: e.fase)) / 2
+    private func estrela(_ e: Floresta.Estrela) -> some View {
+        let pulso = reduzirMovimento ? 0 : (1 + Floresta.onda(86, t, fase: e.fase)) / 2
         let tamanho = e.altura * escala * (1 + 0.06 * pulso)
-        let flutua = reduzirMovimento ? 0 : 8 * Floresta.onda(48, relogio, fase: e.fase)
+        let flutua = reduzirMovimento ? 0 : 8 * Floresta.onda(48, t, fase: e.fase)
         return Image(e.nome)
             .resizable()
             .scaledToFit()
