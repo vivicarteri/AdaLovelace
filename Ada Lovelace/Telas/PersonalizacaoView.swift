@@ -251,7 +251,7 @@ struct PersonalizacaoView: View {
                 }
             } else {
                 Text("Arraste a bolinha para mudar o tamanho")
-                    .font(.footnote)
+                    .adaFont(.smallNote)
                     .foregroundStyle(Cores.tinta.opacity(0.7))
                     .padding(.horizontal)
             }
@@ -275,7 +275,7 @@ struct PersonalizacaoView: View {
             haptics.tique()
         } label: {
             Image(systemName: icone)
-                .font(.system(size: 22, weight: .semibold))
+                .adaFont(.sectionTitle)
                 .foregroundStyle(Cores.tinta)
                 .frame(width: 56, height: 56)
                 .background(Circle().fill(aba == qual ? Cores.dourado : Cores.papel))

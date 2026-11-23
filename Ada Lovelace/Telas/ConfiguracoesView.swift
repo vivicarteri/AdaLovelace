@@ -30,6 +30,7 @@ struct ConfiguracoesView: View {
                     Text("Som")
                 } footer: {
                     Text("A música toca enquanto a vela está acesa. Os sons dos objetos são os alfinetes e penduricalhos caindo. As vibrações continuam.")
+                        .adaFont(.footnote)
                 }
 
                 Section {
@@ -67,7 +68,11 @@ struct ConfiguracoesView: View {
             .onChange(of: velocidadeDoCenario) { RelogioDaHistoria.atualizarVelocidadeDeTeste() }
             #endif
             .navigationTitle("Configurações")
+            .toolbarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("Configurações").adaFont(.sectionTitle)
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("OK") { dismiss() }
                 }

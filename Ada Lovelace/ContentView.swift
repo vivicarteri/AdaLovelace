@@ -14,6 +14,7 @@ struct ContentView: View {
 
     var body: some View {
         PalcoView(abrirConfiguracoes: { mostrarConfiguracoes = true })
+            .environment(\.font, .custom("ViaodaLibre-Regular", size: 17))
             .sheet(isPresented: $mostrarConfiguracoes) {
                 ConfiguracoesView()
             }

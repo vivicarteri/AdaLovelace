@@ -82,7 +82,7 @@ struct Arte<Provisorio: View>: View {
                     .fill(item.cor)
                     .frame(height: 60)
                     .overlay(RoundedRectangle(cornerRadius: 10).stroke(.gray, lineWidth: 1))
-                Text(item.nome).font(.caption)
+                Text(item.nome).adaFont(.caption)
             }
         }
     }
@@ -103,7 +103,7 @@ struct Arte<Provisorio: View>: View {
             Text("sem imagem → provisório")
         }
     }
-    .font(.caption)
+    .adaFont(.caption)
     .foregroundStyle(Cores.papel)
     .padding()
     .background(Cores.fundoEscuro)
