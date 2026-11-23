@@ -49,6 +49,7 @@ struct PalcoView: View {
     @State private var riscado: CGFloat = 0
     @State private var ultimoPontoRisco: CGPoint?
     @State private var ultimoInstanteRisco: TimeInterval?
+    @State private var acendendoSozinho = false   // VoiceOver / Controle por Voz: "Acender vela"
 
     private var tamanhoFosforo: CGFloat { FosforoView.tamanhoNoPalco }
 
@@ -66,7 +67,8 @@ struct PalcoView: View {
                     TeatroSombrasView(entrar: entrarNaCaixa,
                                       aberturaCaixa: aberturaCaixa,
                                       conteudoDaCaixa: mostrarMiniatura ? AnyView(dentroDaCaixa(g, miniatura: true)) : nil,
-                                      congelado: trocandoCena)
+                                      congelado: trocandoCena,
+                                      mostrarCamadas: !trocandoCena)
                         .modifier(EfeitoCamera(z: camera, zoomFinal: caixa.zoomFinal,
                                                alvo: caixa.centroDaAbertura, tela: geo.size))
                         .transition(.opacity)
@@ -102,6 +104,8 @@ struct PalcoView: View {
                 }
             })
             .allowsHitTesting(!trocandoCena)
+            // Smart Invert: a arte de papel, a vela e as sombras não ficam em negativo
+            .accessibilityIgnoresInvertColors()
             .onChange(of: alturaDaChamaNaTela(g, caixa, geo), initial: true) { _, altura in
                 sessao.chamaMudouDeLugar(altura)
             }
@@ -164,6 +168,15 @@ struct PalcoView: View {
         return ZStack {
             // As peças do cenário (lua, passarinho…) só aparecem com a vela ACESA
             CenarioView(acesa: acesa, progresso: sessao.progresso, mostrarPersonagens: estado == .acesa, quadro: g.quadro)
+                .accessibilityHint(acesa ? "Use o rotor Camadas de papel para explorar a cena" : "")
+                .accessibilityActions { atalhos(g) }
+
+            // VoiceOver: uma camada de papel por vez (rotor "Camadas de papel"). Fica embaixo
+            // da vela e dos botões, para o toque do VoiceOver achar eles primeiro.
+            if !miniatura {
+                CamadasDaCenaAcessiveis(camadas: estado == .acesa ? DescricaoDaCena.camadas(sombra: false) : [],
+                                        estadoDaVela: sessao.descricaoDaVela)
+            }
 
             // Vela apagada = tudo escuro, só a vela e os botões em destaque.
             // Acendendo, o escuro sai rápido; apagando, ele desce devagar.
@@ -194,13 +207,9 @@ struct PalcoView: View {
                          caidos: sessao.caidos)
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel("Vela")
-                    .accessibilityValue(descricaoVela)
-                    .accessibilityHint(acesa ? "Toque duas vezes na chama para apagar" : "")
-                    .accessibilityActions {
-                        if acesa {
-                            Button("Apagar a vela") { apagarTocandoNaChama() }
-                        }
-                    }
+                    .accessibilityValue(sessao.descricaoDaVela)
+                    .accessibilityHint(acesa ? "Para apagar, toque na chama ou use as ações" : "Use as ações para atalhos")
+                    .accessibilityActions { atalhos(g) }
                     .position(x: g.centroX,
                               y: g.baseY - (alturaCheia + espacoChama) / 2 + (afundando ? alturaCheia + espacoChama : 0))
             }
@@ -244,6 +253,30 @@ struct PalcoView: View {
             }
         }
         .coordinateSpace(.named("palco"))
+        .accessibilityElement(children: .contain)
+    }
+
+    // Atalhos do VoiceOver (menu de ações). São também a alternativa a virar o aparelho,
+    // soprar, riscar o fósforo e segurar o botão: nenhum gesto físico é o único caminho.
+    @ViewBuilder
+    private func atalhos(_ g: LayoutPalco) -> some View {
+        let estado = sessao.estado
+        if (estado == .nova || estado == .apagada) && !trocando {
+            Button("Acender vela") { acenderSozinho(g) }
+        }
+        if estado == .acesa && !trocando {
+            Button("Apagar chama") { apagarTocandoNaChama() }
+            Button(sessao.derretimentoAcelerado ? "Voltar ao ritmo normal da vela" : "Acelerar derretimento da vela") {
+                sessao.alternarDerretimentoAcelerado()
+            }
+        }
+        if podeSairDaCaixa {
+            Button("Ver o teatro de sombras") { sairDaCaixa() }
+        }
+        if estado == .nova && !trocando {
+            Button("Abrir personalização") { trocarComCortina { personalizando = true } }
+        }
+        Button("Abrir configurações") { abrirConfiguracoes() }
     }
 
     // Letreiro pendurado na cortina fechada. Tocar em qualquer lugar da cortina abre uma vela nova.
@@ -258,6 +291,8 @@ struct PalcoView: View {
             VStack(spacing: 14) {
                 Text("Fim")
                     .adaFont(.screenTitle)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
                     .foregroundStyle(Cores.tinta)
                     .padding(.horizontal, 30)
                     .padding(.vertical, 10)
@@ -267,13 +302,16 @@ struct PalcoView: View {
                     .adaFont(.body)
                     .foregroundStyle(Cores.papel)
                     .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            .frame(maxWidth: max(0, g.tamanho.width - 48))
             .position(x: g.tamanho.width / 2, y: g.tamanho.height * 0.42)
             .allowsHitTesting(false)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Fim. A vela acabou")
         .accessibilityHint("Toque duas vezes para colocar uma vela nova")
+        .accessibilityInputLabels(["Vela nova", "Acender vela nova", "Fim"])
         .accessibilityAddTraits(.isButton)
         .accessibilityAction { descartar() }
     }
@@ -288,14 +326,17 @@ struct PalcoView: View {
             HStack {
                 if sessao.foraDaCaixa {
                     BotaoRedondo(icone: "arrow.up.left.and.arrow.down.right", rotulo: "Entrar na caixa",
-                                 tamanho: MedidasBarraDoPalco.diametro, acao: entrarNaCaixa)
+                                 tamanho: MedidasBarraDoPalco.diametro,
+                                 comandosDeVoz: ["Voltar para a vela", "Aproximar"], acao: entrarNaCaixa)
                 } else if podeSairDaCaixa {
                     BotaoRedondo(icone: "arrow.down.right.and.arrow.up.left", rotulo: "Ver o teatro de sombras",
-                                 tamanho: MedidasBarraDoPalco.diametro, acao: sairDaCaixa)
+                                 tamanho: MedidasBarraDoPalco.diametro,
+                                 comandosDeVoz: ["Teatro de sombras", "Afastar", "Sair da caixa"], acao: sairDaCaixa)
                         .transition(.opacity)
                 }
                 Spacer()
-                BotaoRedondo(icone: "gearshape", rotulo: "Configurações", tamanho: MedidasBarraDoPalco.diametro, acao: abrirConfiguracoes)
+                BotaoRedondo(icone: "gearshape", rotulo: "Configurações", tamanho: MedidasBarraDoPalco.diametro,
+                             comandosDeVoz: ["Abrir configurações", "Ajustes"], acao: abrirConfiguracoes)
             }
             .animation(.spring(duration: 0.6), value: podeSairDaCaixa)
 
@@ -317,14 +358,15 @@ struct PalcoView: View {
             // Some enquanto o fósforo está fora (a lixa aparece nesse lugar).
             Group {
                 if estado == .nova && !trocando && etapa == .guardado {
-                    BotaoRedondo(icone: "paintbrush.pointed", rotulo: "Personalizar vela", tamanho: 60) {
+                    BotaoRedondo(icone: "paintbrush.pointed", rotulo: "Personalizar vela", tamanho: 60,
+                                 comandosDeVoz: ["Abrir personalização", "Personalizar", "Ateliê"]) {
                         trocarComCortina { personalizando = true }
                     }
-                    .transition(.move(edge: .leading).combined(with: .opacity))
+                    .transition(entradaPelaEsquerda)
                 } else if estado == .acabou && !trocando {
                     // Vela que acabou: segurar 1 segundo coloca uma vela nova
                     BotaoDescartar(tamanho: 60, haptics: sessao.haptics, descartar: descartar)
-                        .transition(.move(edge: .leading).combined(with: .opacity))
+                        .transition(entradaPelaEsquerda)
                 } else if estado != .nova && !trocando && etapa == .guardado {
                     // Acesa ou apagada: segurar derrete a vela rápido; soltar para
                     BotaoDescartar(tamanho: 60, haptics: sessao.haptics,
@@ -333,7 +375,7 @@ struct PalcoView: View {
                                        if segurando { sessao.comecarADerreter() } else { sessao.pararDeDerreter() }
                                    },
                                    descartar: { sessao.derreterAteOFim() })
-                        .transition(.move(edge: .leading).combined(with: .opacity))
+                        .transition(entradaPelaEsquerda)
                 }
             }
             .position(x: g.tamanho.width * 0.17, y: g.botaoBaixoY)
@@ -345,12 +387,15 @@ struct PalcoView: View {
                     .contentShape(Rectangle())
                     .onTapGesture { tocarNaCaixa(g) }
                     .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("Caixa de fósforos")
-                    .accessibilityHint("Acende a vela")
+                    .accessibilityLabel("Acender vela")
+                    .accessibilityValue(estado == .nova ? "Vela nova, apagada" : "Vela apagada")
+                    .accessibilityHint("Abre a caixa de fósforos, risca um fósforo e acende o pavio")
+                    .accessibilityInputLabels(["Acender vela", "Acender fósforo", "Caixa de fósforos", "Acender"])
                     .accessibilityAddTraits(.isButton)
-                    .accessibilityAction { sessao.acender() }   // VoiceOver: um toque duplo já acende
+                    // VoiceOver e Controle por Voz: o fósforo faz o caminho todo sozinho
+                    .accessibilityAction { acenderSozinho(g) }
                     .position(g.caixa)
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
+                    .transition(entradaPelaDireita)
             }
         }
         .animation(.spring(duration: 0.6), value: estado)
@@ -369,6 +414,7 @@ struct PalcoView: View {
     // A caixa ABRE (a gaveta desliza para fora) e um fósforo sobe de dentro dela.
     // Nada gira e nada se separa: a gaveta continua encaixada na luva.
     private func tocarNaCaixa(_ g: LayoutPalco) {
+        guard !acendendoSozinho else { return }
         if etapa == .guardado {
             posFosforo = g.saidaDoFosforo
             etapa = .fora
@@ -394,6 +440,7 @@ struct PalcoView: View {
         return FosforoView(aceso: etapa == .aceso, tamanho: tamanhoFosforo)
             .rotationEffect(FosforoView.inclinacao, anchor: pivo)
             .contentShape(Rectangle().inset(by: -16))   // um pouco mais fácil de pegar
+            .allowsHitTesting(!acendendoSozinho)
             .gesture(
                 DragGesture(minimumDistance: 0, coordinateSpace: .named("palco"))
                     .onChanged { valor in arrastarFosforo(valor, g) }
@@ -459,9 +506,7 @@ struct PalcoView: View {
             }
         case .aceso:
             // Encostar no pavio: acende a vela
-            let alturaCheia = g.alturaCheia(sessao.config.posicaoSlider)
-            let pavio = CGPoint(x: g.centroX,
-                                y: g.baseY - alturaCheia * CGFloat(1 - sessao.progresso))
+            let pavio = pontaDoPavio(g)
             if hypot(ponto.x - pavio.x, ponto.y - pavio.y) < max(40, g.larguraVela * 0.6) {
                 inicioArraste = nil
                 sessao.haptics.cancelarSomRiscoFosforo()
@@ -486,6 +531,79 @@ struct PalcoView: View {
         withAnimation(.spring(duration: 0.5)) { posFosforo = repousoFosforo(g) }
     }
 
+    private func pontaDoPavio(_ g: LayoutPalco) -> CGPoint {
+        let alturaCheia = g.alturaCheia(sessao.config.posicaoSlider)
+        return CGPoint(x: g.centroX, y: g.baseY - alturaCheia * CGFloat(1 - sessao.progresso))
+    }
+
+    // "ACENDER VELA" (VoiceOver e Controle por Voz): o fósforo faz o caminho sozinho.
+    // A gaveta abre, o fósforo sobe, risca na lixa, acende e vai até o pavio,
+    // com as mesmas vibrações de quando a pessoa faz com o dedo.
+    // Com "Reduzir movimento", a vela só acende (sem o fósforo voando pela tela).
+    private func acenderSozinho(_ g: LayoutPalco) {
+        guard sessao.estado == .nova || sessao.estado == .apagada,
+              !acendendoSozinho, !trocando, !trocandoCena else { return }
+        sessao.haptics.cancelarSomRiscoFosforo()
+        inicioArraste = nil
+        ultimoPontoRisco = nil
+        ultimoInstanteRisco = nil
+        riscado = 0
+
+        if reduzirMovimento {
+            etapa = .guardado
+            caixaAberta = CaixaFosforoView.emRepouso
+            sessao.haptics.riscar()
+            sessao.acender()
+            return
+        }
+
+        acendendoSozinho = true
+        Task {
+            // 1. A gaveta abre e o fósforo sobe
+            if etapa == .guardado {
+                posFosforo = g.saidaDoFosforo
+                etapa = .fora
+                sessao.haptics.tique()
+                withAnimation(.easeOut(duration: 0.35)) { caixaAberta = 1 }
+                withAnimation(.spring(duration: 0.55, bounce: 0.25).delay(0.12)) {
+                    posFosforo = g.repousoDoFosforo
+                }
+                try? await Task.sleep(for: .seconds(0.75))
+            }
+
+            // 2. Risca a cabeça do fósforo na lixa, para lá e para cá
+            if etapa == .fora {
+                let lixa = g.lixa
+                let esquerda = CGPoint(x: lixa.minX + lixa.width * 0.15, y: lixa.midY)
+                let direita = CGPoint(x: lixa.maxX - lixa.width * 0.15, y: lixa.midY)
+                withAnimation(.easeInOut(duration: 0.3)) { posFosforo = esquerda }
+                try? await Task.sleep(for: .seconds(0.3))
+                for passada in 0..<3 {
+                    sessao.haptics.raspar()
+                    withAnimation(.easeInOut(duration: 0.22)) {
+                        posFosforo = passada.isMultiple(of: 2) ? direita : esquerda
+                    }
+                    try? await Task.sleep(for: .seconds(0.22))
+                }
+                etapa = .aceso
+                sessao.haptics.riscar()
+                try? await Task.sleep(for: .seconds(0.35))
+            }
+
+            // 3. Leva o fósforo aceso até o pavio
+            if etapa == .aceso {
+                withAnimation(.easeInOut(duration: 0.8)) { posFosforo = pontaDoPavio(g) }
+                try? await Task.sleep(for: .seconds(0.85))
+            }
+
+            // 4. A vela acende e o fósforo volta para a caixa
+            withAnimation(.easeOut(duration: 0.3)) { etapa = .guardado }
+            withAnimation(.easeInOut(duration: 0.4).delay(0.1)) { caixaAberta = CaixaFosforoView.emRepouso }
+            sessao.acender()
+            acendendoSozinho = false
+        }
+    }
+
     // MARK: Ações
 
     // ZOOM OUT: a câmera sai de dentro do teatro — o palco vai encolhendo até virar
@@ -496,7 +614,7 @@ struct PalcoView: View {
     // (senão cresceriam junto com o zoom) e as sombras ficam paradas durante o caminho.
     private func sairDaCaixa() {
         guard sessao.estado == .acesa || sessao.estado == .apagada,
-              !trocando, !trocandoCena, !sessao.foraDaCaixa else { return }
+              !trocando, !trocandoCena, !acendendoSozinho, !sessao.foraDaCaixa else { return }
         etapa = .guardado
         if reduzirMovimento {
             aberturaCaixa = 0
@@ -605,7 +723,9 @@ struct PalcoView: View {
         }
         Task {
             if estavaAcesa { try? await Task.sleep(for: .seconds(0.8)) }
-            withAnimation(.easeIn(duration: 0.9)) { afundando = true }
+            if !reduzirMovimento {
+                withAnimation(.easeIn(duration: 0.9)) { afundando = true }
+            }
             try? await Task.sleep(for: .seconds(0.9))
             withAnimation(.easeInOut(duration: 0.9)) { cortinaFechada = true }
             try? await Task.sleep(for: .seconds(1.0))
@@ -642,24 +762,12 @@ struct PalcoView: View {
         }
     }
 
-    // O que o VoiceOver fala sobre a vela (sem números, como na tela)
-    private var descricaoVela: String {
-        let p = sessao.progresso
-        let quanto: String
-        switch p {
-        case ..<0.05: quanto = "inteira"
-        case ..<0.25: quanto = "quase inteira"
-        case ..<0.5: quanto = "chegando na metade"
-        case ..<0.75: quanto = "passou da metade"
-        case ..<1: quanto = "quase no fim"
-        default: quanto = "acabou"
-        }
-        switch sessao.estado {
-        case .nova: return "Vela nova, apagada"
-        case .acesa: return "Acesa, \(quanto)"
-        case .apagada: return "Apagada, \(quanto)"
-        case .acabou: return "A vela acabou"
-        }
+    private var entradaPelaEsquerda: AnyTransition {
+        reduzirMovimento ? .opacity : .move(edge: .leading).combined(with: .opacity)
+    }
+
+    private var entradaPelaDireita: AnyTransition {
+        reduzirMovimento ? .opacity : .move(edge: .trailing).combined(with: .opacity)
     }
 }
 

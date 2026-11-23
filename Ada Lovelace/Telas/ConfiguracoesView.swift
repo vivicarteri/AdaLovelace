@@ -24,22 +24,28 @@ struct ConfiguracoesView: View {
         NavigationStack {
             Form {
                 Section {
-                    Toggle("Música de fundo", isOn: $somAmbiente)
-                    Toggle("Sons dos objetos", isOn: $somObjetos)
+                    // Os nomes dizem exatamente o que muda na experiência
+                    Toggle("Tocar música enquanto a vela está acesa", isOn: $somAmbiente)
+                        .accessibilityInputLabels(["Música de fundo", "Música"])
+                    Toggle("Sons dos alfinetes e penduricalhos caindo", isOn: $somObjetos)
+                        .accessibilityInputLabels(["Sons dos objetos", "Sons"])
                 } header: {
                     Text("Som")
                 } footer: {
-                    Text("A música toca enquanto a vela está acesa. Os sons dos objetos são os alfinetes e penduricalhos caindo. As vibrações continuam.")
+                    Text("Desligar os sons não desliga as vibrações.")
                         .adaFont(.footnote)
                 }
 
                 Section {
-                    Toggle("Apagar soprando", isOn: $apagarSoprando)
-                    Toggle("Usar o movimento do aparelho", isOn: $movimento)
+                    Toggle("Apagar a vela com um sopro (usa o microfone)", isOn: $apagarSoprando)
+                        .accessibilityInputLabels(["Apagar soprando", "Sopro", "Microfone"])
+                    Toggle("Inclinar e virar o aparelho mexem na vela (sensores de movimento)", isOn: $movimento)
+                        .accessibilityInputLabels(["Usar o movimento do aparelho", "Movimento", "Sensores"])
                 } header: {
                     Text("Jeitos de apagar")
                 } footer: {
-                    Text("Sopre na direção da chama com a vela acesa (se precisar, permita o microfone nos Ajustes do aparelho). Com o movimento ligado, inclinar faz a vela derreter mais rápido e virar de cabeça para baixo apaga. Tocar na chama sempre apaga.")
+                    Text("Sopre na direção da chama com a vela acesa (se precisar, permita o microfone nos Ajustes do aparelho). Com o movimento ligado, inclinar faz a vela derreter mais rápido e virar de cabeça para baixo apaga. Tocar na chama sempre apaga. Com o VoiceOver, as ações da vela também apagam a chama e aceleram o derretimento.")
+                        .adaFont(.footnote)
                 }
 
                 Section {

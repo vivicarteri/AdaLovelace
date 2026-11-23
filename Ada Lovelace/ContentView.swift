@@ -14,7 +14,8 @@ struct ContentView: View {
 
     var body: some View {
         PalcoView(abrirConfiguracoes: { mostrarConfiguracoes = true })
-            .environment(\.font, .custom("ViaodaLibre-Regular", size: 17))
+            // relativeTo: o texto acompanha o tamanho de texto escolhido nos Ajustes (Dynamic Type)
+            .environment(\.font, .custom("ViaodaLibre-Regular", size: 17, relativeTo: .body))
             .sheet(isPresented: $mostrarConfiguracoes) {
                 ConfiguracoesView()
             }

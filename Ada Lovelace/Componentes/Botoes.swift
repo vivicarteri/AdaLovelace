@@ -8,16 +8,14 @@ struct BotaoRedondo: View {
     var icone: String
     var rotulo: String
     var tamanho: CGFloat = 52
+    var comandosDeVoz: [String] = []   // Controle por Voz: outros nomes que também ativam o botão
     var acao: () -> Void
 
     var body: some View {
         Button(action: acao) {
             Image(systemName: icone)
-//<<<<<<< Updated upstream
-                .font(.custom("ViaodaLibre-Regular", size: tamanho * 0.4))
-//=======
+                // O ícone tem tamanho fixo de propósito: crescer com o texto desmontaria a caixa
                 .adaFont(.iconButton, containerSize: tamanho)
-//>>>>>>> Stashed changes
                 .foregroundStyle(Cores.tinta)
                 .frame(width: tamanho, height: tamanho)
                 .background(Circle().fill(Cores.papel))
@@ -26,6 +24,7 @@ struct BotaoRedondo: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(rotulo)
+        .accessibilityInputLabels([rotulo] + comandosDeVoz)
     }
 }
 
@@ -100,13 +99,16 @@ struct BotaoDescartar: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(modoDerreter ? "Derreter a vela" : "Vela nova")
+        .accessibilityLabel(modoDerreter ? "Descartar vela" : "Vela nova")
         .accessibilityHint(modoDerreter ? "Derrete a vela até o fim" : "Joga esta vela fora e coloca uma nova")
+        .accessibilityInputLabels(modoDerreter
+                                  ? ["Descartar vela", "Derreter a vela", "Descartar"]
+                                  : ["Vela nova", "Descartar vela", "Colocar vela nova"])
         .accessibilityAddTraits(.isButton)
         .accessibilityAction { confirmar = true }
-        .confirmationDialog(modoDerreter ? "Derreter a vela até o fim?" : "Colocar uma vela nova?",
+        .confirmationDialog(modoDerreter ? "Descartar a vela? Ela derrete até o fim." : "Colocar uma vela nova?",
                             isPresented: $confirmar, titleVisibility: .visible) {
-            Button(modoDerreter ? "Derreter" : "Vela nova", role: .destructive, action: descartar)
+            Button(modoDerreter ? "Descartar" : "Vela nova", role: .destructive, action: descartar)
             Button("Cancelar", role: .cancel) {}
         }
     }
