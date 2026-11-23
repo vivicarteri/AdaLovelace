@@ -82,7 +82,7 @@ struct TeatroSombrasView: View {
 
                 Arte("letreiro") {
                     Text("Teatro de Sombras")
-                        .font(.custom("ViaodaLibre-Regular", size: 22))
+                        .adaFont(.sectionTitle)
                         .foregroundStyle(Cores.tinta)
                         .padding(.horizontal, 18)
                         .padding(.vertical, 10)
