@@ -76,7 +76,7 @@ struct TeatroSombrasView: View {
                     .accessibilityHidden(true)
                 }
 
-                // Bambinela (cortina de cima) e letreiro
+                // Bambinela (cortina de cima)
                 VStack(spacing: 0) {
                     // A arte da Georgia é bem comprida: ela preenche a faixa. Numa tela em pé
                     // (iPhone) sobram os lados, que são cortados; numa tela deitada (iPad) a faixa
@@ -94,20 +94,7 @@ struct TeatroSombrasView: View {
                 .ignoresSafeArea(edges: .top)
                 .accessibilityHidden(true)
 
-                Arte("letreiro") {
-                    Text("Teatro de Sombras")
-                        .adaFont(.sectionTitle)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.5)   // o letreiro tem tamanho fixo: o texto encolhe em vez de cortar
-                        .foregroundStyle(Cores.tinta)
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 10)
-                        .background(Capsule().fill(Cores.papel))
-                        .overlay(Capsule().stroke(Cores.tinta, lineWidth: 2))
-                }
-                .frame(width: min(w * 0.55, 240), height: 60)
-                .position(x: w / 2, y: h * 0.06)
-                .accessibilityHidden(true)
+                // (O letreiro "Teatro de Sombras" saiu, a pedido do time: a cortina de cima fica sozinha.)
 
                 // A caixa do teatro, lá embaixo. Tocar nela entra de novo (a câmera vai até ela).
                 Button(action: entrar) {

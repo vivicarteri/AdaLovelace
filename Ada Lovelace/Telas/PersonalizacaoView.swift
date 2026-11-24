@@ -167,7 +167,7 @@ struct PersonalizacaoView: View {
 
             SuporteView(largura: g.larguraVela)
                 .position(x: g.centroX + SuporteView.desvioX(largura: g.larguraVela),
-                          y: g.baseY + SuporteView.altura(largura: g.larguraVela) / 2)
+                          y: g.baseY + SuporteView.desvioY(largura: g.larguraVela))
 
             // Áreas de toque em cima de cada enfeite, para tirar e reposicionar.
             // Elas ficam em cima do DESENHO (o penduricalho pendura para baixo, então

@@ -16,6 +16,10 @@ struct CortinaLateralView: View {
     @Environment(\.accessibilityReduceMotion) private var reduzirMovimento
 
     static let nome = "cortinaLateral"
+    // ⚙️ Quanto o pano desce além do fim da tela (fração da altura): as franjas encostam no chão
+    // e não sobra nenhuma faixa vazia embaixo
+    static let descida: CGFloat = 0.05
+
     // ⚙️ Quanto um pano passa por cima do outro no meio, fechados (pontos)
     static let sobraNoMeio: CGFloat = 14
     // Na arte, a borda de dentro do pano é inclinada: em cima ela fica 5,5% da largura do pano
@@ -32,10 +36,19 @@ struct CortinaLateralView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let w = geo.size.width, h = geo.size.height
+            let w = geo.size.width, alturaDaTela = geo.size.height
+            // O pano começa no alto da tela e passa um pouco do fim dela
+            let h = alturaDaTela * (1 + CortinaLateralView.descida)
             // Cada pano cobre pelo menos metade da tela (mais a sobra). Numa tela estreita (iPhone)
             // o pano é mais largo que a metade e o pedaço de fora (com a corda) fica escondido.
-            let largura = max(w / 2 + CortinaLateralView.sobraNoMeio, h * CortinaLateralView.proporcao)
+            // Cada pano precisa cobrir da BORDA da tela até passar do meio (a sobra + a parte inclinada
+            // da borda dele). Em telas largas (iPad deitado) o desenho na altura da tela não dá essa
+            // largura: aí o pano cresce (sem deformar) e o excesso de cima é cortado. Antes sobrava
+            // uma faixa escura nas laterais do iPad.
+            let folgaNaBorda: CGFloat = 12
+            let precisa = (w / 2 + CortinaLateralView.sobraNoMeio + folgaNaBorda)
+                / (1 - CortinaLateralView.inclinacaoDaBorda)
+            let largura = max(precisa, h * CortinaLateralView.proporcao)
             let meio = w / 2
             // Quanto cada pano passa do meio (a sobra + a parte inclinada da borda)
             let sobra = CortinaLateralView.sobraNoMeio + largura * CortinaLateralView.inclinacaoDaBorda

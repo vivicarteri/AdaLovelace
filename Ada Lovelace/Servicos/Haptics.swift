@@ -181,6 +181,12 @@ final class Haptics {
     private var audioPrego: AVAudioPlayer?
     private let somRiscoFosforo = SomRiscoFosforo()
 
+    // SEM MOTOR DE VIBRAÇÃO (iPad): os sons que vão junto com a vibração no iPhone (acender, apagar
+    // e fim, dentro dos .ahap) não tocavam; no iPad os mesmos .wav tocam sozinhos.
+    // Só sons que o time já tinha: nada de som novo inventado. O riscar do fósforo e o prego já têm
+    // som próprio; as batidinhas (tique) ficam sem som, como no iPhone.
+    private var sonsSemVibracao: [String: AVAudioPlayer] = [:]
+
     init() {
         criarMotor()
     }
@@ -192,7 +198,10 @@ final class Haptics {
         // .mixWithOthers: o som do app não para a música da pessoa.
         try? AVAudioSession.sharedInstance().setCategory(.playback, options: [.mixWithOthers])
         carregarAudioDoPrego()
-        guard suportado else { return }
+        guard suportado else {
+            carregarSonsSemVibracao()
+            return
+        }
         do {
             let motor = try CHHapticEngine(audioSession: .sharedInstance())
 
@@ -233,6 +242,23 @@ final class Haptics {
         } catch {
             print("Erro ao carregar Prego.wav: \(error)")
         }
+    }
+
+    private func carregarSonsSemVibracao() {
+        for nome in ["Acender", "Apagar", "Fim"] {
+            guard let url = Bundle.main.url(forResource: nome, withExtension: "wav"),
+                  let player = try? AVAudioPlayer(contentsOf: url) else { continue }
+            player.prepareToPlay()
+            sonsSemVibracao[nome] = player
+        }
+    }
+
+    private func tocarSemVibracao(_ nome: String, volume: Float) {
+        guard volume > 0, let player = sonsSemVibracao[nome] else { return }
+        player.stop()
+        player.currentTime = 0
+        player.volume = max(0, min(1, volume))
+        player.play()
     }
 
     // O enfeite leva 0,45 s para cair. Agenda o WAV original para tocar ao atingir o pote.
@@ -299,7 +325,11 @@ final class Haptics {
 
     // Toca um .ahap. "forca" muda a vibração e "volume" muda o som (os dois de 0 a 1).
     private func tocar(_ nome: String, forca: Float = 1, volume: Float = 1) {
-        guard suportado, let player = players[nome] else { return }
+        guard suportado else {
+            tocarSemVibracao(nome, volume: volume)   // iPad: só o som do mesmo momento
+            return
+        }
+        guard let player = players[nome] else { return }
         let f = max(0, min(1, forca))
         let v = max(0, min(1, volume))
         do {

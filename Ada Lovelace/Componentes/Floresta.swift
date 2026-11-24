@@ -360,6 +360,8 @@ enum Floresta {
         }
     }
     static let coracao = Coracao()
+    // Onde fica o meio do corpo do coração dentro do desenho (fração da largura; medido na arte)
+    static let meioDoCorpoDoCoracao: CGFloat = 0.552
 
     // O centro do coração nunca desce até a chama da vela (fica uma folga entre a ponta e a chama)
     static func limiteDoCoracao() -> CGFloat {
@@ -435,6 +437,8 @@ enum Floresta {
     // Tamanho do quadro (1040 × 910 na tela de 3840 da Georgia → pixels da floresta)
     static let coelhoW: CGFloat = 740, coelhoH: CGFloat = 647
     static let pesDoCoelho: CGFloat = 1950       // onde os pés ficam (pixels da Georgia)
+    // ⚙️ Quanto a sombra do coelho sobe na parede (pixels da Georgia)
+    static let subidaDaSombraDoCoelho: CGFloat = 260
     static let pesNoQuadro: CGFloat = 863 / 910   // onde os pés ficam dentro do quadro (fração)
 
     // Qual quadro mostrar sentado (s = segundos desde que pousou, r = segundos até o próximo pulo).
@@ -642,9 +646,11 @@ struct FlorestaView: View {
                     faixa(relogio, larguraVisivel: percurso) {
                         ForEach(Floresta.arbustos.indices, id: \.self) { i in peca(Floresta.arbustos[i]) }
                     }
-                    coelho(relogio, larguraVisivel, percurso)
                 }
+                // O coelho continua na frente dos arbustos no cenário; na parede ele fica junto com o
+                // céu (sombra nítida e com detalhes, como os elementos de cima, e não borrada como a mata)
                 if mostra(.ceu) {
+                    coelho(relogio, larguraVisivel, percurso)
                     ForEach(Floresta.passarinhos.indices, id: \.self) { i in
                         andante(Floresta.passarinhos[i], relogio, larguraVisivel, percurso)
                     }
@@ -763,7 +769,10 @@ struct FlorestaView: View {
                 .modifier(TomDaSombraDoCeu(ativo: sombra)),
                 altura: c.h)
                 .opacity(sombra ? opacidadeDaSombra : 1)
-                .position(x: quadro.x(Floresta.noQuadro(x: Floresta.centroX)),
+                // Alinhado com a VELA: o corpo vermelho do coração fica bem em cima dela.
+                // (No desenho o corpo não está no meio da imagem: fica 5% para a direita, e a vela
+                // também não está exatamente no meio da tela.)
+                .position(x: quadro.x(ArteVela.centroX) - (Floresta.meioDoCorpoDoCoracao - 0.5) * c.w * escala,
                           y: quadro.y(Floresta.noQuadro(y: y)))
         }
     }
@@ -796,7 +805,10 @@ struct FlorestaView: View {
             let w = Floresta.coelhoW, h = Floresta.coelhoH
             let dx = Floresta.esticar(c.dx, larguraVisivel: larguraVisivel,
                                       percurso: sombra ? percurso : nil, tamanho: w * 0.5)
+            // Na parede a sombra do coelho fica um pouco mais alta (senão ela some atrás da caixinha
+            // e da sombra dos arbustos)
             let centroY = Floresta.pesDoCoelho - (Floresta.pesNoQuadro - 0.5) * h
+                - (sombra ? Floresta.subidaDaSombraDoCoelho : 0)
             // Duas poses misturadas (no pulo): as duas ficam inteiras no meio da troca, então o
             // coelho nunca fica transparente; a de agora some e a próxima aparece aos poucos.
             let proxima = reduzirMovimento ? nil : c.proximo
@@ -813,7 +825,7 @@ struct FlorestaView: View {
             let vista = comSombraDePapel(desenho
                 .frame(width: w * escala, height: h * escala)
                 .scaleEffect(x: c.paraDireita ? 1 : -1, y: 1)   // o desenho olha para a direita
-                .colorMultiply(sombra ? .black : .white),
+                .modifier(TomDaSombraDoCeu(ativo: sombra)),
                 altura: h * 0.6)
                 .opacity(sombra ? opacidadeDaSombra : 1)
                 .position(x: quadro.x(Floresta.noQuadro(x: Floresta.centroX + dx)),
@@ -902,7 +914,7 @@ enum CamadaDaSombra: CaseIterable {
     // ⚙️ Borrão (em pontos, numa tela de iPhone; no iPad cresce junto com a tela)
     var borrao: CGFloat {
         switch self {
-        case .ceu: 1.2
+        case .ceu: 3        // (estava nítido demais; na referência a borda é macia)
         case .arvoresDeTras: 5
         case .arvoresDaFrente: 4.5
         case .arbustos: 5.5

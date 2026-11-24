@@ -60,8 +60,9 @@ struct BotaoDescartar: View {
                 .padding(3)
             Arte("iconeDescartar") {
                 ZStack {
+                    // O botão antigo: as setas girando em volta, com uma chaminha no meio.
+                    // (Numa junção, as setas perderam o tamanho e entrou uma chama grande no lugar.)
                     Image(systemName: "arrow.triangle.2.circlepath")
-                    Image(systemName: "flame.fill")
                         .adaFont(.iconButtonProminent, containerSize: tamanho)
                     Image(systemName: "flame.fill")
                         .adaFont(.iconButtonDetail, containerSize: tamanho)

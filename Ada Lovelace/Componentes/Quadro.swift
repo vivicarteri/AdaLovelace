@@ -40,26 +40,48 @@ enum PosicaoArte {
     static let tenda = r(0, 0, 1290, 2725)
     static let lua = r(264, 442, 1025, 1237)
     static let picadeiro = r(3, 2152, 1290, 2643)
-    static let suporte = r(469, 2542, 825, 2770)
+    // Prato da Georgia (24/11): recorte x 814–2218, y 1893–2286 do quadro dela.
+    // A borda de cima do prato (y 2067 no quadro dela) fica na base da vela; as alças sobem acima dela.
+    static let suporte = r(ArteVela.noQuadroX(814), ArteVela.noQuadroY(1893),
+                           ArteVela.noQuadroX(2218), ArteVela.noQuadroY(2286))
 }
 
-// Medidas da vela da arte (em pixels da arte)
+// Medidas da vela da arte (em pixels do quadro do app)
+//
+// A vela, a chama e o prato novos da Georgia (24/11) vieram num quadro dela de 3032 × 2348.
+// Cada pixel desse quadro vale "k" pixels do quadro do app. O k foi escolhido para o prato
+// (que é bem largo, com as alças) caber no iPhone com uma folguinha dos lados,
+// mantendo a vela e o prato na mesma proporção em que a Georgia desenhou.
 enum ArteVela {
-    static let largura: CGFloat = 230        // largura do corpo
+    static let k: CGFloat = 0.87
+    private static let meioDoRecorte: CGFloat = 1504     // x do meio do recorte da vela, no quadro da Georgia
+    private static let bordaDoPrato: CGFloat = 2067      // y da borda de cima do prato, no quadro da Georgia
+    private static let topoDoRecorte: CGFloat = 458      // y do topo do recorte da vela, no quadro da Georgia
+
+    // Converte um ponto do quadro da Georgia para o quadro do app
+    static func noQuadroX(_ x: CGFloat) -> CGFloat { centroX + (x - meioDoRecorte) * k }
+    static func noQuadroY(_ y: CGFloat) -> CGFloat { baseY + (y - bordaDoPrato) * k }
+
+    static let largura: CGFloat = 230        // largura de referência da vela (o resto do app se mede por ela)
+    static let larguraDesenho: CGFloat = 300 * k   // largura dos recortes velaTopo e velaCorpo (a cera de cima é mais larga que o corpo)
     static let centroX: CGFloat = 634
-    static let corpoTopo: CGFloat = 1083     // topo do desenho (ponta do pavio)
-    static let corpoBaixo: CGFloat = 2689    // fim do desenho (escondido atrás do suporte)
-    static let topoBaixo: CGFloat = 1330     // até onde vão os escorridos (recorte "velaTopo")
-    static let baseY: CGFloat = 2542         // onde a vela "nasce" (topo do suporte)
-    static let alturaMaxima: CGFloat = 1459  // da base até o pavio, com a vela no tamanho máximo
-    static let chamaDentro: CGFloat = 22     // quanto a chama entra no pavio
-    static let chamaLargura: CGFloat = 107
-    static let chamaAltura: CGFloat = 247
-    static let chamaDesvioX: CGFloat = -10   // centro da ponta do pavio em velaTopo
-    private static let pontaDoPavioY: CGFloat = 4
-    // A ponta fica dentro da base opaca da chama e vira o centro da rotação.
-    static let ancoraDaChama = UnitPoint(x: 0.5, y: 1 - (chamaDentro - pontaDoPavioY) / chamaAltura)
-    static let pavio: CGFloat = 40           // do topo do desenho até onde a CERA começa (o resto é pavio)
+    static let corpoTopo: CGFloat = 1083     // topo do desenho, com a vela no tamanho máximo
+    static let topoBaixo: CGFloat = corpoTopo + 312 * k     // até onde vão os escorridos (recorte "velaTopo")
+    static let corpoBaixo: CGFloat = corpoTopo + 1744 * k   // fim do desenho "velaCorpo" no tamanho natural
+    static let escondido: CGFloat = (2202 - bordaDoPrato) * k   // pé da vela que fica escondido dentro do prato
+    static let baseY: CGFloat = 2542         // onde a vela "nasce" (borda de cima do prato)
+    static let alturaMaxima: CGFloat = 1459  // da base até o topo do desenho, com a vela no tamanho máximo
+    // Chama: recorte x 1367–1605, y 134–510 do quadro da Georgia
+    static let chamaDentro: CGFloat = (510 - topoDoRecorte) * k   // quanto a chama desce abaixo do topo do desenho
+    static let chamaLargura: CGFloat = 238 * k
+    static let chamaAltura: CGFloat = 376 * k
+    static let chamaDesvioX: CGFloat = (1486 - meioDoRecorte) * k   // meio da chama, como a Georgia desenhou
+    private static let pavioX: CGFloat = (1477.5 - meioDoRecorte) * k
+    private static let pontaDoPavioY: CGFloat = (473 - topoDoRecorte) * k
+    // A ponta do pavio fica dentro da base opaca da chama e vira o centro da rotação.
+    static let ancoraDaChama = UnitPoint(x: 0.5 + (pavioX - chamaDesvioX) / chamaAltura,
+                                         y: 1 - (chamaDentro - pontaDoPavioY) / chamaAltura)
+    static let pavio: CGFloat = (503 - topoDoRecorte) * k   // do topo do desenho até onde a CERA começa (o resto é pavio)
 }
 
 // ARTE ANIMADA (quadro a quadro)
