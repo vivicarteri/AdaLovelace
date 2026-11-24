@@ -96,15 +96,16 @@ struct CenarioView: View {
         .accessibilityLabel(descricao)
     }
 
-    // O que o VoiceOver fala sobre o cenário (sem números)
+    // O que o VoiceOver fala sobre o cenário (sem números).
+    // Os detalhes de cada camada ficam no rotor "Camadas de papel" (Acessibilidade.swift).
     private var descricao: String {
-        let lugar = Floresta.ligada ? "Floresta de papel" : "Circo de papel"
-        guard mostrarPersonagens else { return "\(lugar), no escuro" }
+        let lugar = Floresta.ligada ? "Caixa de Teatro de Sombra da Floresta"
+                                    : "Caixa de Teatro de Sombra do Circo"
+        guard mostrarPersonagens else { return "\(lugar). Apagada, o palco está no escuro" }
         switch progresso {
-        case ..<0.25: return "\(lugar). Amanhecendo, o sol está alto"
-        case ..<0.5: return "\(lugar). O sol está descendo"
-        case ..<0.75: return "\(lugar). Anoitecendo, a lua está subindo"
-        default: return "\(lugar). Noite, a lua está alta"
+        case ..<0.5: return "\(lugar). Acesa, a cena de papel está iluminada"
+        case ..<0.85: return "\(lugar). Acesa, a cena vai escurecendo aos poucos"
+        default: return "\(lugar). Acesa, a noite chegou na cena"
         }
     }
 }

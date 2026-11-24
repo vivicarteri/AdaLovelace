@@ -13,6 +13,7 @@ struct TeatroSombrasView: View {
     var aberturaCaixa: CGFloat = 0        // cortina da caixa: 0 = fechada (normal), 1 = aberta (só na animação)
     var conteudoDaCaixa: AnyView? = nil   // palco em miniatura (só na animação de entrar e sair)
     var congelado = false                 // durante o zoom as sombras param, para o movimento ficar liso
+    var mostrarCamadas = true             // VoiceOver: rotor das camadas (fica de fora na animação)
 
     var body: some View {
         let acesa = sessao.estado == .acesa
@@ -96,6 +97,8 @@ struct TeatroSombrasView: View {
                 Arte("letreiro") {
                     Text("Teatro de Sombras")
                         .adaFont(.sectionTitle)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)   // o letreiro tem tamanho fixo: o texto encolhe em vez de cortar
                         .foregroundStyle(Cores.tinta)
                         .padding(.horizontal, 18)
                         .padding(.vertical, 10)
@@ -113,11 +116,19 @@ struct TeatroSombrasView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Entrar na caixa")
+                .accessibilityHint("Volta para a vela")
+                .accessibilityInputLabels(["Entrar na caixa", "Voltar para a vela", "Caixa de teatro"])
                 .position(caixa.centro)
+
+                // Rotor "Camadas de papel": céu, floresta e estado da vela, uma de cada vez
+                if mostrarCamadas {
+                    CamadasDaCenaAcessiveis(camadas: acesa ? DescricaoDaCena.camadas(sombra: true) : [],
+                                            estadoDaVela: sessao.descricaoDaVela)
+                }
             }
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(acesa ? "Teatro de sombras. As sombras do circo aparecem na parede"
+        .accessibilityLabel(acesa ? "Teatro de sombras. As sombras da cena de papel aparecem na parede"
                                   : "Teatro de sombras, no escuro. A vela está apagada")
     }
 }

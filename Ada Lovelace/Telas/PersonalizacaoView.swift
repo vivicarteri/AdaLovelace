@@ -40,6 +40,8 @@ struct PersonalizacaoView: View {
     // Para o enfeite ficar visível acima do dedo
     private let acimaDoDedo: CGFloat = 36
 
+    @Namespace private var rotorEnfeites   // VoiceOver: rotor "Enfeites"
+
     init(config: VelaConfig, haptics: Haptics, fechar: @escaping () -> Void, confirmar: @escaping (VelaConfig) -> Void) {
         self.haptics = haptics
         self.fechar = fechar
@@ -84,6 +86,15 @@ struct PersonalizacaoView: View {
             }
             .coordinateSpace(.named("atelie"))
             .animation(.easeInOut(duration: 0.25), value: aba)
+            // Smart Invert: o ateliê é arte de papel e madeira, não inverte
+            .accessibilityIgnoresInvertColors()
+            .accessibilityElement(children: .contain)
+            // VoiceOver: pula de enfeite em enfeite espetado na vela
+            .accessibilityRotor("Enfeites") {
+                ForEach(rascunho.enfeites) { enfeite in
+                    AccessibilityRotorEntry(Text(rotulo(enfeite)), id: enfeite.id, in: rotorEnfeites)
+                }
+            }
         }
     }
 
@@ -102,7 +113,8 @@ struct PersonalizacaoView: View {
         VStack {
             HStack {
                 // Se a pessoa mudou alguma coisa, pergunta antes de jogar fora (dupla confirmação)
-                BotaoRedondo(icone: "xmark", rotulo: "Fechar sem salvar", tamanho: 44) {
+                BotaoRedondo(icone: "xmark", rotulo: "Fechar sem salvar", tamanho: 44,
+                             comandosDeVoz: ["Fechar", "Cancelar", "Sair"]) {
                     if rascunho == original { fechar() } else { confirmarSaida = true }
                 }
                 .confirmationDialog("Sair sem salvar?", isPresented: $confirmarSaida, titleVisibility: .visible) {
@@ -112,7 +124,8 @@ struct PersonalizacaoView: View {
                     Text("As mudanças que você fez na vela vão se perder.")
                 }
                 Spacer()
-                BotaoRedondo(icone: "checkmark", rotulo: "Confirmar", tamanho: 44) {
+                BotaoRedondo(icone: "checkmark", rotulo: "Confirmar", tamanho: 44,
+                             comandosDeVoz: ["Salvar", "Pronto"]) {
                     haptics.tique()
                     confirmar(rascunho)
                 }
@@ -135,11 +148,18 @@ struct PersonalizacaoView: View {
                      marcas: rascunho.marcas)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Vela")
-                .accessibilityValue("\(rascunho.quantos(.alfinete)) alfinetes e \(rascunho.quantos(.penduricalho)) penduricalhos")
-                .accessibilityAction(named: "Espetar alfinete") { colocarPeloVoiceOver(.alfinete, g) }
-                .accessibilityAction(named: "Pendurar penduricalho") { colocarPeloVoiceOver(.penduricalho, g) }
-                .accessibilityAction(named: "Tirar o último enfeite") {
-                    if !rascunho.enfeites.isEmpty { rascunho.enfeites.removeLast() }
+                .accessibilityValue("\(DescricaoDaDuracao.texto(minutos: rascunho.minutos)). \(rascunho.quantos(.alfinete)) alfinetes e \(rascunho.quantos(.penduricalho)) penduricalhos")
+                .accessibilityHint("Use as ações para inserir enfeites, e o rotor Enfeites para visitar cada um")
+                .accessibilityActions {
+                    ForEach(LugarNaVela.allCases, id: \.self) { lugar in
+                        Button("Inserir alfinete \(lugar.texto)") { colocarPeloVoiceOver(.alfinete, lugar, g) }
+                    }
+                    ForEach(LugarNaVela.allCases, id: \.self) { lugar in
+                        Button("Inserir penduricalho \(lugar.texto)") { colocarPeloVoiceOver(.penduricalho, lugar, g) }
+                    }
+                    if let ultimo = rascunho.enfeites.last {
+                        Button("Tirar o último enfeite") { remover(ultimo) }
+                    }
                 }
                 // A vela muda de tamanho junto com o dedo (antes uma mola deixava a vela atrasada
                 // em relação à bolinha)
@@ -155,11 +175,16 @@ struct PersonalizacaoView: View {
             ForEach(rascunho.enfeites) { enfeite in
                 let acima = EnfeiteView.acima(enfeite.tipo, largura: g.larguraVela)
                 let abaixo = EnfeiteView.abaixo(enfeite.tipo, largura: g.larguraVela)
-                Color.clear
+                // Quase transparente (e não .clear), para o VoiceOver enxergar o enfeite
+                Color.black.opacity(0.001)
                     .frame(width: 44, height: max(36, acima + abaixo))
                     .contentShape(Rectangle())
                     .gesture(arrasto(tipo: enfeite.tipo, tiradoDe: enfeite, g))
-                    .accessibilityHidden(true)
+                    // VoiceOver: cada enfeite é um item, com a ação de remover
+                    .accessibilityElement()
+                    .accessibilityLabel(rotulo(enfeite))
+                    .accessibilityAction(named: "Remover") { remover(enfeite) }
+                    .accessibilityRotorEntry(id: enfeite.id, in: rotorEnfeites)
                     .position(x: g.centroX + CGFloat(enfeite.lado) * g.larguraVela * 0.62,
                               y: g.baseY - CGFloat(enfeite.altura) * alturaCheia + (abaixo - acima) / 2)
             }
@@ -188,7 +213,7 @@ struct PersonalizacaoView: View {
             // O slider em si, numa área pequena ao lado da vela
             ZStack(alignment: .top) {
                 Capsule()
-                    .fill(Cores.papel.opacity(0.5))
+                    .fill(Cores.papel.opacity(0.6))   // 0,6: contraste mínimo de 3:1 com a madeira
                     .frame(width: 6, height: altura)
                     .offset(y: folga)
 
@@ -219,7 +244,10 @@ struct PersonalizacaoView: View {
             )
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Tamanho da vela")
-            .accessibilityValue("\(rascunho.minutos) minutos")
+            // Sem números, como na tela: só a sensação da duração
+            .accessibilityValue(DescricaoDaDuracao.texto(minutos: rascunho.minutos))
+            .accessibilityHint("Deslize para cima ou para baixo com um dedo para mudar a duração")
+            .accessibilityInputLabels(["Tamanho da vela", "Duração", "Tempo da vela"])
             .accessibilityAdjustableAction { direcao in
                 switch direcao {
                 case .increment: mudarTamanho(rascunho.posicaoSlider + 0.05)
@@ -264,24 +292,37 @@ struct PersonalizacaoView: View {
             } else {
                 Text("Arraste a bolinha para mudar o tamanho")
                     .adaFont(.smallNote)
+                    .multilineTextAlignment(.center)
+                    .minimumScaleFactor(0.6)   // a caixinha tem altura fixa: o texto encolhe em vez de cortar
                     .foregroundStyle(Cores.tinta.opacity(0.7))
                     .padding(.horizontal)
             }
         }
         .position(x: g.centroX, y: g.caixinhaY)
-        .accessibilityHidden(true)
+        // VoiceOver: a caixinha vira um item com as ações de inserir (o arraste não é obrigatório)
+        .accessibilityElement(children: .ignore)
+        .accessibilityHidden(tipo == nil)
+        .accessibilityLabel(tipo == .penduricalho ? "Caixinha de penduricalhos" : "Caixinha de alfinetes")
+        .accessibilityValue(textoDaCaixinha(sobram))
+        .accessibilityActions {
+            if let tipo {
+                ForEach(LugarNaVela.allCases, id: \.self) { lugar in
+                    Button("Inserir \(tipo.nome) \(lugar.texto)") { colocarPeloVoiceOver(tipo, lugar, g) }
+                }
+            }
+        }
     }
 
     private func abas(_ g: LayoutAtelie) -> some View {
         HStack(spacing: 28) {
-            botaoAba(.tempo, icone: "clock", rotulo: "Tempo")
-            botaoAba(.alfinete, icone: "pin", rotulo: "Alfinetes")
-            botaoAba(.penduricalho, icone: "star", rotulo: "Penduricalhos")
+            botaoAba(.tempo, icone: "clock", rotulo: "Tempo", voz: ["Duração", "Tamanho"])
+            botaoAba(.alfinete, icone: "pin", rotulo: "Alfinetes", voz: ["Alfinete"])
+            botaoAba(.penduricalho, icone: "star", rotulo: "Penduricalhos", voz: ["Penduricalho"])
         }
         .position(x: g.centroX, y: g.abasY)
     }
 
-    private func botaoAba(_ qual: Aba, icone: String, rotulo: String) -> some View {
+    private func botaoAba(_ qual: Aba, icone: String, rotulo: String, voz: [String]) -> some View {
         Button {
             aba = qual
             haptics.tique()
@@ -292,9 +333,12 @@ struct PersonalizacaoView: View {
                 .frame(width: 56, height: 56)
                 .background(Circle().fill(aba == qual ? Cores.dourado : Cores.papel))
                 .overlay(Circle().stroke(Cores.tinta, lineWidth: aba == qual ? 3 : 2))
+                // A aba escolhida não depende só da cor: ela também fica maior
+                .scaleEffect(aba == qual ? 1.12 : 1)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(rotulo)
+        .accessibilityInputLabels([rotulo] + voz)
         .accessibilityAddTraits(aba == qual ? .isSelected : [])
     }
 
@@ -362,6 +406,10 @@ struct PersonalizacaoView: View {
             }
             arrastando = nil
             haptics.tique()
+            // O app empurrou o enfeite para não ficar em cima de outro
+            if abs(lugar - altura) > 0.02 {
+                anunciar("Objeto reorganizado para evitar sobreposição")
+            }
         } else {
             // Não encostou (ou não cabe ali): cai no pote e volta para a caixinha
             if let antigo = item.tiradoDe {
@@ -374,6 +422,7 @@ struct PersonalizacaoView: View {
                 arrastando?.ponto = CGPoint(x: g.centroX, y: g.caixinhaY)
             }
             haptics.caiuNoPote()
+            anunciar("Objeto retornado à caixinha")
             Task {
                 try? await Task.sleep(for: .seconds(Haptics.tempoQueda))
                 arrastando = nil
@@ -391,23 +440,66 @@ struct PersonalizacaoView: View {
         // Se a vela ficou menor, os enfeites continuam na mesma altura relativa (não precisa mexer)
     }
 
-    private func colocarPeloVoiceOver(_ tipo: TipoEnfeite, _ g: LayoutAtelie) {
+    // VoiceOver e Controle por Voz: coloca o enfeite perto do lugar pedido (topo, metade ou base).
+    // Tenta os dois lados da vela e fica com o lugar livre mais perto do pedido.
+    private func colocarPeloVoiceOver(_ tipo: TipoEnfeite, _ lugar: LugarNaVela, _ g: LayoutAtelie) {
+        guard rascunho.sobram(tipo) > 0 else {
+            anunciar("Não sobrou nenhum \(tipo.nome) na caixinha")
+            return
+        }
         let alturaCheia = g.alturaCheia(rascunho.posicaoSlider)
         let tamanho = TamanhoEnfeite.daVela(largura: g.larguraVela, alturaCheia: alturaCheia)
 
-        // Começa pelo lado que tem menos coisa, para a vela ficar equilibrada
+        // Em caso de empate, o lado que tem menos coisa, para a vela ficar equilibrada
         let naEsquerda = rascunho.enfeites.filter { $0.lado < 0 }.count
         let naDireita = rascunho.enfeites.count - naEsquerda
         let lados: [Double] = naEsquerda <= naDireita ? [-1, 1] : [1, -1]
 
+        var escolhido: (altura: Double, lado: Double)? = nil
         for lado in lados {
-            if let altura = rascunho.primeiroLugarLivre(tipo, lado: lado, tamanho: tamanho) {
-                rascunho.enfeites.append(Enfeite(tipo: tipo, altura: altura, lado: lado))
-                haptics.tique()
-                return
-            }
+            guard let altura = rascunho.acomodar(tipo, altura: lugar.altura, lado: lado, tamanho: tamanho) else { continue }
+            let distancia = abs(altura - lugar.altura)
+            if let atual = escolhido, abs(atual.altura - lugar.altura) <= distancia + 0.0001 { continue }
+            escolhido = (altura, lado)
         }
-        AccessibilityNotification.Announcement("Não cabe mais nenhum \(tipo.nome)").post()
+
+        guard let escolhido else {
+            anunciar("Não cabe mais nenhum \(tipo.nome) na vela")
+            return
+        }
+        rascunho.enfeites.append(Enfeite(tipo: tipo, altura: escolhido.altura, lado: escolhido.lado))
+        haptics.tique()
+        let onde = "\(DescricaoDoEnfeite.altura(escolhido.altura)), \(DescricaoDoEnfeite.lado(escolhido.lado))"
+        if abs(escolhido.altura - lugar.altura) > 0.03 {
+            anunciar("Objeto reorganizado para evitar sobreposição. \(DescricaoDoEnfeite.nome(tipo)) \(onde)")
+        } else {
+            anunciar("\(DescricaoDoEnfeite.nome(tipo)) colocado \(onde)")
+        }
+    }
+
+    // Tira o enfeite da vela (fica o furinho na cera) e ele volta para a caixinha
+    private func remover(_ enfeite: Enfeite) {
+        rascunho.enfeites.removeAll { $0.id == enfeite.id }
+        rascunho.marcas.append(Marca(altura: enfeite.altura, lado: enfeite.lado))
+        haptics.tique()
+        anunciar("Objeto retornado à caixinha")
+    }
+
+    // "Alfinete, lado esquerdo, perto do topo"
+    private func rotulo(_ enfeite: Enfeite) -> String {
+        "\(DescricaoDoEnfeite.nome(enfeite.tipo)), \(DescricaoDoEnfeite.lado(enfeite.lado)), \(DescricaoDoEnfeite.altura(enfeite.altura))"
+    }
+
+    private func textoDaCaixinha(_ sobram: Int) -> String {
+        switch sobram {
+        case 0: return "Vazia"
+        case 1: return "Sobra um"
+        default: return "Sobram \(sobram)"
+        }
+    }
+
+    private func anunciar(_ texto: String) {
+        AccessibilityNotification.Announcement(texto).post()
     }
 }
 
