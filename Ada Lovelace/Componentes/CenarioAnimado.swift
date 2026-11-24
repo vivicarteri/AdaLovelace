@@ -24,12 +24,26 @@ struct PecaAnimada {
     let pedaco: CGRect        // onde fica o pedacinho que muda (também na tela da Georgia)
     let ritmo: [Int]          // um número por quadro do vídeo; 0 = sem pedacinho (peça parada)
     var fps: Double = 12
+    var raios: RaiosQueGiram? = nil   // camada que gira atrás da peça (os raios claros do sol)
 
     // O pedacinho que deve aparecer agora (0 = nenhum)
     func quadro(t: Double) -> Int {
         guard !ritmo.isEmpty else { return 0 }
         let i = Int((t * fps).rounded(.down)) % ritmo.count
         return ritmo[max(0, i)]
+    }
+}
+
+// Uma camada que GIRA atrás da peça, sempre no mesmo ritmo (as "hélices" do sol da Georgia).
+// A imagem é um quadrado com o centro do giro no meio.
+struct RaiosQueGiram {
+    let nome: String
+    let centro: CGPoint       // centro do giro, na tela da Georgia
+    let raio: CGFloat         // meio lado do quadrado da imagem, na tela da Georgia
+    let grausPorSegundo: Double   // positivo = sentido horário
+
+    func angulo(t: Double) -> Angle {
+        .degrees((t * grausPorSegundo).truncatingRemainder(dividingBy: 360))
     }
 }
 
@@ -66,7 +80,10 @@ enum CenarioNovo {
     // Esses vídeos vieram com fundo PRETO (sem transparência): o preto de fora do
     // contorno branco foi apagado e virou transparente.
 
-    // Sol: o corpo fica parado, só o rosto (olhos e bochechas) muda. 40 s, 12 quadros por segundo.
+    // Sol: o corpo fica parado e o rosto (olhos e bochechas) muda. 40 s, 12 quadros por segundo.
+    // Os raios CLAROS (solhelices.mov) giram por trás do corpo: uma volta inteira a cada 40 s,
+    // no sentido anti-horário (medido no vídeo: 9° por segundo, centro em 2112 × 1224).
+    // "cenarioSol" é o sol sem esses raios (solsemanimacoes.mov com o rosto do sol.mov).
     static let sol = PecaAnimada(
         nome: "cenarioSol",
         peca: CGRect(x: 1344, y: 374, width: 1628, height: 1765),
@@ -90,7 +107,9 @@ enum CenarioNovo {
                 51, 10, 52, 11, 12, 13, 53, 14, 54, 15, 16, 17, 17, 17, 55, 55, 18, 18, 18, 74, 19, 19, 19, 56,
                 56, 56, 20, 20, 20, 21, 21, 21, 21, 21, 22, 22, 22, 22, 57, 23, 23, 23, 23, 23, 24, 25, 58, 26,
                 59, 27, 60, 28, 61, 29, 62, 75, 30, 30, 31, 76, 32, 63, 33, 64, 34, 65, 35, 66, 36, 37, 38, 38,
-                38, 38, 38, 39, 39, 39, 39, 39, 39, 40, 40, 40, 40, 40, 40, 41, 41, 41, 41, 67, 42, 42, 42, 42]
+                38, 38, 38, 39, 39, 39, 39, 39, 39, 40, 40, 40, 40, 40, 40, 41, 41, 41, 41, 67, 42, 42, 42, 42],
+        raios: RaiosQueGiram(nome: "cenarioSolRaios", centro: CGPoint(x: 2112, y: 1224),
+                             raio: 840, grausPorSegundo: -9)
     )
 
     // Passarinho cinza, voando para a ESQUERDA (o outro voa para a direita)
@@ -130,11 +149,11 @@ struct PecaAnimadaView: View {
     var body: some View {
         GeometryReader { geo in
             if let t {
-                desenho(geo.size, quadro: reduzirMovimento ? 0 : peca.quadro(t: t + fase))
+                desenho(geo.size, quadro: reduzirMovimento ? 0 : peca.quadro(t: t + fase), tempo: t)
             } else {
                 TimelineView(.animation(minimumInterval: 1 / peca.fps, paused: reduzirMovimento)) { contexto in
                     let agora = contexto.date.timeIntervalSinceReferenceDate + fase
-                    desenho(geo.size, quadro: reduzirMovimento ? 0 : peca.quadro(t: agora))
+                    desenho(geo.size, quadro: reduzirMovimento ? 0 : peca.quadro(t: agora), tempo: agora)
                 }
             }
         }
@@ -142,7 +161,7 @@ struct PecaAnimadaView: View {
         .accessibilityHidden(true)
     }
 
-    private func desenho(_ tamanho: CGSize, quadro q: Int) -> some View {
+    private func desenho(_ tamanho: CGSize, quadro q: Int, tempo: Double) -> some View {
         // Quanto a peça encolheu/cresceu da tela da Georgia para a tela do aparelho
         let ex = tamanho.width / peca.peca.width
         let ey = tamanho.height / peca.peca.height
@@ -151,6 +170,18 @@ struct PecaAnimadaView: View {
             Image(peca.nome)
                 .resizable()
                 .frame(width: tamanho.width, height: tamanho.height)
+                // Os raios giram ATRÁS do corpo (com "Reduzir movimento", ficam parados).
+                // No fundo (background) eles não mudam o tamanho da peça.
+                .background(alignment: .topLeading) {
+                    if let r = peca.raios {
+                        Image(r.nome)
+                            .resizable()
+                            .frame(width: 2 * r.raio * ex, height: 2 * r.raio * ey)
+                            .rotationEffect(reduzirMovimento ? .zero : r.angulo(t: tempo))
+                            .offset(x: (r.centro.x - r.raio - peca.peca.minX) * ex,
+                                    y: (r.centro.y - r.raio - peca.peca.minY) * ey)
+                    }
+                }
             if q > 0 && !sombra {
                 Image("\(peca.nome)_\(q)")
                     .resizable()

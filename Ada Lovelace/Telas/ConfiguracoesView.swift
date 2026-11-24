@@ -12,6 +12,7 @@ struct ConfiguracoesView: View {
     @AppStorage(Chaves.apagarSoprando) private var apagarSoprando = true
     @AppStorage(Chaves.movimento) private var movimento = true
     @AppStorage(Chaves.resetarDicas) private var resetarDicas = false
+    @AppStorage(Chaves.iluminacaoDramatica) private var iluminacaoDramatica = true
     #if DEBUG
     @AppStorage(Chaves.acelerarTempo) private var acelerarTempo = false
     @AppStorage(Chaves.velocidadeDoTempo) private var velocidadeDoTempo = 2.0
@@ -46,6 +47,7 @@ struct ConfiguracoesView: View {
                         resetarDicas = true
                     }
                     .disabled(resetarDicas)
+                    Toggle("Iluminação dramática", isOn: $iluminacaoDramatica)
                     #if DEBUG
                     Toggle("Acelerar a vela", isOn: $acelerarTempo)
                     if acelerarTempo {
@@ -86,7 +88,7 @@ struct ConfiguracoesView: View {
             } minimumValueLabel: {
                 Text("2×")
             } maximumValueLabel: {
-                Text("10/0×")
+                Text("100×")
             }
             .accessibilityValue("\(multiplicador) vezes mais rápido")
         }

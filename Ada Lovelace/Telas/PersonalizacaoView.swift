@@ -28,9 +28,14 @@ struct PersonalizacaoView: View {
         var tipo: TipoEnfeite
         var ponto: CGPoint          // onde o alfinete vai espetar
         var tiradoDe: Enfeite?      // se veio da vela
+        var daCaixinha: Int? = nil  // qual peça da caixinha está na mão (a que a pessoa pegou)
         var caindo = false
     }
     @State private var arrastando: Arrastando?
+
+    // A ordem das peças na caixinha (cada peça tem um número que não muda). Assim, quando uma sai,
+    // as outras andam para fechar o buraco, com animação, em vez de sumir sempre a última.
+    @State private var pecasNaCaixinha: [TipoEnfeite: [Int]] = [:]
 
     // Para o enfeite ficar visível acima do dedo
     private let acimaDoDedo: CGFloat = 36
@@ -67,10 +72,13 @@ struct PersonalizacaoView: View {
                     EnfeiteView(tipo: arrastando.tipo,
                                 lado: arrastando.ponto.x < g.centroX ? -1 : 1,
                                 largura: g.larguraVela)
+                        // A linha do alfinete fica EXATAMENTE onde ele vai espetar (igual na vela).
+                        // Antes a conta estava invertida: no penduricalho, o que ficava no ponto era a
+                        // estrelinha, e ao soltar ele subia (não ficava onde a pessoa escolheu).
                         .position(x: arrastando.ponto.x,
                                   y: arrastando.ponto.y
-                                     + EnfeiteView.alturaDesenho(arrastando.tipo, largura: g.larguraVela) / 2
-                                     - EnfeiteView.alturaDoAlfinete(arrastando.tipo, largura: g.larguraVela))
+                                     + EnfeiteView.alturaDoAlfinete(arrastando.tipo, largura: g.larguraVela)
+                                     - EnfeiteView.alturaDesenho(arrastando.tipo, largura: g.larguraVela) / 2)
                         .allowsHitTesting(false)
                 }
             }
@@ -133,8 +141,9 @@ struct PersonalizacaoView: View {
                 .accessibilityAction(named: "Tirar o último enfeite") {
                     if !rascunho.enfeites.isEmpty { rascunho.enfeites.removeLast() }
                 }
+                // A vela muda de tamanho junto com o dedo (antes uma mola deixava a vela atrasada
+                // em relação à bolinha)
                 .position(x: g.centroX, y: g.baseY - (alturaCheia + espacoChama) / 2)
-                .animation(.spring(duration: 0.3), value: rascunho.posicaoSlider)
 
             SuporteView(largura: g.larguraVela)
                 .position(x: g.centroX + SuporteView.desvioX(largura: g.larguraVela),
@@ -157,12 +166,13 @@ struct PersonalizacaoView: View {
         }
     }
 
-    // Slider vertical ao lado da vela. A bolinha fica na altura do topo da vela.
+    // Slider vertical ao lado da vela. A bolinha fica na altura do topo da CERA
+    // (o desenho da vela termina na ponta do pavio, que fica um pouco acima).
     private func slider(_ g: LayoutAtelie) -> some View {
         let x = g.tamanho.width * 0.85
-        let yMin = g.baseY - g.alturaCheia(0)    // vela mais curta
-        let yMax = g.baseY - g.alturaCheia(1)    // vela mais longa
-        let yAtual = g.baseY - g.alturaCheia(rascunho.posicaoSlider)
+        let yMin = g.topoDaCera(0)    // vela mais curta
+        let yMax = g.topoDaCera(1)    // vela mais longa
+        let yAtual = g.topoDaCera(rascunho.posicaoSlider)
         let altura = yMin - yMax
         let folga: CGFloat = 24                  // área de toque um pouco maior que o trilho
 
@@ -188,7 +198,7 @@ struct PersonalizacaoView: View {
                     Capsule()
                         .fill(Cores.papel)
                         .frame(width: 16, height: 3)
-                        .offset(y: (g.baseY - g.alturaCheia(p)) - yMax + folga - 1.5)
+                        .offset(y: g.topoDaCera(p) - yMax + folga - 1.5)
                 }
 
                 Circle()
@@ -202,8 +212,8 @@ struct PersonalizacaoView: View {
             .gesture(
                 DragGesture(minimumDistance: 0, coordinateSpace: .named("atelie"))
                     .onChanged { valor in
-                        // Converte a altura do dedo em posição do slider (0 a 1)
-                        let fracao = (g.baseY - valor.location.y) / g.alturaMaxima
+                        // Converte a altura do dedo (= topo da cera) em posição do slider (0 a 1)
+                        let fracao = (g.baseY - valor.location.y + g.pavio) / g.alturaMaxima
                         mudarTamanho(Double((fracao - 0.35) / 0.65))
                     }
             )
@@ -236,19 +246,21 @@ struct PersonalizacaoView: View {
             .frame(width: g.caixinha.width, height: g.caixinha.height)
 
             if let tipo {
+                let pecas = pecasVisiveis(tipo, sobram: sobram)
                 HStack(spacing: 4) {
-                    ForEach(0..<VelaConfig.limitePorTipo, id: \.self) { i in
-                        let tem = i < sobram
+                    ForEach(pecas, id: \.self) { peca in
                         EnfeiteView(tipo: tipo, lado: -1, largura: g.larguraVela * 0.7)
                             .rotationEffect(.degrees(tipo == .alfinete ? -60 : 0))
                             .frame(width: g.caixinha.width / 7, height: g.caixinha.height * 0.8)
                             .contentShape(Rectangle())
-                            // O que está sendo arrastado some da caixinha (mas continua aqui para o gesto não parar)
-                            .opacity(tem && !(arrastandoDaCaixinha && i == sobram - 1) ? 1 : 0)
-                            .allowsHitTesting(tem)
-                            .gesture(arrasto(tipo: tipo, tiradoDe: nil, g))
+                            // A peça que a pessoa PEGOU some da caixinha (mas continua aqui para o gesto
+                            // não parar); quando ela é espetada na vela, as outras andam para fechar o buraco
+                            .opacity(arrastandoDaCaixinha && arrastando?.daCaixinha == peca ? 0 : 1)
+                            .gesture(arrasto(tipo: tipo, tiradoDe: nil, daCaixinha: peca, g))
+                            .transition(.opacity)
                     }
                 }
+                .frame(width: g.caixinha.width, alignment: .center)
             } else {
                 Text("Arraste a bolinha para mudar o tamanho")
                     .font(.footnote)
@@ -288,12 +300,21 @@ struct PersonalizacaoView: View {
 
     // MARK: Arrastar e soltar
 
-    private func arrasto(tipo: TipoEnfeite, tiradoDe: Enfeite?, _ g: LayoutAtelie) -> some Gesture {
+    // As peças que estão na caixinha agora, na ordem (sempre "sobram" peças)
+    private func pecasVisiveis(_ tipo: TipoEnfeite, sobram: Int) -> [Int] {
+        var pecas = pecasNaCaixinha[tipo] ?? Array(0..<VelaConfig.limitePorTipo)
+        if pecas.count > sobram { pecas = Array(pecas.prefix(sobram)) }
+        var proxima = (pecas.max() ?? -1) + 1
+        while pecas.count < sobram { pecas.append(proxima); proxima += 1 }
+        return pecas
+    }
+
+    private func arrasto(tipo: TipoEnfeite, tiradoDe: Enfeite?, daCaixinha: Int? = nil, _ g: LayoutAtelie) -> some Gesture {
         DragGesture(minimumDistance: 2, coordinateSpace: .named("atelie"))
             .onChanged { valor in
                 let ponto = CGPoint(x: valor.location.x, y: valor.location.y - acimaDoDedo)
                 if arrastando == nil {
-                    arrastando = Arrastando(tipo: tipo, ponto: ponto, tiradoDe: tiradoDe)
+                    arrastando = Arrastando(tipo: tipo, ponto: ponto, tiradoDe: tiradoDe, daCaixinha: daCaixinha)
                 } else if arrastando?.caindo == false {
                     arrastando?.ponto = ponto
                 }
@@ -329,7 +350,16 @@ struct PersonalizacaoView: View {
                 nova.marcas.append(Marca(altura: antigo.altura, lado: antigo.lado))
             }
             nova.enfeites.append(Enfeite(tipo: item.tipo, altura: lugar, lado: lado))
-            rascunho = nova
+            // A peça pega sai da caixinha e as outras deslizam para o lugar dela
+            if let peca = item.daCaixinha {
+                let antes = pecasVisiveis(item.tipo, sobram: rascunho.sobram(item.tipo))
+                withAnimation(.spring(duration: 0.35)) {
+                    pecasNaCaixinha[item.tipo] = antes.filter { $0 != peca }
+                    rascunho = nova
+                }
+            } else {
+                rascunho = nova
+            }
             arrastando = nil
             haptics.tique()
         } else {
@@ -393,5 +423,13 @@ private struct LayoutAtelie {
 
     func alturaCheia(_ posicao: Double) -> CGFloat {
         GeometriaVela.alturaCheia(posicao: posicao, alturaMaxima: alturaMaxima)
+    }
+
+    // O pavio (da ponta até onde a cera começa), na mesma escala da vela
+    var pavio: CGFloat { larguraVela * ArteVela.pavio / ArteVela.largura }
+
+    // Onde fica o topo da CERA na tela para cada posição do slider
+    func topoDaCera(_ posicao: Double) -> CGFloat {
+        baseY - alturaCheia(posicao) + pavio
     }
 }

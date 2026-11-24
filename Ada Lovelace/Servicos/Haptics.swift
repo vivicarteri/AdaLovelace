@@ -26,8 +26,9 @@ final class Haptics {
     // MARK: Motor
 
     private func criarMotor() {
-        // .ambient: o som do app não para a música da pessoa
-        try? AVAudioSession.sharedInstance().setCategory(.ambient)
+        // .playback: os sons do app (música de fundo e objetos) tocam MESMO com o iPhone no
+        // silencioso (decisão do time). .mixWithOthers: o som do app não para a música da pessoa.
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])
         guard suportado else { return }
         do {
             let motor = try CHHapticEngine(audioSession: .sharedInstance())
@@ -153,25 +154,28 @@ final class Haptics {
     // forca: 0 a 1 (enfeite mais alto = cai de mais alto = batida mais forte e som mais alto)
     func prego(forca: Float) {
         let f = max(0, min(1, forca))
-        tocar("Prego", forca: 0.5 + 0.5 * f, volume: (0.4 + 0.6 * f) * volumeDosObjetos)
+        // (mais forte que antes, pedido da mentora: a menor batida já é bem perceptível)
+        tocar("Prego", forca: 0.7 + 0.3 * f, volume: (0.4 + 0.6 * f) * volumeDosObjetos)
     }
 
     // Enfeite que não encostou na vela e caiu no pote
     func caiuNoPote() {
-        tocar("Prego", forca: 0.3, volume: 0.25 * volumeDosObjetos)
+        tocar("Prego", forca: 0.55, volume: 0.25 * volumeDosObjetos)
     }
 
     // "Sons dos objetos" desligado nas Configurações: a vibração continua, o som some
     private var volumeDosObjetos: Float { Chaves.ligado(Chaves.somObjetos) ? 1 : 0 }
 
-    // Batidinha leve (slider, encaixar enfeite…)
-    func tique() { toque(forca: 0.5, nitidez: 0.5) }
+    // ⚙️ As batidas foram reforçadas (pedido da mentora: os haptics podiam ser mais intensos).
+    // A vibração contínua da chama NÃO mudou (ela já tinha sido suavizada a pedido do time).
+    // Batidinha (slider, encaixar enfeite…)
+    func tique() { toque(forca: 0.7, nitidez: 0.55) }
 
     // Fósforo riscando na caixa: batida seca e áspera
-    func riscar() { toque(forca: 0.9, nitidez: 0.2) }
+    func riscar() { toque(forca: 1, nitidez: 0.3) }
 
     // Fósforo raspando na lixa (antes de acender): batidinhas fracas e ásperas
-    func raspar() { toque(forca: 0.35, nitidez: 0.05) }
+    func raspar() { toque(forca: 0.6, nitidez: 0.1) }
 
     // MARK: Segurar para descartar (vibração que vai crescendo durante 1 segundo)
 

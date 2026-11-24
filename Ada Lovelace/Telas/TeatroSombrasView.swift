@@ -3,6 +3,9 @@
 //  Tocar na caixa volta para o palco.
 
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 struct TeatroSombrasView: View {
     @EnvironmentObject private var sessao: Sessao
@@ -43,8 +46,8 @@ struct TeatroSombrasView: View {
                                     CenaArte(quadro: Quadro(geo: geo), mostrarPersonagens: true,
                                              sombra: true, congelado: congelado, luz: sessao.movimento,
                                              camadaDaSombra: camada)
-                                        .compositingGroup()   // sombras da mesma camada não escurecem umas às outras
-                                        .opacity(camada.opacidade)
+                                        // A transparência é de cada silhueta (FlorestaView): onde duas se
+                                        // cruzam, a sombra fica mais escura, como num teatro de verdade.
                                         .blur(radius: camada.borrao * fator)
                                         .scaleEffect(camada.escala, anchor: UnitPoint(x: 0.5, y: camada.ancoraY))
                                 }
@@ -73,8 +76,17 @@ struct TeatroSombrasView: View {
 
                 // Bambinela (cortina de cima) e letreiro
                 VStack(spacing: 0) {
-                    Arte("bambinela") { Bambinela() }
-                        .frame(height: h * 0.14)
+                    // A arte da Georgia é bem comprida: ela preenche a faixa. Numa tela em pé
+                    // (iPhone) sobram os lados, que são cortados; numa tela deitada (iPad) a faixa
+                    // fica mais alta, para a cortina aparecer INTEIRA (antes cortava as franjas).
+                    let faixa = MedidasBambinela.altura(largura: w, altura: h)
+                    if arteExiste(MedidasBambinela.nome) {
+                        Image(MedidasBambinela.nome).resizable().scaledToFill()
+                            .frame(width: w, height: faixa)
+                            .clipped()
+                    } else {
+                        Bambinela().frame(height: faixa)
+                    }
                     Spacer()
                 }
                 .ignoresSafeArea(edges: .top)
@@ -109,7 +121,45 @@ struct TeatroSombrasView: View {
     }
 }
 
-// Cortina de cima com franjas arredondadas
+// MEDIDAS DA CORTINA DE CIMA (bambinela)
+// A faixa tem 14% da altura da tela. Se a tela for larga demais para isso (iPad deitado),
+// ela cresce até a arte caber inteira na largura (no máximo 22% da altura), para as
+// franjas de baixo não serem cortadas.
+enum MedidasBambinela {
+    static let nome = "bambinela"
+    static let alturaPadrao: CGFloat = 0.14
+    static let alturaMaxima: CGFloat = 0.22
+    // Na arte da Georgia (3032 × 476), as franjas terminam a 437 px do alto
+    static let fimDasFranjas: CGFloat = 437.0 / 476.0
+
+    // Largura ÷ altura da arte (lida do Assets; se a Georgia trocar a imagem, acompanha)
+    static let proporcao: CGFloat? = {
+        #if canImport(UIKit)
+        if let tamanho = UIImage(named: nome)?.size, tamanho.height > 0 { return tamanho.width / tamanho.height }
+        #endif
+        return nil
+    }()
+
+    static func altura(largura w: CGFloat, altura h: CGFloat) -> CGFloat {
+        guard arteExiste(nome), let proporcao else { return h * alturaPadrao }
+        return min(max(h * alturaPadrao, w / proporcao), h * alturaMaxima)
+    }
+
+    // Onde a cortina termina de verdade (pontos, a partir do alto)
+    static func fim(largura w: CGFloat, altura h: CGFloat) -> CGFloat {
+        let faixa = altura(largura: w, altura: h)
+        guard arteExiste(nome), let proporcao else {
+            return faixa + w / 9 / 2   // provisória: as bolinhas descem meia bolinha
+        }
+        // A arte preenche a faixa: se ela ficou mais alta que a faixa (tela em pé), o meio fica
+        // na faixa e as pontas de cima e de baixo são cortadas por igual.
+        let alturaDaArte = max(faixa, w / proporcao)
+        let cortada = (alturaDaArte - faixa) / 2
+        return min(faixa, alturaDaArte * fimDasFranjas - cortada)
+    }
+}
+
+// Cortina de cima com franjas arredondadas (provisória, quando não há arte)
 private struct Bambinela: View {
     var body: some View {
         GeometryReader { geo in
@@ -171,9 +221,8 @@ struct Projecao {
         escalaX = Projecao.escalaAlta.x + (Projecao.escalaBaixa.x - Projecao.escalaAlta.x) * baixa
         escalaY = Projecao.escalaAlta.y + (Projecao.escalaBaixa.y - Projecao.escalaAlta.y) * baixa
 
-        // Onde a cortina de cima (Bambinela) termina: a faixa tem 14% da altura e as
-        // bolinhas penduradas descem meia bolinha (são 9 na largura). No iPad elas descem bem mais.
-        let limite = (h * 0.14 + tela.width / 9 / 2 + Projecao.folgaDaCortina) / h
+        // Onde a cortina de cima (Bambinela) termina, com as franjas, em qualquer tela
+        let limite = (MedidasBambinela.fim(largura: tela.width, altura: h) + Projecao.folgaDaCortina) / h
 
         // O alto do céu (eclipse) vai parar em: ancora + (topo + descida - ancora) × escalaY.
         // A descida é a menor que deixa esse ponto abaixo da cortina.

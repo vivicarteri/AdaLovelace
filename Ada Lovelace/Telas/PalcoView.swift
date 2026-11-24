@@ -21,6 +21,7 @@ struct PalcoView: View {
     @Environment(\.accessibilityReduceMotion) private var reduzirMovimento
 
     @State private var personalizando = false
+    @AppStorage(Chaves.iluminacaoDramatica) private var iluminacaoDramatica = true
     @State private var cortinaFechada = false
     @State private var trocando = false        // animação de descartar
     @State private var afundando = false       // vela descendo pelo alçapão
@@ -46,6 +47,7 @@ struct PalcoView: View {
     @State private var etapa: EtapaFosforo = .guardado
     @State private var posFosforo: CGPoint = .zero   // onde está a cabeça do fósforo
     @State private var inicioArraste: CGPoint?
+    @State private var toqueDoArraste: CGPoint?    // onde o dedo encostou (reconhece um gesto novo)
     @State private var riscado: CGFloat = 0
     @State private var ultimoPontoRisco: CGPoint?
 
@@ -117,6 +119,17 @@ struct PalcoView: View {
         .onChange(of: podeApagarNaCaixa, initial: true) { _, podeApagar in
             DicaOutroJeitoDeApagar.velaAcesa = podeApagar
         }
+        // O fósforo voltou para a caixa (por qualquer caminho): esquece o arraste que estava
+        // no meio e fecha a gaveta. Se a vista do fósforo some no meio de um arraste (a vela
+        // acendeu, ele queimou até o fim), o fim do gesto não chega; sem isto, o próximo fósforo
+        // começava do lugar antigo e ficava "flutuando" longe da caixa.
+        .onChange(of: etapa) { _, nova in
+            guard nova == .guardado else { return }
+            esquecerArraste()
+            if caixaAberta != CaixaFosforoView.emRepouso {
+                withAnimation(.easeInOut(duration: 0.4).delay(0.1)) { caixaAberta = CaixaFosforoView.emRepouso }
+            }
+        }
         .onChange(of: sessao.estado) { _, novo in
             if novo != .nova && novo != .apagada { etapa = .guardado }
             if novo == .acabou && sessao.foraDaCaixa {
@@ -170,6 +183,13 @@ struct PalcoView: View {
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
                 .animation(.easeInOut(duration: acesa ? 0.1 : 1.2), value: acesa)
+
+            // Iluminação dramática: longe da chama o palco escurece, cada vez mais com o tempo
+            if acesa && iluminacaoDramatica {
+                LuzDaVela(chama: CGPoint(x: g.centroX, y: topoCera - g.larguraVela * 0.7),
+                          tela: g.tamanho, progresso: sessao.progresso)
+                    .transition(.opacity.animation(.easeOut(duration: 0.1)))
+            }
 
             // Luz da vela (entra junto com a chama, sem esperar a animação do palco)
             if acesa {
@@ -369,7 +389,11 @@ struct PalcoView: View {
     // Nada gira e nada se separa: a gaveta continua encaixada na luva.
     private func tocarNaCaixa(_ g: LayoutPalco) {
         if etapa == .guardado {
-            posFosforo = g.saidaDoFosforo
+            esquecerArraste()
+            // Sem animação: o fósforo novo nasce na boca da caixa (e não no lugar do anterior)
+            var semAnimacao = Transaction()
+            semAnimacao.disablesAnimations = true
+            withTransaction(semAnimacao) { posFosforo = g.saidaDoFosforo }
             etapa = .fora
             sessao.haptics.tique()
             withAnimation(.easeOut(duration: 0.35)) { caixaAberta = 1 }
@@ -410,8 +434,24 @@ struct PalcoView: View {
             .accessibilityHidden(true)   // com VoiceOver, a caixa acende direto
     }
 
+    private func esquecerArraste() {
+        inicioArraste = nil
+        toqueDoArraste = nil
+        ultimoPontoRisco = nil
+        riscado = 0
+    }
+
     private func arrastarFosforo(_ valor: DragGesture.Value, _ g: LayoutPalco) {
-        if inicioArraste == nil { inicioArraste = posFosforo }
+        // O fósforo já foi guardado (acendeu a vela ou queimou): o resto do gesto é ignorado
+        guard etapa != .guardado else { return }
+        // Gesto novo (o dedo encostou em outro lugar): começa do lugar ATUAL do fósforo.
+        // Se o sistema cancelou o gesto anterior, o "fim" dele não chegou; sem esta conferência
+        // o fósforo pulava para o lugar antigo e ficava flutuando longe da mão.
+        if inicioArraste == nil || toqueDoArraste != valor.startLocation {
+            inicioArraste = posFosforo
+            toqueDoArraste = valor.startLocation
+            ultimoPontoRisco = nil
+        }
         guard let inicio = inicioArraste else { return }
         let ponto = CGPoint(x: inicio.x + valor.translation.width, y: inicio.y + valor.translation.height)
         posFosforo = ponto
@@ -441,7 +481,6 @@ struct PalcoView: View {
             let pavio = CGPoint(x: g.centroX,
                                 y: g.baseY - alturaCheia * CGFloat(1 - sessao.progresso))
             if hypot(ponto.x - pavio.x, ponto.y - pavio.y) < max(40, g.larguraVela * 0.6) {
-                inicioArraste = nil
                 withAnimation(.easeOut(duration: 0.3)) { etapa = .guardado }
                 withAnimation(.easeInOut(duration: 0.4).delay(0.1)) { caixaAberta = CaixaFosforoView.emRepouso }
                 sessao.acender()
@@ -453,6 +492,7 @@ struct PalcoView: View {
 
     private func soltarFosforo(_ g: LayoutPalco) {
         inicioArraste = nil
+        toqueDoArraste = nil
         ultimoPontoRisco = nil
         if etapa == .fora { riscado = 0 }
         guard etapa != .guardado else { return }
@@ -584,10 +624,15 @@ struct PalcoView: View {
             try? await Task.sleep(for: .seconds(1.0))
             sessao.descartar()
             fumacaDaTroca = nil
-            try? await Task.sleep(for: .seconds(0.2))
+            // A vela nova já fica INTEIRA no lugar enquanto a cortina está fechada (sem animação).
+            // Antes ela subia de dentro do suporte depois que a cortina abria: por um instante
+            // aparecia só o topo e um pedaço do corpo, parecendo uma vela cortada "crescendo".
+            var semAnimacao = Transaction()
+            semAnimacao.disablesAnimations = true
+            withTransaction(semAnimacao) { afundando = false }
+            try? await Task.sleep(for: .seconds(0.5))   // a vela termina de se ajeitar ainda atrás da cortina
             withAnimation(.easeInOut(duration: 0.9)) { cortinaFechada = false }
-            withAnimation(.easeOut(duration: 1.0).delay(0.5)) { afundando = false }
-            try? await Task.sleep(for: .seconds(1.5))
+            try? await Task.sleep(for: .seconds(1.0))
             trocando = false
         }
     }

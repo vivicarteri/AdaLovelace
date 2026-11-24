@@ -114,25 +114,21 @@ struct CortinaView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let tecido = Arte("cortina") {
-                ZStack {
-                    Cores.cortina
-                    HStack(spacing: 0) {
-                        ForEach(0..<8, id: \.self) { _ in
-                            LinearGradient(colors: [.black.opacity(0.25), .clear, .black.opacity(0.25)],
-                                           startPoint: .leading, endPoint: .trailing)
-                        }
-                    }
-                }
-            }
-            .frame(width: geo.size.width, height: geo.size.height + 60)
+            // O pano é mais comprido que a tela: a barra de baixo (as pontas recortadas, com
+            // buracos entre elas) fica TODA abaixo da tela quando a cortina está fechada.
+            // Assim, fechada, ela cobre a tela inteira até o fim; subindo e descendo, as pontas
+            // aparecem passando. Vale para qualquer tamanho de iPhone ou iPad.
+            let comprimento = TecidoDaCortina.comprimento(tela: geo.size.height)
+            let tecido = TecidoDaCortina()
+                .frame(width: geo.size.width, height: comprimento, alignment: .top)
+                .clipped()
 
             Group {
                 if reduzirMovimento {
                     // Sem movimento: a cortina só aparece e some
                     tecido.opacity(fechada ? 1 : 0)
                 } else {
-                    tecido.offset(y: fechada ? 0 : -(geo.size.height + 60))
+                    tecido.offset(y: fechada ? 0 : -comprimento)
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
@@ -140,6 +136,39 @@ struct CortinaView: View {
         .ignoresSafeArea()
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+}
+
+// O pano da cortina. A arte da Georgia ("cortina") é deitada: ela PREENCHE a tela
+// (corta um pouco dos lados) em vez de encolher para caber, senão sobrava tela vazia.
+private struct TecidoDaCortina: View {
+    // Na arte da Georgia (3032 × 2348) o pano é inteiro (sem nenhum buraco) até 85,5% da
+    // altura; daí para baixo vêm as pontas recortadas.
+    static let parteInteira: CGFloat = 2009.0 / 2348.0
+
+    // Altura do pano para a parte inteira chegar até o fim da tela (com folga)
+    static func comprimento(tela altura: CGFloat) -> CGFloat {
+        arteExiste("cortina") ? altura / parteInteira + 20 : altura + 60
+    }
+
+    var body: some View {
+        if arteExiste("cortina") {
+            // Preenche a largura/altura pedida, sempre presa no ALTO (o bando de cima aparece inteiro)
+            GeometryReader { geo in
+                Image("cortina").resizable().scaledToFill()
+                    .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
+            }
+        } else {
+            ZStack {
+                Cores.cortina
+                HStack(spacing: 0) {
+                    ForEach(0..<8, id: \.self) { _ in
+                        LinearGradient(colors: [.black.opacity(0.25), .clear, .black.opacity(0.25)],
+                                       startPoint: .leading, endPoint: .trailing)
+                    }
+                }
+            }
+        }
     }
 }
 

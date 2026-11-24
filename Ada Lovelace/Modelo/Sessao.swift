@@ -32,6 +32,7 @@ enum Chaves {
     static let somObjetos = "somObjetos"          // sons dos alfinetes e penduricalhos caindo
     static let movimento = "movimentoLigado"      // Core Motion: inclinar e virar o aparelho
     static let resetarDicas = "resetarDicas"      // mostra as dicas de novo na próxima abertura
+    static let iluminacaoDramatica = "iluminacaoDramatica"   // a chama como única luz do palco (teste)
 
     // Lê uma chave de liga/desliga (quando nunca foi mexida, vale o padrão)
     static func ligado(_ chave: String, padrao: Bool = true) -> Bool {
@@ -147,6 +148,7 @@ final class Sessao: ObservableObject {
         movimento.fixarReferencia()
         ligarVibracaoDaChama()
         if somAmbienteLigado { ambiente.tocar() }
+        AvisoDeFim.pedirPermissao()          // para avisar quando ela acabar com o app fechado
         anunciar("Vela acesa")
         atualizarRelogio()
         salvar()
@@ -256,6 +258,7 @@ final class Sessao: ObservableObject {
             ativo = true
             if movimentoLigado { movimento.iniciar() }
             haptics.ligarMotor()
+            AvisoDeFim.cancelar()     // voltou para o app: o aviso de fim não precisa mais
             tique()                   // conta o tempo que passou com o app fechado
             if estado == .acesa {
                 RelogioDaHistoria.acender()      // app abriu com a vela acesa
@@ -270,6 +273,10 @@ final class Sessao: ObservableObject {
             atualizarRelogio()
             tique()
             salvar()
+            // Vela acesa indo para o segundo plano: avisa quando ela acabar
+            if estado == .acesa {
+                AvisoDeFim.agendar(daquiA: max(0, config.duracao - queimado) / max(Sessao.velocidade, 0.01))
+            }
             movimento.parar()
             ambiente.parar()
             desligarVibracaoDaChama()
