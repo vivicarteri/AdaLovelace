@@ -60,8 +60,6 @@ struct CenarioView: View {
                         .frame(width: w, height: h)
                 }
 
-                // Camada 2: roda com o sol de um lado e a lua do outro.
-                // Meia volta durante a vela inteira: começa de dia, termina de noite.
                 RodaSolLua(raio: h * 0.3)
                     .rotationEffect(.degrees(180 * progresso))
                     .position(x: w / 2, y: h * 0.62)

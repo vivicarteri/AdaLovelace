@@ -9,6 +9,7 @@ struct VelaView: View {
     var largura: CGFloat
     var progresso: Double = 0         // 0 = inteira, 1 = acabou
     var acesa = false
+    var destaque = false              // vela acesa no palco: ganha um contorno escuro para aparecer mais no cenário
     var apagouEm: Date? = nil         // para a fumaça
     var movimento: Movimento? = nil   // para a chama ficar sempre para cima
     var enfeites: [Enfeite] = []
@@ -42,6 +43,9 @@ struct VelaView: View {
 
             if usaArte {
                 corpoComArte
+                    // Destaque da vela acesa: uma sombra escura bem rente, que separa a cera
+                    // das árvores claras atrás dela (como as outras peças de papel)
+                    .shadow(color: .black.opacity(destaque ? 0.45 : 0), radius: largura * 0.1)
             } else {
                 // Corpo de cera provisório, com escorridos no topo
                 ZStack(alignment: .top) {
@@ -120,7 +124,8 @@ struct VelaView: View {
     // Um pedaço da cera fica escondido atrás do suporte (por isso o "escondido").
     private var corpoComArte: some View {
         let s = escalaArte
-        let escondido = (ArteVela.corpoBaixo - ArteVela.baseY) * s
+        let larguraDesenho = ArteVela.larguraDesenho * s
+        let escondido = ArteVela.escondido * s
         let topo = (ArteVela.topoBaixo - ArteVela.corpoTopo) * s        // a peça dos escorridos
         let inteiro = (ArteVela.corpoBaixo - ArteVela.corpoTopo) * s    // o desenho do corpo todo
         let liso = (ArteVela.corpoBaixo - ArteVela.topoBaixo) * s       // só a parte lisa dele
@@ -133,18 +138,18 @@ struct VelaView: View {
         return VStack(spacing: 0) {
             Image("velaTopo")
                 .resizable()
-                .frame(width: largura, height: topo)
+                .frame(width: larguraDesenho, height: topo)
             if corpo > 0 {
                 Image("velaCorpo")
                     .resizable()
-                    .frame(width: largura, height: alturaDesenho)
-                    .frame(width: largura, height: corpo, alignment: .bottom)   // corta os escorridos de cima
+                    .frame(width: larguraDesenho, height: alturaDesenho)
+                    .frame(width: larguraDesenho, height: corpo, alignment: .bottom)   // corta os escorridos de cima
                     .clipped()
             }
         }
         // No fim da vela a cera fica mais baixa que os escorridos: aí eles vão sumindo
         // por baixo, derretendo dentro do suporte.
-        .frame(width: largura, height: visivel, alignment: .top)
+        .frame(width: larguraDesenho, height: visivel, alignment: .top)
         .clipped()
         .offset(y: escondido)
     }
@@ -331,13 +336,16 @@ struct FumacaView: View {
     }
 }
 
-// Suporte (castiçal) da arte. Fica embaixo da vela e esconde a parte de baixo dela.
+// Suporte (o prato da Georgia). Fica embaixo da vela e esconde a parte de baixo dela.
+// As alças sobem acima da borda do prato, então o MEIO do desenho não fica logo abaixo da base:
+// use desvioX/desvioY a partir do pé da vela (centroX, baseY).
 struct SuporteView: View {
     var largura: CGFloat   // largura da VELA (o suporte segue a mesma escala)
 
     private static func escala(_ largura: CGFloat) -> CGFloat { largura / ArteVela.largura }
     static func altura(largura: CGFloat) -> CGFloat { PosicaoArte.suporte.height * escala(largura) }
     static func desvioX(largura: CGFloat) -> CGFloat { (PosicaoArte.suporte.midX - ArteVela.centroX) * escala(largura) }
+    static func desvioY(largura: CGFloat) -> CGFloat { (PosicaoArte.suporte.midY - ArteVela.baseY) * escala(largura) }
 
     var body: some View {
         let s = SuporteView.escala(largura)
@@ -376,13 +384,17 @@ extension TamanhoEnfeite {
 // A vela mais curta, a do meio e a mais longa. Serve para conferir a emenda do topo em todos os tamanhos.
 #Preview("VelaView: tamanhos") {
     let largura: CGFloat = 40
-    HStack(alignment: .bottom, spacing: 0) {
+    HStack(alignment: .bottom, spacing: 100) {
         ForEach([0.0, 0.4, 1.0], id: \.self) { posicao in
             VStack(spacing: 0) {
                 VelaView(alturaCheia: GeometriaVela.alturaCheia(posicao: posicao, alturaMaxima: 420),
                          largura: largura, acesa: true)
-                SuporteView(largura: largura)
-                    .offset(x: SuporteView.desvioX(largura: largura))
+                    .overlay(alignment: .bottom) {
+                        SuporteView(largura: largura)
+                            .offset(x: SuporteView.desvioX(largura: largura),
+                                    y: SuporteView.desvioY(largura: largura))
+                    }
+                    .padding(.bottom, SuporteView.altura(largura: largura) / 2 + SuporteView.desvioY(largura: largura))
                 Text("\(VelaConfig.minutos(para: posicao)) min")
                     .adaFont(.caption)
                     .foregroundStyle(Cores.papel)
@@ -415,8 +427,12 @@ extension TamanhoEnfeite {
         VStack(spacing: 0) {
             VelaView(alturaCheia: 320, largura: largura, progresso: progresso, acesa: acesa,
                      apagouEm: apagouEm, enfeites: enfeites, caidos: caidos, marcas: marcas)
-            SuporteView(largura: largura)
-                .offset(x: SuporteView.desvioX(largura: largura))
+                .overlay(alignment: .bottom) {
+                    SuporteView(largura: largura)
+                        .offset(x: SuporteView.desvioX(largura: largura),
+                                y: SuporteView.desvioY(largura: largura))
+                }
+                .padding(.bottom, SuporteView.altura(largura: largura) / 2 + SuporteView.desvioY(largura: largura))
         }
         Spacer()
         VStack {

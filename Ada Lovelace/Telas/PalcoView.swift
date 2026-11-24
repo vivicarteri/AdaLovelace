@@ -21,9 +21,11 @@ struct PalcoView: View {
     @Environment(\.accessibilityReduceMotion) private var reduzirMovimento
 
     @State private var personalizando = false
+    @AppStorage(Chaves.iluminacaoDramatica) private var iluminacaoDramatica = true
     @State private var cortinaFechada = false
     @State private var trocando = false        // animação de descartar
     @State private var afundando = false       // vela descendo pelo alçapão
+    @State private var velaNovaVisivel = true  // a vela nova aparece devagar (na troca de vela)
     @State private var fumacaDaTroca: Date?
 
     // Transições
@@ -46,6 +48,7 @@ struct PalcoView: View {
     @State private var etapa: EtapaFosforo = .guardado
     @State private var posFosforo: CGPoint = .zero   // onde está a cabeça do fósforo
     @State private var inicioArraste: CGPoint?
+    @State private var toqueDoArraste: CGPoint?    // onde o dedo encostou (reconhece um gesto novo)
     // Risco do fósforo na lixa (a física está em riscarNaLixa)
     @State private var ultimoPontoRisco: CGPoint?
     @State private var ultimoInstanteRisco: TimeInterval?
@@ -127,7 +130,8 @@ struct PalcoView: View {
             }
         }
         .onAppear {
-            cortinaFechada = sessao.estado == .acabou
+            // Vela nova (ainda não acesa) ou que acabou: a cortina está fechada
+            cortinaFechada = sessao.estado == .acabou || sessao.estado == .nova
         }
         .onChange(of: podeSairDaCaixa, initial: true) { _, podeSair in
             DicaSairDaCaixa.podeSair = podeSair
@@ -138,8 +142,23 @@ struct PalcoView: View {
         .onChange(of: podeApagarNaCaixa, initial: true) { _, podeApagar in
             DicaOutroJeitoDeApagar.velaAcesa = podeApagar
         }
+        // O fósforo voltou para a caixa (por qualquer caminho): esquece o arraste que estava
+        // no meio e fecha a gaveta. Se a vista do fósforo some no meio de um arraste (a vela
+        // acendeu, ele queimou até o fim), o fim do gesto não chega; sem isto, o próximo fósforo
+        // começava do lugar antigo e ficava "flutuando" longe da caixa.
+        .onChange(of: etapa) { _, nova in
+            guard nova == .guardado else { return }
+            esquecerArraste()
+            if caixaAberta != CaixaFosforoView.emRepouso {
+                withAnimation(.easeInOut(duration: 0.4).delay(0.1)) { caixaAberta = CaixaFosforoView.emRepouso }
+            }
+        }
         .onChange(of: sessao.estado) { _, novo in
             if novo != .nova && novo != .apagada { etapa = .guardado }
+            // Acendeu: a cortina abre e mostra a floresta
+            if novo == .acesa && cortinaFechada {
+                withAnimation(.easeInOut(duration: 1.6)) { cortinaFechada = false }
+            }
             if novo == .acabou && sessao.foraDaCaixa {
                 entrarNaCaixa()   // a vela acabou nas sombras: entra na caixa
             }
@@ -183,7 +202,11 @@ struct PalcoView: View {
 
         return ZStack {
             // As peças do cenário (lua, passarinho…) só aparecem com a vela ACESA
-            CenarioView(acesa: acesa, progresso: sessao.progresso, mostrarPersonagens: estado == .acesa, quadro: g.quadro)
+            // A floresta aparece com a vela ACESA e continua aparecendo (no escuro) quando a pessoa
+            // APAGA a vela no meio: o cenário fica pausado e escuro, não preto. Com a vela nova ou
+            // que acabou, a cortina fechada cobre tudo.
+            CenarioView(acesa: acesa, progresso: sessao.progresso,
+                        mostrarPersonagens: estado == .acesa || estado == .apagada, quadro: g.quadro)
                 .accessibilityHint(acesa ? "Use o rotor Camadas de papel para explorar a cena" : "")
                 .accessibilityActions { atalhos(g) }
 
@@ -194,12 +217,26 @@ struct PalcoView: View {
                                         estadoDaVela: sessao.descricaoDaVela)
             }
 
+            // Cortina lateral (arte "Cortina_Horizontal" da Georgia), ATRÁS da vela: fecha dos lados
+            // para o meio quando a vela acaba e só reabre quando a vela é ACESA.
+            CortinaLateralView(fechada: cortinaFechada)
+
             // Vela apagada = tudo escuro, só a vela e os botões em destaque.
+            // Vela acesa = o cenário fica só um pouco mais escuro, para a vela aparecer mais.
+            // O MESMO escuro vale para o cenário pausado e para a cortina fechada (fica por cima dos dois).
             // Acendendo, o escuro sai rápido; apagando, ele desce devagar.
-            Color.black.opacity(acesa ? 0 : 0.55)
+            Color.black.opacity(acesa ? MedidasDoPalco.escuroComVelaAcesa : MedidasDoPalco.escuroComVelaApagada)
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
                 .animation(.easeInOut(duration: acesa ? 0.1 : 1.2), value: acesa)
+
+
+            // Iluminação dramática: longe da chama o palco escurece, cada vez mais com o tempo
+            if acesa && iluminacaoDramatica {
+                LuzDaVela(chama: CGPoint(x: g.centroX, y: topoCera - g.larguraVela * 0.7),
+                          tela: g.tamanho, progresso: sessao.progresso)
+                    .transition(.opacity.animation(.easeOut(duration: 0.1)))
+            }
 
             // Luz da vela (entra junto com a chama, sem esperar a animação do palco)
             if acesa {
@@ -217,6 +254,7 @@ struct PalcoView: View {
                          largura: g.larguraVela,
                          progresso: sessao.progresso,
                          acesa: acesa,
+                         destaque: acesa,
                          apagouEm: fumacaDaTroca ?? sessao.apagouEm,
                          movimento: sessao.movimento,
                          enfeites: sessao.config.enfeites,
@@ -231,6 +269,7 @@ struct PalcoView: View {
             }
             .frame(width: g.tamanho.width, height: g.tamanho.height)
             .mask(alignment: .top) { Rectangle().frame(height: g.baseY + 2) }
+            .opacity(velaNovaVisivel ? 1 : 0)
 
             // Tocar na chama apaga a vela.
             // É também o jeito de apagar SEM virar o aparelho: importante para quem não pode
@@ -247,9 +286,7 @@ struct PalcoView: View {
             // Suporte da vela
             SuporteView(largura: g.larguraVela)
                 .position(x: g.centroX + SuporteView.desvioX(largura: g.larguraVela),
-                          y: g.baseY + SuporteView.altura(largura: g.larguraVela) / 2)
-
-            CortinaView(fechada: cortinaFechada)
+                          y: g.baseY + SuporteView.desvioY(largura: g.larguraVela))
 
             // A vela acabou e a cortina fechou: letreiro de "Fim" e a cortina inteira vira
             // um botão para começar de novo (antes não tinha nenhuma pista e parecia travado).
@@ -379,11 +416,8 @@ struct PalcoView: View {
                         trocarComCortina { personalizando = true }
                     }
                     .transition(entradaPelaEsquerda)
-                } else if estado == .acabou && !trocando {
-                    // Vela que acabou: segurar 1 segundo coloca uma vela nova
-                    BotaoDescartar(tamanho: 60, haptics: sessao.haptics, descartar: descartar)
-                        .transition(entradaPelaEsquerda)
-                } else if estado != .nova && !trocando && etapa == .guardado {
+                } else if estado != .nova && estado != .acabou && !trocando && etapa == .guardado {
+                    // (Quando a vela acaba não tem botão aqui: o "Fim" no meio da cortina é o toque)
                     // Acesa ou apagada: segurar derrete a vela rápido; soltar para
                     BotaoDescartar(tamanho: 60, haptics: sessao.haptics,
                                    anel: sessao.progresso,
@@ -394,7 +428,7 @@ struct PalcoView: View {
                         .transition(entradaPelaEsquerda)
                 }
             }
-            .position(x: g.tamanho.width * 0.17, y: g.botaoBaixoY)
+            .position(x: g.botaoBaixoX, y: g.botaoBaixoY)
 
             // Canto inferior direito: a caixa de fósforos, meio para fora da tela
             // (só aparece quando dá para acender). A lixa vai junto com ela, na borda de cima.
@@ -432,7 +466,11 @@ struct PalcoView: View {
     private func tocarNaCaixa(_ g: LayoutPalco) {
         guard !acendendoSozinho else { return }
         if etapa == .guardado {
-            posFosforo = g.saidaDoFosforo
+            esquecerArraste()
+            // Sem animação: o fósforo novo nasce na boca da caixa (e não no lugar do anterior)
+            var semAnimacao = Transaction()
+            semAnimacao.disablesAnimations = true
+            withTransaction(semAnimacao) { posFosforo = g.saidaDoFosforo }
             etapa = .fora
             sessao.haptics.tique()
             withAnimation(.easeOut(duration: 0.35)) { caixaAberta = 1 }
@@ -477,8 +515,23 @@ struct PalcoView: View {
             .accessibilityHidden(true)   // com VoiceOver, a caixa acende direto
     }
 
+    private func esquecerArraste() {
+        inicioArraste = nil
+        toqueDoArraste = nil
+        zerarRisco()   // o risco na lixa (física da Sofia) também recomeça do zero
+    }
+
     private func arrastarFosforo(_ valor: DragGesture.Value, _ g: LayoutPalco) {
-        if inicioArraste == nil { inicioArraste = posFosforo }
+        // O fósforo já foi guardado (acendeu a vela ou queimou): o resto do gesto é ignorado
+        guard etapa != .guardado else { return }
+        // Gesto novo (o dedo encostou em outro lugar): começa do lugar ATUAL do fósforo.
+        // Se o sistema cancelou o gesto anterior, o "fim" dele não chegou; sem esta conferência
+        // o fósforo pulava para o lugar antigo e ficava flutuando longe da mão.
+        if inicioArraste == nil || toqueDoArraste != valor.startLocation {
+            inicioArraste = posFosforo
+            toqueDoArraste = valor.startLocation
+            zerarRisco()
+        }
         guard let inicio = inicioArraste else { return }
         let ponto = CGPoint(x: inicio.x + valor.translation.width, y: inicio.y + valor.translation.height)
         posFosforo = ponto
@@ -497,7 +550,6 @@ struct PalcoView: View {
             // Encostar no pavio: acende a vela
             let pavio = pontaDoPavio(g)
             if hypot(ponto.x - pavio.x, ponto.y - pavio.y) < max(40, g.larguraVela * 0.6) {
-                inicioArraste = nil
                 sessao.haptics.cancelarSomRiscoFosforo()
                 withAnimation(.easeOut(duration: 0.3)) { etapa = .guardado }
                 withAnimation(.easeInOut(duration: 0.4).delay(0.1)) { caixaAberta = CaixaFosforoView.emRepouso }
@@ -603,6 +655,7 @@ struct PalcoView: View {
 
     private func soltarFosforo(_ g: LayoutPalco) {
         inicioArraste = nil
+        toqueDoArraste = nil
         zerarRisco()
         if etapa == .fora {
             sessao.haptics.cancelarSomRiscoFosforo()
@@ -810,10 +863,23 @@ struct PalcoView: View {
             try? await Task.sleep(for: .seconds(1.0))
             sessao.descartar()
             fumacaDaTroca = nil
-            try? await Task.sleep(for: .seconds(0.2))
-            withAnimation(.easeInOut(duration: 0.9)) { cortinaFechada = false }
-            withAnimation(.easeOut(duration: 1.0).delay(0.5)) { afundando = false }
-            try? await Task.sleep(for: .seconds(1.5))
+            // A vela nova SOBE DO CHÃO: sai de dentro do prato, pelo mesmo alçapão por onde
+            // a velha desceu. A cortina continua fechada atrás dela (só abre quando a vela é acesa).
+            // Com "Reduzir movimento" ela só aparece devagar, sem subir.
+            if reduzirMovimento {
+                var semAnimacao = Transaction()
+                semAnimacao.disablesAnimations = true
+                withTransaction(semAnimacao) {
+                    velaNovaVisivel = false
+                    afundando = false
+                }
+                withAnimation(.easeOut(duration: 0.6)) { velaNovaVisivel = true }
+                try? await Task.sleep(for: .seconds(0.6))
+            } else {
+                // Ela começa escondida embaixo do prato (afundando = true) e sobe até o lugar
+                withAnimation(.easeOut(duration: 1.1)) { afundando = false }
+                try? await Task.sleep(for: .seconds(1.1))
+            }
             trocando = false
         }
     }
@@ -855,13 +921,20 @@ private struct LayoutPalco {
     let tamanho: CGSize
     let quadro: Quadro
 
+    let fundoDaTela: CGFloat   // a borda de baixo do aparelho (passa da área segura)
+
     init(geo: GeometryProxy) {
         tamanho = geo.size
         quadro = Quadro(geo: geo)
+        fundoDaTela = geo.size.height + geo.safeAreaInsets.bottom
     }
 
     var centroX: CGFloat { quadro.x(ArteVela.centroX) }
-    var baseY: CGFloat { quadro.y(ArteVela.baseY) }
+    // O prato fica encostado na borda de baixo do aparelho, em qualquer tela:
+    // a base da vela (borda de cima do prato) é calculada a partir do fundo do prato.
+    var baseY: CGFloat { fundoDaTela - (PosicaoArte.suporte.maxY - ArteVela.baseY) * quadro.escala }
+    // Onde começam as alças do prato (o ponto mais alto dele)
+    var topoDoPrato: CGFloat { baseY + (PosicaoArte.suporte.minY - ArteVela.baseY) * quadro.escala }
     var alturaMaxima: CGFloat { ArteVela.alturaMaxima * quadro.escala }
     var larguraVela: CGFloat { ArteVela.largura * quadro.escala }
     var larguraCaixa: CGFloat { min(tamanho.width * 0.34, 150) }
@@ -872,7 +945,21 @@ private struct LayoutPalco {
         CGPoint(x: tamanho.width - larguraCaixa * 0.34, y: tamanho.height - alturaCaixa * 0.30)
     }
 
-    var botaoBaixoY: CGFloat { tamanho.height * 0.92 }
+    // Botão de baixo à esquerda (personalizar / acabar com a vela).
+    // No iPhone o prato da vela vai quase de ponta a ponta: aí o botão sobe para ficar
+    // acima da alça esquerda do prato, em vez de ficar por cima dela.
+    // No iPad o prato fica longe do botão e ele continua no lugar de sempre.
+    var botaoBaixoX: CGFloat { tamanho.width * 0.17 }
+    var botaoBaixoY: CGFloat {
+        let normal = tamanho.height * 0.92
+        let raio: CGFloat = 30   // o botão tem 60 de tamanho
+        // A alça esquerda ocupa mais ou menos o primeiro quarto da largura do prato
+        let alcaComeca = quadro.x(PosicaoArte.suporte.minX)
+        let alcaTermina = alcaComeca + PosicaoArte.suporte.width * quadro.escala * 0.26
+        let encosta = botaoBaixoX + raio > alcaComeca && botaoBaixoX - raio < alcaTermina
+        guard encosta else { return normal }
+        return min(normal, topoDoPrato - raio - 10)
+    }
 
     // A lixa é a faixa da própria caixa: a conta abaixo leva a faixa de dentro
     // da caixa para as coordenadas da tela.
@@ -901,4 +988,12 @@ private struct LayoutPalco {
     func alturaCheia(_ posicao: Double) -> CGFloat {
         GeometriaVela.alturaCheia(posicao: posicao, alturaMaxima: alturaMaxima)
     }
+}
+
+
+enum MedidasDoPalco {
+    // ⚙️ Quanto o palco escurece com a vela apagada (cenário pausado ou cortina fechada).
+    // 0 = nada, 1 = preto.
+    static let escuroComVelaApagada: Double = 0.58
+    static let escuroComVelaAcesa: Double = 0.2   // escurece o cenário de leve, a vela fica em destaque
 }
