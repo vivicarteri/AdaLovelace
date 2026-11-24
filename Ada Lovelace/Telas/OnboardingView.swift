@@ -52,19 +52,16 @@ struct OnboardingView: View {
 
                 VStack(spacing: 12) {
                     Text(passos[passo].titulo)
-//<<<<<<< Updated upstream
                         .font(.custom("ViaodaLibre-Regular", size: 22, relativeTo: .title2))
                         .multilineTextAlignment(.center)
                         .accessibilityAddTraits(.isHeader)
                     Text(passos[passo].texto)
                         .font(.custom("ViaodaLibre-Regular", size: 17, relativeTo: .body))
-//=======
                         .adaFont(.sectionTitle)
                         .multilineTextAlignment(.center)
                         .accessibilityAddTraits(.isHeader)
                     Text(passos[passo].texto)
                         .adaFont(.body)
-//>>>>>>> Stashed changes
                         .multilineTextAlignment(.center)
                         .opacity(0.85)
                 }
