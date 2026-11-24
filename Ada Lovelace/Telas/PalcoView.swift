@@ -46,9 +46,13 @@ struct PalcoView: View {
     @State private var etapa: EtapaFosforo = .guardado
     @State private var posFosforo: CGPoint = .zero   // onde está a cabeça do fósforo
     @State private var inicioArraste: CGPoint?
-    @State private var riscado: CGFloat = 0
+    // Risco do fósforo na lixa (a física está em riscarNaLixa)
     @State private var ultimoPontoRisco: CGPoint?
     @State private var ultimoInstanteRisco: TimeInterval?
+    @State private var ancoraDoRisco: CGFloat?          // x onde começou o risco rápido de agora
+    @State private var velocidadeDoRisco: CGFloat = 0   // pontos por segundo, na horizontal, suavizada
+    @State private var caminhoNaLixa: CGFloat = 0       // caminho total, para a vibração a cada pedacinho
+    @State private var vigiaDoRiscoParado: Task<Void, Never>?
     @State private var acendendoSozinho = false   // VoiceOver / Controle por Voz: "Acender vela"
 
     private var tamanhoFosforo: CGFloat { FosforoView.tamanhoNoPalco }
@@ -56,6 +60,18 @@ struct PalcoView: View {
     // ⚙️ Quanto tempo o fósforo aceso dura antes de apagar sozinho (como um de verdade).
     // Depois disso ele volta para a caixa e a pessoa pega outro.
     private let duracaoDoFosforo: TimeInterval = 10
+
+    // ⚙️ Risco do fósforo (valores para ir testando)
+    // Quanto da largura da lixa é preciso riscar, num sentido só, para acender.
+    private let fracaoDaLixaParaAcender: CGFloat = 0.55
+    // Sem movimento por este tempo = dedo parado: o som de riscar para.
+    private let tempoParaConsiderarParado: Duration = .milliseconds(60)
+    // Abaixo desta velocidade (pontos por segundo) o dedo conta como parado.
+    private let velocidadeDeDedoParado: CGFloat = 20
+    // Suavização da velocidade (segundos): tira os tremidos do toque.
+    private let suavizacaoDaVelocidade: TimeInterval = 0.04
+    // A cada este tanto de caminho na lixa, uma vibração áspera.
+    private let caminhoPorVibracao: CGFloat = 26
 
     var body: some View {
         GeometryReader { geo in
@@ -426,9 +442,7 @@ struct PalcoView: View {
         } else {
             // Guarda o fósforo de volta e fecha a gaveta
             sessao.haptics.cancelarSomRiscoFosforo()
-            ultimoPontoRisco = nil
-            ultimoInstanteRisco = nil
-            riscado = 0
+            zerarRisco()
             withAnimation(.easeIn(duration: 0.3)) { etapa = .guardado }
             withAnimation(.easeInOut(duration: 0.4).delay(0.1)) { caixaAberta = CaixaFosforoView.emRepouso }
         }
@@ -473,36 +487,11 @@ struct PalcoView: View {
         case .fora:
             // Riscar: esfregar a cabeça do fósforo na lixa
             if g.lixa.insetBy(dx: -10, dy: -14).contains(ponto) {
-                if ultimoPontoRisco == nil {
-                    sessao.haptics.prepararSomRiscoFosforo()
-                }
-                let agora = ProcessInfo.processInfo.systemUptime
-                if let ultimo = ultimoPontoRisco {
-                    let delta = hypot(ponto.x - ultimo.x, ponto.y - ultimo.y)
-                    let antes = riscado
-                    riscado += delta
-                    // Uma vibração áspera a cada pedacinho riscado.
-                    if Int(riscado / 26) > Int(antes / 26) { sessao.haptics.raspar() }
-
-                    if delta > 0 {
-                        let intervalo = max(agora - (ultimoInstanteRisco ?? agora), 1.0 / 120.0)
-                        sessao.haptics.atualizarSomRiscoFosforo(
-                            velocidade: delta / CGFloat(intervalo),
-                            distanciaNecessaria: g.lixa.width * 0.55
-                        )
-                    }
-                }
-                ultimoPontoRisco = ponto
-                ultimoInstanteRisco = agora
-                if riscado > g.lixa.width * 0.55 {
-                    etapa = .aceso
-                    riscado = 0
-                    sessao.haptics.riscar()
-                }
+                riscarNaLixa(ponto, g)
             } else {
-                ultimoPontoRisco = nil
-                ultimoInstanteRisco = nil
-                sessao.haptics.pausarSomRiscoFosforo()
+                // Saiu da lixa: o atrito para e o risco recomeça do zero
+                zerarRisco()
+                sessao.haptics.silenciarSomRiscoFosforo()
             }
         case .aceso:
             // Encostar no pavio: acende a vela
@@ -519,12 +508,103 @@ struct PalcoView: View {
         }
     }
 
-    private func soltarFosforo(_ g: LayoutPalco) {
-        inicioArraste = nil
+    // FÍSICA DO RISCO (como um fósforo de verdade):
+    // - Parado: silêncio.
+    // - Devagar: só o som de atrito (Riscando), que some com fade de 20 ms quando o dedo para.
+    //   O fósforo NÃO acende, por mais longe que a pessoa risque.
+    // - Rápido: a distância conta a partir de onde o risco rápido começou, num sentido só
+    //   (ir 30% e voltar 30% = de volta ao zero). Desacelerou abaixo da velocidade mínima: zera.
+    //   Chegou a 55% da lixa: o fósforo acende, com o som e a vibração do Acender.
+    // Velocidade mínima = 55% da lixa no tempo do áudio Riscando. Assim o áudio nunca é esticado:
+    // quem risca rápido o bastante percorre a distância antes de o som de atrito terminar.
+    private func riscarNaLixa(_ ponto: CGPoint, _ g: LayoutPalco) {
+        let agora = ProcessInfo.processInfo.systemUptime
+        let distanciaParaAcender = g.lixa.width * fracaoDaLixaParaAcender
+        let velocidadeMinima = distanciaParaAcender / CGFloat(max(0.1, sessao.haptics.duracaoDoRisco))
+
+        guard let ultimo = ultimoPontoRisco, let instanteAnterior = ultimoInstanteRisco else {
+            // Encostou na lixa agora
+            sessao.haptics.prepararSomRiscoFosforo()
+            ultimoPontoRisco = ponto
+            ultimoInstanteRisco = agora
+            vigiarRiscoParado()
+            return
+        }
+
+        let intervalo = max(agora - instanteAnterior, 1.0 / 240.0)
+        let andouNaHorizontal = ponto.x - ultimo.x
+        let caminho = hypot(andouNaHorizontal, ponto.y - ultimo.y)
+        let instantanea = abs(andouNaHorizontal) / CGFloat(intervalo)
+        if velocidadeDoRisco == 0 {
+            velocidadeDoRisco = instantanea   // primeiro movimento: sem esperar a média subir
+        } else {
+            let peso = CGFloat(min(1, intervalo / suavizacaoDaVelocidade))
+            velocidadeDoRisco += (instantanea - velocidadeDoRisco) * peso
+        }
+        ultimoPontoRisco = ponto
+        ultimoInstanteRisco = agora
+
+        // 0 = parado, 1 = na velocidade de acender (ou mais rápido)
+        let proporcao = Float(min(1, velocidadeDoRisco / max(1, velocidadeMinima)))
+
+        // Vibração áspera a cada pedacinho: quanto mais devagar, mais forte
+        let antes = caminhoNaLixa
+        caminhoNaLixa += caminho
+        if Int(caminhoNaLixa / caminhoPorVibracao) > Int(antes / caminhoPorVibracao) {
+            sessao.haptics.raspar(lentidao: 1 - proporcao)
+        }
+
+        // Som de atrito: o volume acompanha a velocidade
+        if velocidadeDoRisco < velocidadeDeDedoParado {
+            sessao.haptics.silenciarSomRiscoFosforo()
+        } else {
+            sessao.haptics.tocarSomRiscoFosforo(volume: 0.35 + 0.65 * proporcao)
+        }
+
+        // Distância: só conta enquanto está rápido, num sentido só
+        if velocidadeDoRisco >= velocidadeMinima {
+            let ancora = ancoraDoRisco ?? ultimo.x
+            ancoraDoRisco = ancora
+            if abs(ponto.x - ancora) >= distanciaParaAcender {
+                zerarRisco()
+                etapa = .aceso
+                sessao.haptics.acenderFosforo()
+                return
+            }
+        } else {
+            ancoraDoRisco = nil
+        }
+
+        vigiarRiscoParado()
+    }
+
+    // O DragGesture não avisa quando o dedo para em cima da lixa: se nenhum movimento
+    // chegar neste tempo, o dedo está parado. O som para e o risco rápido zera.
+    private func vigiarRiscoParado() {
+        vigiaDoRiscoParado?.cancel()
+        vigiaDoRiscoParado = Task {
+            try? await Task.sleep(for: tempoParaConsiderarParado)
+            guard !Task.isCancelled else { return }
+            velocidadeDoRisco = 0
+            ancoraDoRisco = nil
+            sessao.haptics.silenciarSomRiscoFosforo()
+        }
+    }
+
+    private func zerarRisco() {
+        vigiaDoRiscoParado?.cancel()
+        vigiaDoRiscoParado = nil
         ultimoPontoRisco = nil
         ultimoInstanteRisco = nil
+        ancoraDoRisco = nil
+        velocidadeDoRisco = 0
+        caminhoNaLixa = 0
+    }
+
+    private func soltarFosforo(_ g: LayoutPalco) {
+        inicioArraste = nil
+        zerarRisco()
         if etapa == .fora {
-            riscado = 0
             sessao.haptics.cancelarSomRiscoFosforo()
         }
         guard etapa != .guardado else { return }
@@ -545,14 +625,12 @@ struct PalcoView: View {
               !acendendoSozinho, !trocando, !trocandoCena else { return }
         sessao.haptics.cancelarSomRiscoFosforo()
         inicioArraste = nil
-        ultimoPontoRisco = nil
-        ultimoInstanteRisco = nil
-        riscado = 0
+        zerarRisco()
 
         if reduzirMovimento {
             etapa = .guardado
             caixaAberta = CaixaFosforoView.emRepouso
-            sessao.haptics.riscar()
+            sessao.haptics.acenderFosforo()   // a chama pegando toca, mesmo sem a animação
             sessao.acender()
             return
         }
@@ -585,8 +663,9 @@ struct PalcoView: View {
                     }
                     try? await Task.sleep(for: .seconds(0.22))
                 }
+                // Sem o som de atrito: só a chama pegando (o padrão Acender, som + vibração)
                 etapa = .aceso
-                sessao.haptics.riscar()
+                sessao.haptics.acenderFosforo()
                 try? await Task.sleep(for: .seconds(0.35))
             }
 

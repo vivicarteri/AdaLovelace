@@ -30,6 +30,7 @@ enum Chaves {
     #endif
     static let sessaoSalva = "sessaoSalva"
     static let somObjetos = "somObjetos"          // sons dos alfinetes e penduricalhos caindo
+    static let somFosforoEChama = "somFosforoEChama"   // riscar, fósforo acendendo, chama aparecendo e apagando
     static let movimento = "movimentoLigado"      // Core Motion: inclinar e virar o aparelho
     static let resetarDicas = "resetarDicas"      // mostra as dicas de novo na próxima abertura
 
