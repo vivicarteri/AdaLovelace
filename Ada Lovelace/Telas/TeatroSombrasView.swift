@@ -22,14 +22,15 @@ struct TeatroSombrasView: View {
             let caixa = MedidasCaixa(tela: geo.size)
             let luz = Projecao(sessao: sessao, caixa: caixa, tela: geo.size)
             ZStack {
-                // Parede: clara com a vela acesa, escura com ela apagada
-                (acesa ? Cores.papel : Cores.fundoEscuro)
+                // Parede: clara com a vela acesa, escura com ela apagada.
+                // Na floresta a parede é quase branca (referência da Georgia), para as sombras cinza
+                // ficarem bem definidas.
+                (acesa ? (Floresta.ligada ? Color(white: 0.96) : Cores.papel) : Cores.fundoEscuro)
                     .ignoresSafeArea()
 
                 if acesa {
-                    // Luz saindo da caixa
-                    // (mais fraca na floresta: na referência a parede é quase lisa)
-                    RadialGradient(colors: [Cores.dourado.opacity(Floresta.ligada ? 0.35 : 0.75), .clear],
+                    // Luz saindo da caixa (na floresta, só um calorzinho perto dela)
+                    RadialGradient(colors: [Cores.dourado.opacity(Floresta.ligada ? 0.14 : 0.75), .clear],
                                    center: luz.ancora,
                                    startRadius: 10, endRadius: h * 0.7)
                         .ignoresSafeArea()
@@ -94,7 +95,7 @@ struct TeatroSombrasView: View {
 
                 Arte("letreiro") {
                     Text("Teatro de Sombras")
-                        .font(.system(size: 22, weight: .bold, design: .serif).italic())
+                        .adaFont(.sectionTitle)
                         .foregroundStyle(Cores.tinta)
                         .padding(.horizontal, 18)
                         .padding(.vertical, 10)
@@ -194,7 +195,7 @@ struct Projecao {
     static let escalaAlta = (x: CGFloat(1.08), y: CGFloat(1.08))
     static let escalaBaixa = (x: CGFloat(1.22), y: CGFloat(1.42))
     // ⚙️ Folga entre o alto da sombra e a cortina de cima, em pontos
-    static let folgaDaCortina: CGFloat = 8
+    static let folgaDaCortina: CGFloat = 28   // (folga maior: o eclipse não encosta nas franjas)
 
     let ancora: UnitPoint      // onde a chama está (de onde a sombra sai)
     let escalaX: CGFloat

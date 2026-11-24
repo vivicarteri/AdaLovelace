@@ -10,8 +10,8 @@ struct DicaSairDaCaixa: Tip {
     // Ligado pela PalcoView: só dá para sair da caixa com a vela acesa ou apagada.
     @Parameter static var podeSair: Bool = false
 
-    var title: Text { Text("Veja o teatro de sombras") }
-    var message: Text? { Text("Junte dois dedos na tela (pinça) para sair da caixa.") }
+    var title: Text { Text("Veja o teatro de sombras").font(ADAFont.font(for: .tipTitle)) }
+    var message: Text? { Text("Junte dois dedos na tela (pinça) para sair da caixa.").font(ADAFont.font(for: .tipMessage)) }
     var image: Image? { Image(systemName: "hand.pinch") }
     var rules: [Rule] { #Rule(Self.$podeSair) { $0 } }
 }
@@ -21,8 +21,8 @@ struct DicaEntrarNaCaixa: Tip {
     // Ligado pela PalcoView: só vale enquanto a pessoa está fora da caixa.
     @Parameter static var estaForaDaCaixa: Bool = false
 
-    var title: Text { Text("Volte para a vela") }
-    var message: Text? { Text("Afaste dois dedos na tela (pinça) para entrar na caixa.") }
+    var title: Text { Text("Volte para a vela").font(ADAFont.font(for: .tipTitle)) }
+    var message: Text? { Text("Afaste dois dedos na tela (pinça) para entrar na caixa.").font(ADAFont.font(for: .tipMessage)) }
     var image: Image? { Image(systemName: "hand.pinch") }
     var rules: [Rule] { #Rule(Self.$estaForaDaCaixa) { $0 } }
 }
@@ -35,10 +35,11 @@ struct DicaOutroJeitoDeApagar: Tip {
     // Só aparece com a vela acesa (é quando dá para experimentar)
     @Parameter static var velaAcesa: Bool = false
 
-    var title: Text { Text("Outro jeito de apagar") }
+    var title: Text { Text("Outro jeito de apagar").font(ADAFont.font(for: .tipTitle)) }
     var message: Text? {
         Text(Self.sugestao == 2 ? "Vire o aparelho de cabeça para baixo e a chama apaga."
                                 : "Toque na chama para apagar a vela.")
+            .font(ADAFont.font(for: .tipMessage))
     }
     var image: Image? { Image(systemName: Self.sugestao == 2 ? "arrow.uturn.down" : "hand.tap") }
     var rules: [Rule] {

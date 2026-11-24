@@ -11,6 +11,7 @@
     ],
   },
   "files": [
+    { "path": "Ada-Lovelace-Info.plist" },
     { "kind": "folder", "path": "Ada Lovelace", "target-membership": [ "Ada Lovelace" ] },
     {
       "kind": "group",
@@ -35,11 +36,12 @@
         "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
         "CODE_SIGN_STYLE": "Automatic",
         "CURRENT_PROJECT_VERSION": "1",
-        "DEVELOPMENT_TEAM": "PPWW79FQJ9",
+        "DEVELOPMENT_TEAM": "67AYPRFZH8",
         "ENABLE_APP_SANDBOX": "YES",
         "ENABLE_PREVIEWS": "YES",
         "ENABLE_USER_SELECTED_FILES": "readonly",
         "GENERATE_INFOPLIST_FILE": "YES",
+        "INFOPLIST_FILE": "Ada-Lovelace-Info.plist",
         "INFOPLIST_KEY_ITSAppUsesNonExemptEncryption": "NO",
         "INFOPLIST_KEY_NSMicrophoneUsageDescription": "O microfone detecta quando você sopra para apagar a vela.",
         "INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]": "YES",

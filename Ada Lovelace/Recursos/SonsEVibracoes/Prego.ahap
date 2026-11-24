@@ -213,19 +213,6 @@
           }
         ]
       }
-    },
-    {
-      "Event": {
-        "Time": 0.45,
-        "EventType": "AudioCustom",
-        "EventWaveformPath": "Prego.wav",
-        "EventParameters": [
-          {
-            "ParameterID": "AudioVolume",
-            "ParameterValue": 1.0
-          }
-        ]
-      }
     }
   ]
 }

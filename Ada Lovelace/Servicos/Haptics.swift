@@ -5,6 +5,66 @@ import OSLog
 import CoreHaptics
 import AVFoundation
 
+/// Reproduz o som de raspagem em sincronia com a distância percorrida na lixa.
+private final class SomRiscoFosforo {
+    private let engine = AVAudioEngine()
+    private let player = AVAudioPlayerNode()
+    private let timePitch = AVAudioUnitTimePitch()
+    private var arquivo: AVAudioFile?
+    private var audioAgendado = false
+
+    init() {
+        guard let url = Bundle.main.url(forResource: "Acender", withExtension: "wav") else {
+            print("Não achei Acender.wav no bundle do app")
+            return
+        }
+        do {
+            let arquivo = try AVAudioFile(forReading: url)
+            self.arquivo = arquivo
+            engine.attach(player)
+            engine.attach(timePitch)
+            engine.connect(player, to: timePitch, format: arquivo.processingFormat)
+            engine.connect(timePitch, to: engine.mainMixerNode, format: arquivo.processingFormat)
+        } catch {
+            print("Erro ao preparar Acender.wav: \(error)")
+        }
+    }
+
+    func preparar() {
+        guard let arquivo else { return }
+        do {
+            if !engine.isRunning { try engine.start() }
+            if !audioAgendado {
+                timePitch.rate = 1.0 / 32.0
+                player.scheduleFile(arquivo, at: nil, completionHandler: nil)
+                audioAgendado = true
+            }
+        } catch {
+            print("Erro ao preparar o risco do fósforo: \(error)")
+        }
+    }
+
+    func atualizar(velocidade: CGFloat, distanciaNecessaria: CGFloat) {
+        guard let arquivo, distanciaNecessaria > 0 else { return }
+        let duracaoAudio = Double(arquivo.length) / arquivo.processingFormat.sampleRate
+        let taxaDesejada = duracaoAudio * Double(max(0, velocidade)) / Double(distanciaNecessaria)
+        timePitch.rate = Float(min(32, max(1.0 / 32.0, taxaDesejada)))
+
+        preparar()
+        if !player.isPlaying { player.play() }
+    }
+
+    func pausar() {
+        player.pause()
+    }
+
+    func cancelar() {
+        player.stop()
+        audioAgendado = false
+        timePitch.rate = 1
+    }
+}
+
 final class Haptics {
     let suportado = CHHapticEngine.capabilitiesForHardware().supportsHaptics
 
@@ -18,6 +78,11 @@ final class Haptics {
     private var chama: CHHapticAdvancedPatternPlayer?
     private var chamaTocando = false   // para religar a chama se o sistema reiniciar o motor
     private var segurar: CHHapticAdvancedPatternPlayer?
+//<<<<<<< Updated upstream
+    private var audioPrego: AVAudioPlayer?
+//=======
+    private let somRiscoFosforo = SomRiscoFosforo()
+//>>>>>>> Stashed changes
 
     init() {
         criarMotor()
@@ -29,6 +94,7 @@ final class Haptics {
         // .playback: os sons do app (música de fundo e objetos) tocam MESMO com o iPhone no
         // silencioso (decisão do time). .mixWithOthers: o som do app não para a música da pessoa.
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])
+        carregarAudioDoPrego()
         guard suportado else { return }
         do {
             let motor = try CHHapticEngine(audioSession: .sharedInstance())
@@ -56,6 +122,30 @@ final class Haptics {
         } catch {
             log.error("Erro ao criar o motor de vibração: \(error.localizedDescription)")
         }
+    }
+
+    private func carregarAudioDoPrego() {
+        guard let url = Bundle.main.url(forResource: "Prego", withExtension: "wav") else {
+            print("Não achei Prego.wav no bundle do app")
+            return
+        }
+        do {
+            let player = try AVAudioPlayer(contentsOf: url)
+            player.prepareToPlay()
+            audioPrego = player
+        } catch {
+            print("Erro ao carregar Prego.wav: \(error)")
+        }
+    }
+
+    // O enfeite leva 0,45 s para cair. Agenda o WAV original para tocar ao atingir o pote.
+    private func tocarAudioDoPrego(forca: Float) {
+        guard Chaves.ligado(Chaves.somObjetos), let player = audioPrego else { return }
+        player.stop()
+        player.currentTime = 0
+        player.volume = max(0, min(1, forca))
+        player.prepareToPlay()
+        player.play(atTime: player.deviceCurrentTime + Self.tempoQueda)
     }
 
     private func ligarSePreciso() throws {
@@ -145,7 +235,7 @@ final class Haptics {
 
     // MARK: Momentos da vela
 
-    func acender() { tocar("Acender") }
+    func acender() { tocar("Acender", volume: 0) }
 
     func apagar() { tocar("Apagar") }
 
@@ -154,22 +244,31 @@ final class Haptics {
     // forca: 0 a 1 (enfeite mais alto = cai de mais alto = batida mais forte e som mais alto)
     func prego(forca: Float) {
         let f = max(0, min(1, forca))
-        // (mais forte que antes, pedido da mentora: a menor batida já é bem perceptível)
-        tocar("Prego", forca: 0.7 + 0.3 * f, volume: (0.4 + 0.6 * f) * volumeDosObjetos)
+        // Vibração mais forte que antes (pedido da mentora); o som vem do Prego.wav (Sofia)
+        tocar("Prego", forca: 0.7 + 0.3 * f, volume: 0)
+        tocarAudioDoPrego(forca: 0.4 + 0.6 * f)
     }
 
     // Enfeite que não encostou na vela e caiu no pote
     func caiuNoPote() {
-        tocar("Prego", forca: 0.55, volume: 0.25 * volumeDosObjetos)
+        tocar("Prego", forca: 0.55, volume: 0)
+        tocarAudioDoPrego(forca: 0.25)
     }
-
-    // "Sons dos objetos" desligado nas Configurações: a vibração continua, o som some
-    private var volumeDosObjetos: Float { Chaves.ligado(Chaves.somObjetos) ? 1 : 0 }
 
     // ⚙️ As batidas foram reforçadas (pedido da mentora: os haptics podiam ser mais intensos).
     // A vibração contínua da chama NÃO mudou (ela já tinha sido suavizada a pedido do time).
     // Batidinha (slider, encaixar enfeite…)
     func tique() { toque(forca: 0.7, nitidez: 0.55) }
+
+    // O padrão Acender continua dando a vibração, mas seu áudio é raspado pelo gesto.
+    func prepararSomRiscoFosforo() { somRiscoFosforo.preparar() }
+
+    func atualizarSomRiscoFosforo(velocidade: CGFloat, distanciaNecessaria: CGFloat) {
+        somRiscoFosforo.atualizar(velocidade: velocidade, distanciaNecessaria: distanciaNecessaria)
+    }
+
+    func pausarSomRiscoFosforo() { somRiscoFosforo.pausar() }
+    func cancelarSomRiscoFosforo() { somRiscoFosforo.cancelar() }
 
     // Fósforo riscando na caixa: batida seca e áspera
     func riscar() { toque(forca: 1, nitidez: 0.3) }
@@ -245,6 +344,10 @@ final class Haptics {
     func ligarMotor() {}
     func desligarMotor() {}
     func acender() {}
+    func prepararSomRiscoFosforo() {}
+    func atualizarSomRiscoFosforo(velocidade: CGFloat, distanciaNecessaria: CGFloat) {}
+    func pausarSomRiscoFosforo() {}
+    func cancelarSomRiscoFosforo() {}
     func apagar() {}
     func fim() {}
     func prego(forca: Float) {}

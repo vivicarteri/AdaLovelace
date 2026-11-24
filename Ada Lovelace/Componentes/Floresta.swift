@@ -690,6 +690,7 @@ struct FlorestaView: View {
 
     // Cada par de painéis fecha uma volta. O espelho une bordas idênticas.
     private func faixa<Conteudo: View>(_ relogio: Double, larguraVisivel: CGFloat,
+                                       alternaEspelho: Bool = true,
                                        @ViewBuilder conteudo: () -> Conteudo) -> some View {
         let largura = Floresta.largura * escala
         let voltas = Floresta.desliza && !reduzirMovimento ? 2 * relogio / RelogioDaHistoria.ciclo : 0
@@ -703,7 +704,7 @@ struct FlorestaView: View {
                 painelDeArte
                     .frame(width: largura, height: Floresta.altura * escala)
                     .clipped()
-                    .scaleEffect(x: (painel + i).isMultiple(of: 2) ? 1 : -1, y: 1)
+                    .scaleEffect(x: alternaEspelho && !(painel + i).isMultiple(of: 2) ? -1 : 1, y: 1)
                     .position(x: centro + (CGFloat(i) - fracao) * largura,
                               y: quadro.y(Quadro.altura / 2))
             }
@@ -734,8 +735,11 @@ struct FlorestaView: View {
                 // O rosto (olhos e bochechas) e os raios do sol andam no TEMPO REAL, no ritmo dos
                 // vídeos da Georgia (12 quadros/s). Antes andavam no relógio da história, que no
                 // eclipse ficava mais lento e, no teste acelerado, corria junto.
-                PecaAnimadaView(peca: a.peca, t: t, fase: a.fase, sombra: sombra)
-                    .frame(width: a.largura * escala, height: a.alturaNaTela * escala),
+                // Na parede o desenho vira sombra COM os detalhes (rosto, raios, penas), como na
+                // referência da Georgia: o rosto do sol e da lua aparece dentro da sombra.
+                PecaAnimadaView(peca: a.peca, t: t, fase: a.fase)
+                    .frame(width: a.largura * escala, height: a.alturaNaTela * escala)
+                    .modifier(TomDaSombraDoCeu(ativo: sombra)),
                 altura: a.alturaNaTela)
                 .opacity(sombra ? opacidadeDaSombra : 1)
                 .position(x: quadro.x(Floresta.noQuadro(x: Floresta.centroX + dx)),
@@ -756,7 +760,7 @@ struct FlorestaView: View {
             comSombraDePapel(Image(nomeDoCoracao(relogio, passagem: p))
                 .resizable()
                 .frame(width: c.w * escala, height: c.h * escala)
-                .colorMultiply(sombra ? .black : .white),
+                .modifier(TomDaSombraDoCeu(ativo: sombra)),
                 altura: c.h)
                 .opacity(sombra ? opacidadeDaSombra : 1)
                 .position(x: quadro.x(Floresta.noQuadro(x: Floresta.centroX)),
@@ -848,7 +852,7 @@ struct FlorestaView: View {
             .resizable()
             .scaledToFit()
             .frame(width: tamanho, height: tamanho)
-            .colorMultiply(sombra ? .black : .white),
+            .modifier(TomDaSombraDoCeu(ativo: sombra)),
             altura: e.altura * Floresta.aumentoDosElementos)
             .opacity(sombra ? opacidadeDaSombra : 1)
             .offset(y: flutua * escala)
@@ -890,48 +894,38 @@ struct FlorestaView: View {
 enum CamadaDaSombra: CaseIterable {
     case ceu, arvoresDeTras, arvoresDaFrente, arbustos
 
-    // Pedido da Georgia: na parede os elementos ficam MAIORES, mais nítidos e mais escuros que
-    // numa sombra de verdade, para dar para entender o que está acontecendo dentro da caixa.
+    // Medido na referência da Georgia (Refsombras): parede branca; o céu (sol, lua, nuvens,
+    // coração, pássaros, estrelas) bem escuro e nítido, com os detalhes aparecendo por dentro;
+    // as árvores cinza-claras e um pouco borradas; os arbustos médios, escurecendo onde se
+    // cruzam. A cena aparece no MESMO tamanho de dentro da caixa (dá para reconhecer tudo).
 
     // ⚙️ Borrão (em pontos, numa tela de iPhone; no iPad cresce junto com a tela)
     var borrao: CGFloat {
         switch self {
-        case .ceu: 2.5
-        case .arvoresDeTras: 9
-        case .arvoresDaFrente: 11
-        case .arbustos: 13
+        case .ceu: 1.2
+        case .arvoresDeTras: 5
+        case .arvoresDaFrente: 4.5
+        case .arbustos: 5.5
         }
     }
 
     // ⚙️ Quão escura é a sombra (onde duas se cruzam, fica mais escuro ainda)
     var opacidade: Double {
         switch self {
-        case .ceu: 0.74
-        case .arvoresDeTras: 0.5
-        case .arvoresDaFrente: 0.62
-        case .arbustos: 0.78
+        case .ceu: 0.82
+        case .arvoresDeTras: 0.3
+        case .arvoresDaFrente: 0.42
+        case .arbustos: 0.55
         }
     }
 
-    // ⚙️ Tamanho da sombra na parede, comparado com o cenário.
-    // O céu (sol, lua, nuvens, coração, pássaros, estrelas) fica bem maior que antes (era 0,5).
-    var escala: CGFloat {
-        switch self {
-        case .ceu: 0.72
-        case .arvoresDeTras: 0.55
-        case .arvoresDaFrente: 0.62
-        case .arbustos: 0.78
-        }
-    }
+    // ⚙️ Tamanho da sombra na parede, comparado com o cenário. A cena inteira encolhe por igual,
+    // presa no chão (como na referência, tudo na mesma proporção de dentro da caixa), só o
+    // necessário para o céu caber inteiro abaixo da cortina de cima.
+    var escala: CGFloat { 0.82 }
 
-    // ⚙️ De onde a camada encolhe (fração da altura da tela): o céu encolhe em volta do alto
-    // da tela (fica lá em cima); a mata encolhe para o chão (fica embaixo, perto da caixa).
-    var ancoraY: CGFloat {
-        switch self {
-        case .ceu: 0.40
-        default: 1.0
-        }
-    }
+    // De onde a camada encolhe (fração da altura da tela): todas do chão, juntas.
+    var ancoraY: CGFloat { 1.0 }
 
     // Onde o alto do céu (eclipse) vai parar depois de encolher (fração da altura da tela)
     static var topoDoCeu: CGFloat {
@@ -939,3 +933,23 @@ enum CamadaDaSombra: CaseIterable {
     }
 }
 
+
+
+// A sombra das peças do céu na parede: escura, mas mostrando os detalhes do desenho (o rosto
+// do sol e da lua, as penas, as fitas do coração), como na referência da Georgia.
+// (As árvores, os arbustos e o coelho continuam como silhueta lisa.)
+struct TomDaSombraDoCeu: ViewModifier {
+    var ativo: Bool
+    // ⚙️ Cor da parte clara do desenho na sombra (0 = preto; mais alto = detalhes mais visíveis)
+    static let tom = Color(white: 0.2)
+
+    func body(content: Content) -> some View {
+        if ativo {
+            content
+                .grayscale(1)
+                .colorMultiply(TomDaSombraDoCeu.tom)
+        } else {
+            content
+        }
+    }
+}
