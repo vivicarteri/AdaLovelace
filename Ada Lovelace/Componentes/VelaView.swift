@@ -160,26 +160,27 @@ struct VelaView: View {
         .overlay(alignment: .top) {
             if arteExiste(CeraView.quadros[0]) {
                 CeraView(progresso: progresso)
-                    .frame(width: larguraDesenho, height: ArteVela.ceraAltura * s)
+                    .frame(width: ArteVela.ceraLargura * s, height: ArteVela.ceraAltura * s)
                     .frame(width: larguraDesenho, height: 0, alignment: .top)
             }
         }
         // No fim da vela a cera fica mais baixa que os escorridos: aí eles vão sumindo
         // por baixo, derretendo dentro do suporte.
         .frame(width: larguraDesenho, height: visivel, alignment: .top)
-        .clipped()
+        // Corta só em cima/embaixo: a cera é mais larga que o corpo e não pode perder as beiradas
+        .mask { Rectangle().frame(width: larguraDesenho * 2) }
         .offset(y: escondido)
     }
 }
 
 // Cera da Georgia derretendo no topo da vela, conforme a vela queima.
-// Quadros "velaCera_N" (mesma escala e recorte de 300 px de largura do "velaCorpo").
-// O 16 é a cera nova (vela inteira); do 1 ao 12 os escorridos crescem, pinga uma gota
-// e a cera vai virando um escorrido só. Entre um quadro e outro, um dissolve deixa
-// a passagem macia em vez de "pular".
+// Quadros "velaCera_1…49": na escala do "velaCorpo", com 60 px de folga de cada lado.
+// Vêm dos 13 desenhos dela (cera nova → escorridos crescem → pinga → um escorrido só)
+// com 3 quadros intermediários entre cada par, gerados no mesmo traço.
+// Entre um quadro e outro ainda há um dissolve curtinho.
 struct CeraView: View {
     var progresso: Double
-    static let quadros = ["velaCera_16"] + (1...12).map { "velaCera_\($0)" }
+    static let quadros = (1...49).map { "velaCera_\($0)" }
 
     var body: some View {
         let n = CeraView.quadros.count
