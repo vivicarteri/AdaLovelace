@@ -5,9 +5,10 @@
     "Release",
   ],
   "localizations": {
-    "development": "en",
+    "development": "pt-BR",
     "supported": [
       "Base",
+      "en",
     ],
   },
   "files": [
