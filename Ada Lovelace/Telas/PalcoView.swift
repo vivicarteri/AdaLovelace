@@ -83,7 +83,8 @@ struct PalcoView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let g = LayoutPalco(geo: geo)
+            let regioes = regioesDoDuo(geo)
+            let g = layoutDoPalco(geo, cameras: regioes.cameras)
             let caixa = MedidasCaixa(tela: geo.size)
             ZStack {
                 if sessao.foraDaCaixa || cameraAtiva {
@@ -105,7 +106,7 @@ struct PalcoView: View {
                     }
                     .transition(.opacity)
                 } else if dobradica.ehDuo {
-                    palcoDoDuo(g, geo)
+                    palcoDoDuo(g, geo, divisao: regioes.divisao)
                         .transition(.opacity)
                 } else {
                     dentroDaCaixa(g)
@@ -144,6 +145,11 @@ struct PalcoView: View {
             .onChange(of: alturaDaChamaNaTela(g, caixa, geo), initial: true) { _, altura in
                 sessao.chamaMudouDeLugar(altura)
             }
+            // iPhone Duo: conta para a Dobradica em que tela o app está e para que lado a dobra corre
+            .onChange(of: regioes.leitura(tamanho: geo.size), initial: true) { _, tela in
+                guard dobradica.ehDuo else { return }
+                dobradica.telaMudou(temDobra: tela.temDobra, dobraDeitada: tela.dobraDeitada, tamanho: tela.tamanho)
+            }
         }
         .onAppear {
             cortinaFechada = sessao.estado == .acabou
@@ -158,13 +164,13 @@ struct PalcoView: View {
             DicaOutroJeitoDeApagar.velaAcesa = podeApagar
         }
         // iPhone Duo: a dobra decide se a tela é a vela ou o teatro de sombras
-        .onChange(of: dobradica.postura.tipo, initial: true) { antes, agora in
+        .onChange(of: dobradica.postura, initial: true) { antes, agora in
             mudouPostura(de: antes, para: agora)
         }
         .onChange(of: sessao.estado) { _, novo in
             if novo != .nova && novo != .apagada { etapa = .guardado }
             // A vela acabou nas sombras: entra na caixa (menos no Duo fechado, que fica preso nas sombras)
-            if novo == .acabou && sessao.foraDaCaixa && !(dobradica.ehDuo && dobradica.postura.tipo == .fechado) {
+            if novo == .acabou && sessao.foraDaCaixa && !(dobradica.ehDuo && dobradica.postura == .fechado) {
                 entrarNaCaixa()
             }
             if novo == .acabou {
@@ -883,24 +889,23 @@ struct PalcoView: View {
     // Dá para trocar de cena pelo botão, pela pinça e pelo VoiceOver?
     // No Duo, só no modo tenda: no resto, quem troca é abrir e fechar o aparelho.
     private var trocaManual: Bool {
-        !dobradica.ehDuo || dobradica.postura.tipo == .tenda
+        !dobradica.ehDuo || dobradica.postura == .tenda
     }
 
-    // ⚙️ Modo abrindo (B): quanto a vela encolhe quando chega nos 90° (0,45 = 45% do tamanho).
-    private let escalaDoPalcoAos90: CGFloat = 0.45
-
-    // Dentro da caixa no Duo. Aberto (A) e abrindo (B) são a MESMA vista (B com t = 0 é o A),
-    // para a vela não piscar ao passar dos 180°. Com Reduzir Movimento não tem zoom contínuo.
-    @ViewBuilder
-    private func palcoDoDuo(_ g: LayoutPalco, _ geo: GeometryProxy) -> some View {
-        switch dobradica.postura {
-        case .laptop:
-            vistaLaptop(geo)
-        case .abrindo(let t):
-            vistaAbrindo(g, geo, t: reduzirMovimento ? 0 : t)
-        default:
-            vistaAbrindo(g, geo, t: 0)
+    // Dentro da caixa no Duo. Aberto (A) e meio aberto (B) são a caixa inteira, igual ao iPad.
+    // Só o laptop (C) muda a tela, com uma animação curta (com Reduzir Movimento, só esmaece).
+    private func palcoDoDuo(_ g: LayoutPalco, _ geo: GeometryProxy, divisao: CGRect?) -> some View {
+        let laptop = dobradica.postura == .laptop
+        return ZStack {
+            if laptop {
+                vistaLaptop(geo, divisao: divisao)
+                    .transition(reduzirMovimento ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+            } else {
+                dentroDaCaixa(g)
+                    .transition(.opacity)
+            }
         }
+        .animation(reduzirMovimento ? .easeInOut(duration: 0.3) : .spring(duration: 0.6), value: laptop)
     }
 
     // A tela inteira, contando as áreas fora da área segura (a arte vai até a borda)
@@ -911,58 +916,22 @@ struct PalcoView: View {
                       height: geo.size.height + i.top + i.bottom)
     }
 
-    // B: fechando de 180° para 90°, a vela encolhe e vai para o meio da metade esquerda,
-    // e a borda da caixa vai aparecendo em volta (como uma câmera saindo da caixa).
-    private func vistaAbrindo(_ g: LayoutPalco, _ geo: GeometryProxy, t: Double) -> some View {
+    // C: modo laptop. Embaixo da dobra, a caixa do teatro com a cortina aberta e a vela de
+    // verdade dentro (com os botões de sempre). Em cima, o teatro de sombras, acompanhando a
+    // vela em tempo real. A dobra (região .division) separa as duas metades; sem ela (simulação),
+    // a tela é dividida no meio.
+    private func vistaLaptop(_ geo: GeometryProxy, divisao: CGRect?) -> some View {
         let cheia = telaCheia(geo)
-        let t = CGFloat(t)
-        let lado = min(cheia.width, cheia.height)
-        // A abertura da caixa é a tela inteira: em t = 0 a moldura fica toda fora da tela
-        let medidas = MedidasCaixa(tela: cheia.size, aberturaFixa: cheia.size,
-                                   molduraFixa: (coluna: lado * 0.07, telhado: lado * 0.12, palco: lado * 0.07))
-        let desvio = -medidas.caixa.height / 2 + medidas.telhado + cheia.height / 2
-        let escala = 1 - (1 - escalaDoPalcoAos90) * t
-        let destinoX = cheia.minX + cheia.width * 0.25          // meio da metade esquerda
-        let acesa = sessao.estado == .acesa && !trocando
-        let ancora = UnitPoint(x: cheia.midX / max(geo.size.width, 1), y: cheia.midY / max(geo.size.height, 1))
-
-        return ZStack {
-            // A parede do teatro, atrás da caixa
-            (acesa ? Cores.papel : Cores.fundoEscuro)
-                .ignoresSafeArea()
-                .opacity(t > 0 ? 1 : 0)
-                .accessibilityHidden(true)
-
-            ZStack {
-                CaixaTeatroView(medidas: medidas, acesa: acesa, aberturaCortina: 1)
-                    .position(x: cheia.midX, y: cheia.midY - desvio)
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
-                dentroDaCaixa(g)
-                    .mask {
-                        Rectangle()
-                            .frame(width: cheia.width, height: cheia.height)
-                            .position(x: cheia.midX, y: cheia.midY)
-                    }
-            }
-            .scaleEffect(escala, anchor: ancora)
-            .offset(x: (destinoX - cheia.midX) * t)
-        }
-    }
-
-    // C: modo laptop. Embaixo, a caixa do teatro do tamanho da metade, com a cortina aberta
-    // e a vela de verdade dentro (com os botões de sempre). Em cima, o teatro de sombras,
-    // acompanhando a vela em tempo real.
-    private func vistaLaptop(_ geo: GeometryProxy) -> some View {
-        let cheia = telaCheia(geo)
-        let metade = cheia.height / 2
-        let lado = min(cheia.width, metade)
+        let dobra = divisao ?? CGRect(x: cheia.minX, y: cheia.midY, width: cheia.width, height: 0)
+        let cima = CGRect(x: cheia.minX, y: cheia.minY, width: cheia.width, height: max(1, dobra.minY - cheia.minY))
+        let baixo = CGRect(x: cheia.minX, y: dobra.maxY, width: cheia.width, height: max(1, cheia.maxY - dobra.maxY))
+        let lado = min(baixo.width, baixo.height)
         let moldura = (coluna: lado * 0.07, telhado: lado * 0.16, palco: lado * 0.08)
         let margem: CGFloat = 8
-        let abertura = CGSize(width: max(1, (cheia.width - margem * 2) / 1.14 - moldura.coluna * 2),
-                              height: max(1, metade - moldura.telhado - moldura.palco - margem * 2))
+        let abertura = CGSize(width: max(1, (baixo.width - margem * 2) / 1.14 - moldura.coluna * 2),
+                              height: max(1, baixo.height - moldura.telhado - moldura.palco - margem * 2))
         let medidas = MedidasCaixa(tela: abertura, aberturaFixa: abertura, molduraFixa: moldura)
-        let centroDaCaixa = CGPoint(x: cheia.midX, y: cheia.minY + metade * 1.5)
+        let centroDaCaixa = CGPoint(x: baixo.midX, y: baixo.midY)
         let centroDaAbertura = CGPoint(x: centroDaCaixa.x,
                                        y: centroDaCaixa.y - medidas.caixa.height / 2 + moldura.telhado + abertura.height / 2)
         let acesa = sessao.estado == .acesa && !trocando
@@ -974,9 +943,9 @@ struct PalcoView: View {
 
             // Metade de cima: as sombras na parede (a caixa delas fica de fora: é a de baixo)
             TeatroSombrasView(entrar: {}, mostrarCaixa: false, podeEntrar: false)
-                .frame(width: cheia.width, height: metade)
+                .frame(width: cima.width, height: cima.height)
                 .clipped()
-                .position(x: cheia.midX, y: cheia.minY + metade / 2)
+                .position(x: cima.midX, y: cima.midY)
 
             // Metade de baixo: a caixa grande, aberta
             CaixaTeatroView(medidas: medidas, acesa: acesa, aberturaCortina: 1)
@@ -991,7 +960,42 @@ struct PalcoView: View {
         }
     }
 
-    private func mudouPostura(de antes: PosturaDuo.Tipo, para agora: PosturaDuo.Tipo) {
+    // O que a tela do Duo informa: a dobra (ativa ou não) e onde a câmera cobre a tela.
+    // Fora do Duo não pergunta nada, para o iPhone e o iPad ficarem como sempre.
+    private func regioesDoDuo(_ geo: GeometryProxy) -> RegioesDoDuo {
+        guard dobradica.ehDuo else { return RegioesDoDuo() }
+        if #available(iOS 27.1, *) {
+            let dobras = geo.reservedRegions(kind: .division, options: .includeInactive)
+            return RegioesDoDuo(temDobra: !dobras.isEmpty,
+                                divisao: dobras.first { $0.isActive }?.frame,
+                                cameras: geo.reservedRegions(kind: .occlusion).map(\.frame))
+        }
+        return RegioesDoDuo()
+    }
+
+    // O palco, com a caixa de fósforos afastada da câmera (só no Duo, só o necessário).
+    // A câmera externa fica num canto: na tenda, deitada, ela pode cair em cima da caixa.
+    private func layoutDoPalco(_ geo: GeometryProxy, cameras: [CGRect]) -> LayoutPalco {
+        var g = LayoutPalco(geo: geo)
+        guard dobradica.ehDuo, !cameras.isEmpty else { return g }
+        let tela = CGRect(origin: .zero, size: g.tamanho)
+        var desvio = CGSize.zero
+        for camera in cameras {
+            let inteira = CGRect(x: g.caixa.x - g.larguraCaixa / 2 + desvio.width,
+                                 y: g.caixa.y - g.alturaCaixa / 2 + desvio.height,
+                                 width: g.larguraCaixa, height: g.alturaCaixa)
+            // Só conta a parte da caixa que aparece (ela fica meio para fora da tela)
+            guard inteira.intersection(tela).intersects(camera) else { continue }
+            // O menor caminho para sair de baixo da câmera: para cima ou para a esquerda
+            let subir = inteira.maxY - camera.minY
+            let irParaEsquerda = inteira.maxX - camera.minX
+            if subir <= irParaEsquerda { desvio.height -= subir } else { desvio.width -= irParaEsquerda }
+        }
+        g.desvioDaCaixa = desvio
+        return g
+    }
+
+    private func mudouPostura(de antes: PosturaDuo, para agora: PosturaDuo) {
         let duo = dobradica.ehDuo
         DicaSairDaCaixa.pincaPermitida = trocaManual
         DicaEntrarNaCaixa.pincaPermitida = trocaManual
@@ -1014,25 +1018,25 @@ struct PalcoView: View {
         conferirPostura()
     }
 
-    // Leva a tela para onde a dobra manda (fechado = sombras; aberto, abrindo e laptop = vela)
+    // Leva a tela para onde a dobra manda. Só abrir e fechar por completo fazem o zoom:
+    // fechado = sai da caixa para as sombras; aberto e laptop = entra na caixa.
     private func conferirPostura() {
         guard dobradica.ehDuo, !personalizando, !trocandoCena else { return }
-        switch dobradica.postura.tipo {
+        switch dobradica.postura {
         case .fechado:
             if !sessao.foraDaCaixa { sairDaCaixa(forcar: true) }
         case .tenda:
             break
-        case .aberto, .abrindo, .laptop:
+        case .aberto, .laptop:
             if sessao.foraDaCaixa { entrarNaCaixa() }
         }
     }
 
     // VoiceOver: diz a tela nova na hora (interrompe a fala, porque é o que está na tela agora)
-    private func anunciarPostura(_ tipo: PosturaDuo.Tipo) {
+    private func anunciarPostura(_ postura: PosturaDuo) {
         let texto: String
-        switch tipo {
+        switch postura {
         case .aberto: texto = "Dentro da caixa, com a vela"
-        case .abrindo: return   // é só o caminho entre o aberto e o laptop
         case .laptop: texto = "Vela embaixo e teatro de sombras em cima"
         case .fechado: texto = "Teatro de sombras"
         case .tenda: texto = "Modo tenda. Use o botão ou a pinça para trocar de cena"
@@ -1091,10 +1095,14 @@ private struct LayoutPalco {
     var larguraVela: CGFloat { ArteVela.largura * quadro.escala }
     var larguraCaixa: CGFloat { min(tamanho.width * 0.34, 150) }
     var alturaCaixa: CGFloat { CaixaFosforoView.altura(largura: larguraCaixa) }
+    // iPhone Duo: quanto a caixa de fósforos sai do lugar para a câmera não ficar na frente
+    // (a lixa e o fósforo vão junto, porque são contados a partir da caixa)
+    var desvioDaCaixa: CGSize = .zero
 
     // Caixa de fósforos no canto de baixo à direita, meio para fora da tela
     var caixa: CGPoint {
-        CGPoint(x: tamanho.width - larguraCaixa * 0.34, y: tamanho.height - alturaCaixa * 0.30)
+        CGPoint(x: tamanho.width - larguraCaixa * 0.34 + desvioDaCaixa.width,
+                y: tamanho.height - alturaCaixa * 0.30 + desvioDaCaixa.height)
     }
 
     var botaoBaixoY: CGFloat { tamanho.height * 0.92 }
@@ -1125,5 +1133,25 @@ private struct LayoutPalco {
 
     func alturaCheia(_ posicao: Double) -> CGFloat {
         GeometriaVela.alturaCheia(posicao: posicao, alturaMaxima: alturaMaxima)
+    }
+}
+
+// iPhone Duo: o que a tela informa (reservedRegions). Fora do Duo fica vazio.
+private struct RegioesDoDuo {
+    var temDobra = true          // existe uma dobra na tela, ativa ou não (= tela interna)
+    var divisao: CGRect?         // a dobra ativa (aparelho meio aberto)
+    var cameras: [CGRect] = []   // onde a câmera cobre a tela
+
+    struct Leitura: Equatable {
+        var temDobra: Bool
+        var dobraDeitada: Bool
+        var tamanho: CGSize
+    }
+
+    // A dobra deitada (mais larga que alta) é o laptop: uma metade em cima e outra embaixo
+    func leitura(tamanho: CGSize) -> Leitura {
+        Leitura(temDobra: temDobra,
+                dobraDeitada: divisao.map { $0.width > $0.height } ?? false,
+                tamanho: tamanho)
     }
 }

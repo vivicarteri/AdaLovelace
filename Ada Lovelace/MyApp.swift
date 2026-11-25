@@ -7,6 +7,8 @@ import CoreText
 
 @main struct MyApp: App {
     @StateObject private var sessao = Sessao()
+    // Só o iPhone Duo usa: troca as orientações conforme a dobra (no resto vale o Info.plist)
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     init() {
         // Registra a fonte incluída em Recursos para poder experimentá-la nas telas.
         if let url = Bundle.main.url(forResource: "ViaodaLibre-Regular", withExtension: "ttf") {

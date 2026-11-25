@@ -14,7 +14,7 @@ struct ContentView: View {
     @ObservedObject private var dobradica = Dobradica.compartilhada
 
     var body: some View {
-        // ZStack, e não Group: no Group o .background abaixo iria para CADA tela, e o leitor
+        // ZStack, e não Group: no Group o .modifier abaixo iria para CADA tela, e a escuta
         // da dobradiça nascia e morria a cada troca (a tela ficava piscando entre Duo e normal).
         ZStack {
             if dobradica.ehDuo {
@@ -37,10 +37,8 @@ struct ContentView: View {
                 palco
             }
         }
-        #if canImport(UIKit)
         // Ouve a dobradiça do iPhone Duo (nos outros aparelhos ela nunca responde)
-        .background(LeitorDaDobradica().allowsHitTesting(false).accessibilityHidden(true))
-        #endif
+        .modifier(OuvirADobradica())
     }
 
     private var palco: some View {

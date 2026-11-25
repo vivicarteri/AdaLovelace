@@ -1,16 +1,20 @@
 //  Dobradica.swift
-//  iPhone Duo (dobrável): lê a dobradiça e diz em qual postura o aparelho está.
+//  iPhone Duo (dobrável): junta o que a dobradiça e a tela informam e diz em qual postura o aparelho está.
 //
 //  ISOLAMENTO: tudo do modo Duo depende de `ehDuo`. Ele só fica true quando o sistema
-//  informa uma dobradiça (UIHingeInteraction, iOS 27.1+). No iPhone comum e no iPad
+//  informa uma dobradiça (onHingeChange, iOS 27.1+). No iPhone comum e no iPad
 //  a dobradiça nunca aparece, então nada muda para eles.
 //
+//  Como a Apple pede ("Don't use hinge updates for layout"):
+//  - a DOBRADIÇA é só entrada: abrir e fechar troca de cena, e o ângulo decide quando é laptop;
+//  - o LAYOUT vem da tela: a região da dobra (reservedRegions .division) diz em que tela o app
+//    está e para que lado a dobra corre; o tamanho da janela diz se ela está em pé.
+//
 //  Posturas (combinadas com a Sofia):
-//  A aberto   180°                      → só a vela, dentro da caixa
-//  B abrindo  entre 180° e 90°          → zoom contínuo: a vela vai para a esquerda e a borda da caixa aparece
-//  C laptop   90° ou menos, até fechar  → vela embaixo, teatro de sombras em cima
-//  D fechado  tela externa              → travado no teatro de sombras
-//  E tenda    "V" invertido, tela externa acesa com o aparelho entreaberto → troca manual (botão e pinça)
+//  A/B aberto  de 180° até 100°, tela interna        → a caixa inteira, travada em paisagem
+//  C   laptop  100° ou menos e a dobra na horizontal  → vela embaixo, teatro de sombras em cima
+//  D   fechado o sistema passou para a tela externa   → travado no teatro de sombras, em pé
+//  E   tenda   entreaberto com a tela externa acesa   → troca manual (botão e pinça), em paisagem
 
 import SwiftUI
 import Combine
@@ -19,53 +23,40 @@ import UIKit
 #endif
 
 enum PosturaDuo: Equatable {
-    case aberto
-    case abrindo(Double)    // 0 = acabou de sair dos 180°, 1 = chegou nos 90°
-    case laptop
-    case fechado
-    case tenda
-
-    // A postura sem o ângulo: é o que muda a tela (o ângulo só mexe no zoom)
-    enum Tipo { case aberto, abrindo, laptop, fechado, tenda }
-
-    var tipo: Tipo {
-        switch self {
-        case .aberto: .aberto
-        case .abrindo: .abrindo
-        case .laptop: .laptop
-        case .fechado: .fechado
-        case .tenda: .tenda
-        }
-    }
+    case aberto     // A e B: é a mesma tela
+    case laptop     // C
+    case fechado    // D
+    case tenda      // E
 }
 
 final class Dobradica: ObservableObject {
     static let compartilhada = Dobradica()
 
-    // ⚙️ Abaixo disto (graus) é modo laptop; acima, transição de zoom.
-    static let anguloDoLaptop: Double = 90
-    // ⚙️ Folga em volta dos 90°, para a tela não ficar pulando entre B e C com o aparelho parado ali.
-    static let folgaDoLaptop: Double = 3
-    // ⚙️ Sem tamanho guardado da tela externa: janela com o lado menor abaixo disto conta como tela externa.
-    static let ladoMenorDaTelaExterna: CGFloat = 560
+    // ⚙️ Fechando até este ângulo (graus), a dobra conta como laptop.
+    static let entraNoLaptop: Double = 100
+    // ⚙️ Abrindo, só deixa de ser laptop acima deste ângulo (o respiro para a tela não piscar).
+    static let saiDoLaptop: Double = 105
+    // ⚙️ Tempo para confirmar o modo tenda: abrindo o aparelho fechado, a tela externa fica acesa
+    // um instante antes de o app passar para a interna, e isso não pode virar tenda.
+    static let esperaDaTenda: Duration = .milliseconds(400)
 
     @Published private(set) var ehDuo = false
     @Published private(set) var postura: PosturaDuo = .aberto
-    // Para a floresta e o sopro: a janela está em pé (mais alta que larga)?
+    // Para a floresta: a janela está em pé (mais alta que larga)?
     @Published private(set) var telaEmPe = true
 
-    #if canImport(UIKit)
-    // Orientação da janela onde o app está (o Movimento usa no Duo, em vez da do app inteiro)
-    private(set) var orientacao: UIInterfaceOrientation = .portrait
-    #endif
-
-    // O que a dobradiça real informou
-    private enum Status { case desconhecido, fechado, entreaberto, aberto }
+    // O que a dobradiça informou
+    private enum Status { case fechado, entreaberto, aberto }
     private var temDobradica = false
-    private var status = Status.desconhecido
+    private var status = Status.aberto
     private var angulo: Double = 180          // graus
-    private var tamanhoDaJanela: CGSize = .zero
-    private var tamanhoDaTelaExterna: CGSize?  // guardado quando o aparelho fecha
+    private var laptopPeloAngulo = false
+
+    // O que a tela informou (região da dobra)
+    private var naTelaInterna = true          // existe uma dobra na tela (ativa ou não)
+    private var dobraDeitada = false          // a dobra ativa corre na horizontal (laptop)
+
+    private var confirmacaoDaTenda: Task<Void, Never>?
 
     #if DEBUG
     private var observador: AnyCancellable?
@@ -81,34 +72,36 @@ final class Dobradica: ObservableObject {
         #endif
     }
 
-    // MARK: Leituras (vêm do LeitorDaDobradica)
+    // MARK: Leituras
 
-    #if canImport(UIKit)
-    fileprivate func dobradicaMudou(status bruto: Int?, angulo radianos: Double?) {
-        guard let bruto, let radianos else {
+    // Da dobradiça (onHingeChange). nil = este aparelho não tem dobradiça.
+    @available(iOS 27.1, *)
+    func dobradicaMudou(_ hinge: DeviceHinge?) {
+        guard let hinge else {
             temDobradica = false
             recalcular()
             return
         }
         temDobradica = true
-        switch bruto {
-        case 1: status = .fechado
-        case 2: status = .entreaberto
-        case 3: status = .aberto
-        default: status = .desconhecido
+        switch hinge.status {
+        case .closed: status = .fechado
+        case .partiallyOpen: status = .entreaberto
+        default: status = .aberto
         }
-        angulo = radianos * 180 / .pi
+        angulo = hinge.angle.degrees
         recalcular()
     }
 
-    fileprivate func janelaMudou(_ tamanho: CGSize, orientacao: UIInterfaceOrientation) {
+    // Da tela (PalcoView): a região da dobra e o tamanho da janela
+    func telaMudou(temDobra: Bool, dobraDeitada: Bool, tamanho: CGSize) {
         guard tamanho.width > 0, tamanho.height > 0 else { return }
-        self.orientacao = orientacao
-        guard tamanho != tamanhoDaJanela else { return }
-        tamanhoDaJanela = tamanho
+        let emPe = tamanho.height >= tamanho.width
+        guard temDobra != naTelaInterna || dobraDeitada != self.dobraDeitada || emPe != telaEmPe else { return }
+        naTelaInterna = temDobra
+        self.dobraDeitada = dobraDeitada
+        if telaEmPe != emPe { telaEmPe = emPe }
         recalcular()
     }
-    #endif
 
     // MARK: Postura
 
@@ -116,7 +109,8 @@ final class Dobradica: ObservableObject {
         var duo = temDobradica
         var st = status
         var graus = angulo
-        var externa = naTelaExterna
+        var interna = naTelaInterna
+        var deitada = dobraDeitada
 
         #if DEBUG
         let padrao = UserDefaults.standard
@@ -124,100 +118,123 @@ final class Dobradica: ObservableObject {
             duo = true
             graus = padrao.object(forKey: Chaves.anguloSimulado) as? Double ?? 180
             st = graus <= 0 ? .fechado : graus >= 180 ? .aberto : .entreaberto
-            externa = st == .fechado || (st == .entreaberto && padrao.bool(forKey: Chaves.tendaSimulada))
+            interna = !(st == .entreaberto && padrao.bool(forKey: Chaves.tendaSimulada))
+            deitada = telaEmPe   // sem dobra de verdade: em pé conta como a dobra na horizontal
         }
         #endif
 
-        if st == .fechado, tamanhoDaJanela != .zero { tamanhoDaTelaExterna = tamanhoDaJanela }
+        // Respiro: quem já está no laptop só sai acima de 105°; quem não está, só entra em 100°
+        laptopPeloAngulo = st == .entreaberto
+            && graus <= (laptopPeloAngulo ? Dobradica.saiDoLaptop : Dobradica.entraNoLaptop)
 
         let nova: PosturaDuo
         switch st {
         case .fechado: nova = .fechado
-        case .aberto, .desconhecido: nova = .aberto
+        case .aberto: nova = .aberto
         case .entreaberto:
-            if externa {
-                nova = .tenda
-            } else {
-                // Folga nos 90°: quem já está no laptop só sai um pouco acima, e vice-versa
-                let limite = postura.tipo == .laptop ? Dobradica.anguloDoLaptop + Dobradica.folgaDoLaptop
-                                                     : Dobradica.anguloDoLaptop - Dobradica.folgaDoLaptop
-                if graus <= limite {
-                    nova = .laptop
-                } else {
-                    let fracao = (180 - graus) / (180 - Dobradica.anguloDoLaptop)
-                    nova = .abrindo(min(1, max(0, fracao)))
-                }
-            }
+            if !interna { nova = .tenda }
+            else if laptopPeloAngulo && deitada { nova = .laptop }
+            else { nova = .aberto }
         }
 
         if ehDuo != duo { ehDuo = duo }
-        if postura != nova { postura = nova }
-        let emPe = tamanhoDaJanela == .zero || tamanhoDaJanela.height >= tamanhoDaJanela.width
-        if telaEmPe != emPe { telaEmPe = emPe }
+        mudarPostura(para: nova)
+        atualizarOrientacoes()
     }
 
-    // A janela está na tela externa (a de fora)? Usado para separar a tenda do laptop.
-    // As duas telas do Duo têm quase a mesma proporção, então a conta é pelo tamanho.
-    private var naTelaExterna: Bool {
-        guard tamanhoDaJanela != .zero else { return false }
-        let menor = min(tamanhoDaJanela.width, tamanhoDaJanela.height)
-        let maior = max(tamanhoDaJanela.width, tamanhoDaJanela.height)
-        if let externa = tamanhoDaTelaExterna {
-            let menorExterna = min(externa.width, externa.height)
-            let maiorExterna = max(externa.width, externa.height)
-            return abs(menor - menorExterna) < 2 && abs(maior - maiorExterna) < 2
+    private func mudarPostura(para nova: PosturaDuo) {
+        guard nova != .tenda || postura == .tenda else {
+            // Tenda só vale se continuar assim por um instante
+            guard confirmacaoDaTenda == nil else { return }
+            confirmacaoDaTenda = Task { [weak self] in
+                try? await Task.sleep(for: Dobradica.esperaDaTenda)
+                guard let self, !Task.isCancelled else { return }
+                self.confirmacaoDaTenda = nil
+                self.postura = .tenda
+                self.atualizarOrientacoes()
+            }
+            return
         }
-        return menor < Dobradica.ladoMenorDaTelaExterna
+        confirmacaoDaTenda?.cancel()
+        confirmacaoDaTenda = nil
+        if postura != nova { postura = nova }
     }
+
+    // MARK: Orientação (só no Duo)
+
+    #if canImport(UIKit)
+    // nil = o app segue o Info.plist, como sempre (iPhone comum em pé, iPad em todas).
+    var orientacoesDoDuo: UIInterfaceOrientationMask? {
+        guard ehDuo else { return nil }
+        switch postura {
+        case .fechado: return .portrait                 // D: tela externa, em pé
+        case .tenda: return .landscape                  // E: tela externa, deitada
+        case .laptop: return .allButUpsideDown          // C
+        case .aberto:
+            // Abaixo de 100° o app solta o em pé, para a pessoa poder virar para o laptop.
+            // Segurando como livro, o sistema continua em paisagem e a tela continua a caixa inteira.
+            return laptopPeloAngulo ? .allButUpsideDown : .landscape   // A e B: só paisagem
+        }
+    }
+
+    private var ultimasOrientacoes: UIInterfaceOrientationMask?
+
+    // Pede ao sistema para perguntar de novo as orientações (AppDelegate) e girar se precisar
+    private func atualizarOrientacoes() {
+        let agora = orientacoesDoDuo
+        guard agora != ultimasOrientacoes else { return }
+        ultimasOrientacoes = agora
+        for cena in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }) {
+            for janela in cena.windows {
+                janela.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
+            }
+        }
+    }
+    #else
+    private func atualizarOrientacoes() {}
+    #endif
 }
 
 #if canImport(UIKit)
-// Vista invisível que fica no fundo do app só para ouvir a dobradiça e o tamanho da janela.
-struct LeitorDaDobradica: UIViewRepresentable {
-    func makeUIView(context: Context) -> VistaDaDobradica { VistaDaDobradica() }
-    func updateUIView(_ uiView: VistaDaDobradica, context: Context) {}
-}
+// Só existe para o iPhone Duo trocar as orientações conforme a postura.
+// Fora do Duo devolve exatamente o que está no Info.plist, então nada muda no iPhone e no iPad.
+final class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication,
+                     supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
+        Dobradica.compartilhada.orientacoesDoDuo ?? AppDelegate.orientacoesDoInfoPlist
+    }
 
-final class VistaDaDobradica: UIView {
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        isUserInteractionEnabled = false
-        isAccessibilityElement = false
-        if #available(iOS 27.1, *) {
-            addInteraction(UIHingeInteraction { [weak self] _, update in
-                // Vista saindo da tela: o "sem dobradiça" dela não vale para o app
-                guard let self, self.window != nil || update.hinge != nil else { return }
-                let hinge = update.hinge
-                let status = hinge.map { $0.status.rawValue }
-                let angulo = hinge.map { Double($0.angle) }
-                // Depois do desenho da tela: mudar a postura no meio dele dá erro no SwiftUI
-                DispatchQueue.main.async {
-                    Dobradica.compartilhada.dobradicaMudou(status: status, angulo: angulo)
-                }
-            })
+    // As mesmas chaves que o sistema lê quando o app não responde a pergunta acima
+    private static let orientacoesDoInfoPlist: UIInterfaceOrientationMask = {
+        let info = Bundle.main.infoDictionary ?? [:]
+        let sufixo = UIDevice.current.userInterfaceIdiom == .pad ? "~ipad" : "~iphone"
+        let lista = info["UISupportedInterfaceOrientations" + sufixo] as? [String]
+            ?? info["UISupportedInterfaceOrientations"] as? [String]
+            ?? []
+        var mascara: UIInterfaceOrientationMask = []
+        for nome in lista {
+            switch nome {
+            case "UIInterfaceOrientationPortrait": mascara.insert(.portrait)
+            case "UIInterfaceOrientationPortraitUpsideDown": mascara.insert(.portraitUpsideDown)
+            case "UIInterfaceOrientationLandscapeLeft": mascara.insert(.landscapeLeft)
+            case "UIInterfaceOrientationLandscapeRight": mascara.insert(.landscapeRight)
+            default: break
+            }
         }
-    }
-
-    required init?(coder: NSCoder) { fatalError("init(coder:) não é usado") }
-
-    override func didMoveToWindow() {
-        super.didMoveToWindow()
-        avisarJanela()
-    }
-
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        avisarJanela()
-    }
-
-    private func avisarJanela() {
-        guard let window else { return }
-        let orientacao = window.windowScene?.effectiveGeometry.interfaceOrientation ?? .portrait
-        let tamanho = window.bounds.size
-        // layoutSubviews roda no meio do desenho do SwiftUI: avisa logo depois
-        DispatchQueue.main.async {
-            Dobradica.compartilhada.janelaMudou(tamanho, orientacao: orientacao)
-        }
-    }
+        return mascara.isEmpty ? .allButUpsideDown : mascara
+    }()
 }
 #endif
+
+// Ouve a dobradiça (só no iOS 27.1+, onde ela existe)
+struct OuvirADobradica: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 27.1, *) {
+            content.onHingeChange { _, novo in
+                Dobradica.compartilhada.dobradicaMudou(novo.hinge)
+            }
+        } else {
+            content
+        }
+    }
+}
