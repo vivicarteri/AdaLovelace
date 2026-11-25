@@ -1,9 +1,32 @@
 //  Dicas.swift
-//  Dicas do TipKit: ensinam os gestos de pinça e os jeitos de apagar a vela.
+//  Dicas do TipKit: ensinam a acender (pegar e riscar o fósforo), os gestos de pinça
+//  e os jeitos de apagar a vela.
 //  As regras definem quando cada dica faz sentido. A PalcoView exibe uma por vez.
 
 import SwiftUI
 import TipKit
+
+// Vela apagada: como pegar um fósforo (teste do Guilherme: não dava para saber o que tocar)
+struct DicaPegarFosforo: Tip {
+    // Ligado pela PalcoView: vela nova ou apagada, com a caixa de fósforos na tela
+    @Parameter static var podePegar: Bool = false
+
+    var title: Text { Text("Acenda a vela").font(ADAFont.font(for: .tipTitle)) }
+    var message: Text? { Text("Toque na caixa de fósforos, no canto de baixo, para pegar um fósforo.").font(ADAFont.font(for: .tipMessage)) }
+    var image: Image? { Image(systemName: "hand.tap") }
+    var rules: [Rule] { #Rule(Self.$podePegar) { $0 } }
+}
+
+// Fósforo na mão: como riscar (teste do Guilherme: pediu uma dica de como riscar)
+struct DicaRiscarFosforo: Tip {
+    // Ligado pela PalcoView: o fósforo saiu da caixa e ainda não acendeu
+    @Parameter static var fosforoNaMao: Bool = false
+
+    var title: Text { Text("Risque o fósforo").font(ADAFont.font(for: .tipTitle)) }
+    var message: Text? { Text("Arraste a cabeça do fósforo de lado, rápido, na lixa da caixinha. Depois leve a chama até o pavio.").font(ADAFont.font(for: .tipMessage)) }
+    var image: Image? { Image(systemName: "hand.draw") }
+    var rules: [Rule] { #Rule(Self.$fosforoNaMao) { $0 } }
+}
 
 // Dentro da caixa → teatro de sombras
 struct DicaSairDaCaixa: Tip {

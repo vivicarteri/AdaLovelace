@@ -953,7 +953,9 @@ enum CamadaDaSombra: CaseIterable {
 struct TomDaSombraDoCeu: ViewModifier {
     var ativo: Bool
     // ⚙️ Cor da parte clara do desenho na sombra (0 = preto; mais alto = detalhes mais visíveis)
-    static let tom = Color(white: 0.2)
+    // Preto: a sombra é só a SILHUETA, como uma sombra de verdade. Com 0,2 ainda dava para ver
+    // os detalhes de dentro do desenho (as fitas do coração, os riscos), e não devia.
+    static let tom = Color.black
 
     func body(content: Content) -> some View {
         if ativo {

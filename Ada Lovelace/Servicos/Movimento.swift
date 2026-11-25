@@ -42,9 +42,19 @@ final class Movimento: ObservableObject {
     // da chama descansar quando o aparelho fica parado. Não é @Published (muda a toda hora).
     private(set) var mexeuEm = Date()
 
+    // Última vez que o aparelho foi mexido RÁPIDO (pegar, apoiar numa garrafa, apertar os botões).
+    // O sopro usa para não confundir o barulho desses movimentos com alguém soprando.
+    private(set) var sacudiuEm = Date.distantPast
+
+    // ⚙️ Quanto a gravidade precisa mudar de um quadro para o outro (1/30 s) para contar como
+    // mexida rápida. 0,02 ≈ 35° por segundo: a mão parada segurando o celular não chega nisso.
+    static let mexidaRapida: Double = 0.02
+
     #if os(iOS)
     // Em pé é 0° e de lado é 90°. A projeção da gravidade no topo vale -cos(ângulo).
-    private static let gravidadeMinimaParaApagar = -cos(100 * Double.pi / 180)
+    // ⚙️ Só apaga quando o celular fica BEM de cabeça para baixo (135°). Antes era 100°:
+    // deitar o celular de lado (90°) e passar um pouquinho já apagava a vela (teste da Sofia).
+    private static let gravidadeMinimaParaApagar = -cos(135 * Double.pi / 180)
     private let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "AdaLovelace", category: "Movimento")
     // Onde era o "para cima" da tela quando a vela foi acesa. O "virar para apagar" é medido
     // a partir daqui, e não da tela de agora: no iPad a tela gira junto quando a pessoa
@@ -55,6 +65,7 @@ final class Movimento: ObservableObject {
     // Gravidade da última vez que contou como "mexeu". Usamos a gravidade inteira (x, y, z),
     // e não o ângulo: com o celular deitado na mesa o ângulo vira ruído, a gravidade não.
     private var gravidadeDeReferencia: CMAcceleration?
+    private var gravidadeAnterior: CMAcceleration?
     #endif
 
     func iniciar() {
@@ -64,6 +75,7 @@ final class Movimento: ObservableObject {
         mudouEm = nil
         invertido = false
         gravidadeDeReferencia = nil
+        gravidadeAnterior = nil
         manager.deviceMotionUpdateInterval = 1.0 / 30.0
 
         manager.startDeviceMotionUpdates(to: .main) { [weak self] dados, erro in
@@ -92,7 +104,18 @@ final class Movimento: ObservableObject {
             // A diferença é ajustada para o caminho curto: assim o giro não dá a volta
             // ao passar de +180° para -180° (celular de cabeça para baixo).
             self.angulo = Movimento.aproximar(de: self.angulo, para: alvo, passo: 0.2)
-            self.anguloLento = Movimento.aproximar(de: self.anguloLento, para: self.angulo, passo: 0.05)
+            // ⚙️ 0,008: as sombras acompanham a chama BEM devagar (era 0,05 e depois 0,02; o time
+            // ainda achou rápido). Só as sombras usam este ângulo.
+            self.anguloLento = Movimento.aproximar(de: self.anguloLento, para: self.angulo, passo: 0.008)
+
+            // Mexeu rápido? (comparando com o quadro anterior)
+            if let anterior = self.gravidadeAnterior {
+                let dx = g.x - anterior.x, dy = g.y - anterior.y, dz = g.z - anterior.z
+                if (dx * dx + dy * dy + dz * dz).squareRoot() >= Movimento.mexidaRapida {
+                    self.sacudiuEm = Date()
+                }
+            }
+            self.gravidadeAnterior = g
 
             // Mexeu de verdade? (distância entre a gravidade de agora e a de referência)
             if let ref = self.gravidadeDeReferencia {

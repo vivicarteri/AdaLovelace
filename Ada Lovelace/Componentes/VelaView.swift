@@ -58,24 +58,10 @@ struct VelaView: View {
                 .frame(width: largura, height: alturaCera)
             }
 
-            // Furinhos de onde a pessoa já tentou espetar
-            ForEach(marcas) { marca in
-                Circle()
-                    .fill(Cores.tinta.opacity(0.45))
-                    .frame(width: 5, height: 5)
-                    .offset(x: CGFloat(marca.lado) * largura * 0.36,
-                            y: -CGFloat(marca.altura) * alturaCheia + 2.5)
-            }
-
-            // Enfeites que ainda não caíram
-            ForEach(enfeites.filter { !caidos.contains($0.id) }) { enfeite in
-                EnfeiteView(tipo: enfeite.tipo, lado: enfeite.lado, largura: largura)
-                    .offset(x: CGFloat(enfeite.lado) * largura * 0.62,
-                            y: -CGFloat(enfeite.altura) * alturaCheia
-                               + EnfeiteView.alturaDoAlfinete(enfeite.tipo, largura: largura))
-                    .transition(.asymmetric(insertion: .opacity,
-                                            removal: .offset(y: alturaCheia).combined(with: .opacity)))
-            }
+            // Furinhos e enfeites, ESPETADOS na borda de verdade da cera (teste da Sofia: antes eles
+            // ficavam numa distância fixa do meio e, na vela nova, que é meio torta, alguns
+            // flutuavam do lado sem encostar). A agulha some dentro da cera, como um alfinete de verdade.
+            furinhosEEnfeites
 
             // Pavio (o da arte já vem desenhado), chama e fumaça
             ZStack(alignment: .bottom) {
@@ -107,6 +93,92 @@ struct VelaView: View {
         .animation(.easeIn(duration: Haptics.tempoQueda), value: caidos)
         // Acender tem que parecer instantâneo (~100 ms); apagar pode continuar macio (a fumaça cobre).
         .animation(.easeOut(duration: acesa ? 0.1 : 0.4), value: acesa)
+    }
+
+    private var furinhosEEnfeites: some View {
+        let larguraTotal = largura * 3
+        let alturaTotal = alturaCheia + espacoChama
+        let meioX = larguraTotal / 2
+        return ZStack {
+            // Furinhos de onde a pessoa já tentou espetar (um pouquinho para dentro da borda)
+            ForEach(marcas) { marca in
+                let h = CGFloat(marca.altura) * alturaCheia
+                let borda = bordaDaCera(lado: marca.lado, altura: h)
+                Circle()
+                    .fill(Cores.tinta.opacity(0.45))
+                    .frame(width: 5, height: 5)
+                    .position(x: meioX + borda + (marca.lado < 0 ? 4 : -4), y: alturaTotal - h)
+            }
+
+            // Enfeites que ainda não caíram
+            ForEach(enfeites.filter { !caidos.contains($0.id) }) { enfeite in
+                let h = CGFloat(enfeite.altura) * alturaCheia
+                let borda = meioX + bordaDaCera(lado: enfeite.lado, altura: h)
+                let meio = VelaView.meioDoEnfeite(enfeite.tipo, estilo: enfeite.desenho, lado: enfeite.lado,
+                                                  altura: h, largura: largura, alturaCera: alturaCheia)
+                EnfeiteView(tipo: enfeite.tipo, lado: enfeite.lado, largura: largura, estilo: enfeite.desenho)
+                    .position(x: meioX + meio.x, y: alturaTotal - h + meio.y)
+                    // Só aparece o que está FORA da cera: a ponta da agulha fica escondida dentro
+                    .mask(alignment: enfeite.lado < 0 ? .leading : .trailing) {
+                        Rectangle().frame(width: max(0, enfeite.lado < 0 ? borda : larguraTotal - borda))
+                    }
+                    .transition(.asymmetric(insertion: .opacity,
+                                            removal: .offset(y: alturaCheia).combined(with: .opacity)))
+            }
+        }
+        .frame(width: larguraTotal, height: alturaTotal)
+    }
+
+    // A borda é medida na vela INTEIRA (como na hora de espetar). Antes ela era medida na vela
+    // derretendo: o desenho do corpo estica conforme a cera desce, a borda mudava um pouquinho
+    // a cada instante e os enfeites ficavam escorregando de lado com a vela acesa.
+    private func bordaDaCera(lado: Double, altura h: CGFloat) -> CGFloat {
+        VelaView.bordaDaCera(lado: lado, altura: h, largura: largura, alturaCera: alturaCheia)
+    }
+
+    // Onde fica a borda da cera (x, em pontos, a partir do meio da vela) a "h" pontos acima da base.
+    // Faz a mesma conta da montagem da vela (corpoComArte): a peça de cima tem altura fixa e o
+    // corpo estica ou encolhe conforme o tamanho da vela.
+    static func bordaDaCera(lado: Double, altura h: CGFloat, largura: CGFloat, alturaCera: CGFloat) -> CGFloat {
+        let sinal: CGFloat = lado < 0 ? -1 : 1
+        guard arteExiste("velaCorpo") else { return sinal * largura / 2 }
+        let reserva = sinal * largura * 0.42
+        let s = largura / ArteVela.largura
+        let pixelParaPonto = ArteVela.k * s          // pixel do desenho da Georgia → ponto na tela
+        let topo = (ArteVela.topoBaixo - ArteVela.corpoTopo) * s
+        let inteiro = (ArteVela.corpoBaixo - ArteVela.corpoTopo) * s
+        let liso = (ArteVela.corpoBaixo - ArteVela.topoBaixo) * s
+        let escondido = ArteVela.escondido * s
+        let distanciaDoTopo = alturaCera - h
+
+        if distanciaDoTopo < topo {
+            guard let linhas = PerfilDaVela.topo,
+                  let px = PerfilDaVela.borda(linhas, fracao: max(0, distanciaDoTopo) / topo, lado: lado)
+            else { return reserva }
+            return px * pixelParaPonto
+        }
+        let corpo = max(1, alturaCera + escondido - topo)
+        let alturaDesenho = liso > 0 ? corpo * inteiro / liso : corpo
+        let y = (distanciaDoTopo - topo) + (alturaDesenho - corpo)
+        guard let linhas = PerfilDaVela.corpo,
+              let px = PerfilDaVela.borda(linhas, fracao: y / alturaDesenho, lado: lado)
+        else { return reserva }
+        return px * pixelParaPonto
+    }
+
+    // Onde fica o MEIO do desenho do enfeite, a partir do ponto (meio da vela, linha onde ele espeta).
+    // A ponta da agulha entra um pouco na cera, bem na borda.
+    static func meioDoEnfeite(_ tipo: TipoEnfeite, estilo: Int, lado: Double, altura h: CGFloat,
+                              largura: CGFloat, alturaCera: CGFloat) -> CGPoint {
+        let borda = bordaDaCera(lado: lado, altura: h, largura: largura, alturaCera: alturaCera)
+        let tamanho = EnfeiteView.tamanho(tipo, estilo: estilo, largura: largura)
+        let ponta = EnfeiteView.ponta(tipo, estilo: estilo, largura: largura)   // no desenho do lado esquerdo
+        let enterrado = EnfeiteView.enterrado(tipo, estilo: estilo, largura: largura)
+        let daPontaAoMeio = ponta.x - tamanho.width / 2
+        let x = lado < 0
+            ? borda + enterrado - daPontaAoMeio     // esquerda: a ponta aponta para a direita (para dentro)
+            : borda - enterrado + daPontaAoMeio     // direita: o desenho é espelhado
+        return CGPoint(x: x, y: tamanho.height / 2 - ponta.y)
     }
 
     // Vela da Georgia, montada com as DUAS peças que ela desenhou:
@@ -171,44 +243,122 @@ private struct Escorridos: View {
     }
 }
 
-// Alfinete (espetado de lado) ou penduricalho (estrelinha pendurada)
+// Alfinete (espetado de lado) ou penduricalho (estrelinha pendurada).
+// O desenho é feito para o lado ESQUERDO da vela: cabeça para fora, agulha apontando para a vela.
+// Os alfinetes são os da Georgia (estrela, coração e bolinha), deitados.
 struct EnfeiteView: View {
     var tipo: TipoEnfeite
     var lado: Double = 1
     var largura: CGFloat
+    var estilo: Int = 0
+
+    // Medidas dos desenhos "alfinete1/2/3", em pixels da Georgia (mesma escala da vela).
+    // ponta = onde a agulha termina; cabeca = de onde até onde vai a cabeça (de cima para baixo).
+    private static let alfinetes: [(tamanho: CGSize, ponta: CGPoint, cabeca: ClosedRange<CGFloat>)] = [
+        (CGSize(width: 143, height: 61), CGPoint(x: 135, y: 28.5), 6...54),   // estrela
+        (CGSize(width: 153, height: 59), CGPoint(x: 147, y: 15), 7...50),     // coração
+        (CGSize(width: 140, height: 38), CGPoint(x: 133, y: 18.5), 6...31),   // bolinha
+    ]
+
+    private static var usaArte: Bool { arteExiste("alfinete1") }
+
+    // Medidas do desenho de um alfinete, em pixels da Georgia (usado nas almofadas do ateliê)
+    static func desenhoDoAlfinete(_ estilo: Int) -> (tamanho: CGSize, ponta: CGPoint) {
+        let m = medidas(estilo)
+        return (m.tamanho, m.ponta)
+    }
+    private static func escala(_ largura: CGFloat) -> CGFloat { largura / ArteVela.largura * ArteVela.k }
+    private static func medidas(_ estilo: Int) -> (tamanho: CGSize, ponta: CGPoint, cabeca: ClosedRange<CGFloat>) {
+        alfinetes[((estilo % alfinetes.count) + alfinetes.count) % alfinetes.count]
+    }
+
+    // Tamanho do desenho inteiro
+    static func tamanho(_ tipo: TipoEnfeite, estilo: Int = 0, largura: CGFloat) -> CGSize {
+        let haste = largura * 0.55
+        switch tipo {
+        case .alfinete:
+            guard usaArte else { return CGSize(width: haste + 10, height: 10) }
+            let m = medidas(estilo).tamanho, f = escala(largura)
+            return CGSize(width: m.width * f, height: m.height * f)
+        case .penduricalho:
+            return CGSize(width: haste * 0.7 + 7, height: largura * 0.35 + 23)
+        }
+    }
+
+    // Onde fica a ponta da agulha dentro do desenho (do canto de cima à esquerda)
+    static func ponta(_ tipo: TipoEnfeite, estilo: Int = 0, largura: CGFloat) -> CGPoint {
+        let t = tamanho(tipo, estilo: estilo, largura: largura)
+        switch tipo {
+        case .alfinete:
+            guard usaArte else { return CGPoint(x: t.width, y: 5) }
+            let p = medidas(estilo).ponta, f = escala(largura)
+            return CGPoint(x: p.x * f, y: p.y * f)
+        case .penduricalho:
+            return CGPoint(x: t.width, y: 3.5)
+        }
+    }
+
+    // Quanto da agulha fica enterrado na cera (o resto aparece)
+    static func enterrado(_ tipo: TipoEnfeite, estilo: Int = 0, largura: CGFloat) -> CGFloat {
+        switch tipo {
+        case .alfinete:
+            return usaArte ? tamanho(tipo, estilo: estilo, largura: largura).width * 0.22 : largura * 0.55 * 0.3
+        case .penduricalho:
+            return largura * 0.55 * 0.7 * 0.3
+        }
+    }
 
     // Altura do desenho inteiro
-    static func alturaDesenho(_ tipo: TipoEnfeite, largura: CGFloat) -> CGFloat {
-        tipo == .alfinete ? 10 : largura * 0.35 + 23
+    static func alturaDesenho(_ tipo: TipoEnfeite, estilo: Int = 0, largura: CGFloat) -> CGFloat {
+        tamanho(tipo, estilo: estilo, largura: largura).height
     }
 
     // Distância entre a parte de baixo do desenho e a linha do alfinete (onde ele espeta)
-    static func alturaDoAlfinete(_ tipo: TipoEnfeite, largura: CGFloat) -> CGFloat {
-        tipo == .alfinete ? 5 : alturaDesenho(tipo, largura: largura) - 3.5
+    static func alturaDoAlfinete(_ tipo: TipoEnfeite, estilo: Int = 0, largura: CGFloat) -> CGFloat {
+        alturaDesenho(tipo, estilo: estilo, largura: largura) - ponta(tipo, estilo: estilo, largura: largura).y
     }
 
     // Quanto o desenho sobe acima da linha onde ele espeta...
-    static func acima(_ tipo: TipoEnfeite, largura: CGFloat) -> CGFloat {
-        alturaDesenho(tipo, largura: largura) - alturaDoAlfinete(tipo, largura: largura)
+    static func acima(_ tipo: TipoEnfeite, estilo: Int = 0, largura: CGFloat) -> CGFloat {
+        ponta(tipo, estilo: estilo, largura: largura).y
     }
 
     // ...e quanto ele desce abaixo dela (o penduricalho fica pendurado, então desce bastante)
-    static func abaixo(_ tipo: TipoEnfeite, largura: CGFloat) -> CGFloat {
-        alturaDoAlfinete(tipo, largura: largura)
+    static func abaixo(_ tipo: TipoEnfeite, estilo: Int = 0, largura: CGFloat) -> CGFloat {
+        alturaDoAlfinete(tipo, estilo: estilo, largura: largura)
+    }
+
+    // O que conta para um enfeite não ficar EM CIMA do outro: só a cabeça espetada.
+    // (Vale para todos os desenhos de alfinete: usa o maior deles.)
+    static func ocupaAcima(_ tipo: TipoEnfeite, largura: CGFloat) -> CGFloat {
+        guard tipo == .alfinete else { return 3.5 }
+        guard usaArte else { return 5 }
+        return (alfinetes.map { $0.ponta.y - $0.cabeca.lowerBound }.max() ?? 0) * escala(largura)
+    }
+
+    static func ocupaAbaixo(_ tipo: TipoEnfeite, largura: CGFloat) -> CGFloat {
+        guard tipo == .alfinete else { return 3.5 }
+        guard usaArte else { return 5 }
+        return (alfinetes.map { $0.cabeca.upperBound - $0.ponta.y }.max() ?? 0) * escala(largura)
     }
 
     var body: some View {
         let haste = largura * 0.55
+        let tamanho = EnfeiteView.tamanho(tipo, estilo: estilo, largura: largura)
         Group {
             switch tipo {
             case .alfinete:
-                Arte("alfinete") {
+                if EnfeiteView.usaArte {
+                    Image("alfinete\(((estilo % 3) + 3) % 3 + 1)")
+                        .resizable()
+                        .frame(width: tamanho.width, height: tamanho.height)
+                } else {
                     HStack(spacing: 0) {
                         Circle().fill(Cores.cortina).frame(width: 10, height: 10)
                         Capsule().fill(Cores.tinta.opacity(0.8)).frame(width: haste, height: 2)
                     }
+                    .frame(width: tamanho.width, height: tamanho.height)
                 }
-                .frame(width: haste + 10, height: 10)
             case .penduricalho:
                 Arte("penduricalho") {
                     VStack(spacing: 0) {
@@ -227,12 +377,80 @@ struct EnfeiteView: View {
                     }
                     .frame(width: haste * 0.7 + 7)
                 }
-                .frame(width: haste * 0.7 + 7, height: EnfeiteView.alturaDesenho(.penduricalho, largura: largura), alignment: .top)
+                .frame(width: tamanho.width, height: tamanho.height, alignment: .top)
             }
         }
         // O desenho é feito para o lado esquerdo; do lado direito espelhamos
         .scaleEffect(x: lado < 0 ? 1 : -1, y: 1)
         .accessibilityHidden(true)
+    }
+}
+
+// MARK: - Borda da cera
+//
+// Onde fica a borda da vela em cada altura, lida dos próprios desenhos da Georgia
+// ("velaTopo" e "velaCorpo"). A vela não é um retângulo: ela é meio torta e a cera de cima
+// é mais larga. Os enfeites e os furinhos usam isso para ficarem na borda de verdade.
+// A leitura é feita uma vez só (na primeira vez que precisa) e fica guardada.
+enum PerfilDaVela {
+    struct Linhas {
+        let largura: CGFloat                                        // largura da imagem, em pixels
+        let bordas: [(esquerda: CGFloat, direita: CGFloat)?]        // uma por linha (nil = linha vazia)
+    }
+
+    static let topo = ler("velaTopo")
+    static let corpo = ler("velaCorpo")
+
+    private static func ler(_ nome: String) -> Linhas? {
+        #if canImport(UIKit)
+        guard let imagem = UIImage(named: nome)?.cgImage else { return nil }
+        let w = imagem.width, h = imagem.height
+        guard w > 0, h > 0 else { return nil }
+        var pixels = [UInt8](repeating: 0, count: w * h * 4)
+        let desenhou = pixels.withUnsafeMutableBytes { bytes -> Bool in
+            guard let contexto = CGContext(data: bytes.baseAddress, width: w, height: h,
+                                           bitsPerComponent: 8, bytesPerRow: w * 4,
+                                           space: CGColorSpaceCreateDeviceRGB(),
+                                           bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+            else { return false }
+            contexto.draw(imagem, in: CGRect(x: 0, y: 0, width: w, height: h))
+            return true
+        }
+        guard desenhou else { return nil }
+
+        var bordas: [(esquerda: CGFloat, direita: CGFloat)?] = []
+        bordas.reserveCapacity(h)
+        for y in 0..<h {
+            let linha = y * w * 4
+            var esquerda = -1
+            for x in 0..<w where pixels[linha + x * 4 + 3] > 128 { esquerda = x; break }
+            guard esquerda >= 0 else { bordas.append(nil); continue }
+            var direita = esquerda
+            for x in stride(from: w - 1, through: esquerda, by: -1) where pixels[linha + x * 4 + 3] > 128 {
+                direita = x; break
+            }
+            bordas.append((CGFloat(esquerda), CGFloat(direita + 1)))
+        }
+        return Linhas(largura: CGFloat(w), bordas: bordas)
+        #else
+        return nil
+        #endif
+    }
+
+    // Borda na altura "fracao" do desenho (0 = topo, 1 = fim), em pixels a partir do meio da imagem.
+    // Se a linha estiver vazia, usa a linha com desenho mais perto.
+    static func borda(_ linhas: Linhas, fracao: CGFloat, lado: Double) -> CGFloat? {
+        let n = linhas.bordas.count
+        guard n > 0, fracao.isFinite else { return nil }
+        let alvo = min(n - 1, max(0, Int(fracao * CGFloat(n))))
+        for distancia in 0..<n {
+            for y in [alvo + distancia, alvo - distancia] where y >= 0 && y < n {
+                if let b = linhas.bordas[y] {
+                    return (lado < 0 ? b.esquerda : b.direita) - linhas.largura / 2
+                }
+            }
+        }
+        return nil
     }
 }
 
@@ -369,10 +587,10 @@ extension TamanhoEnfeite {
         let altura = max(alturaCheia, 1)
         func fracao(_ pontos: CGFloat) -> Double { Double(pontos / altura) }
         return TamanhoEnfeite(
-            alfineteAcima: fracao(EnfeiteView.acima(.alfinete, largura: largura)),
-            alfineteAbaixo: fracao(EnfeiteView.abaixo(.alfinete, largura: largura)),
-            penduricalhoAcima: fracao(EnfeiteView.acima(.penduricalho, largura: largura)),
-            penduricalhoAbaixo: fracao(EnfeiteView.abaixo(.penduricalho, largura: largura))
+            alfineteAcima: fracao(EnfeiteView.ocupaAcima(.alfinete, largura: largura)),
+            alfineteAbaixo: fracao(EnfeiteView.ocupaAbaixo(.alfinete, largura: largura)),
+            penduricalhoAcima: fracao(EnfeiteView.ocupaAcima(.penduricalho, largura: largura)),
+            penduricalhoAbaixo: fracao(EnfeiteView.ocupaAbaixo(.penduricalho, largura: largura))
         )
     }
 }

@@ -191,15 +191,24 @@ struct CaixaFosforoView: View {
 
     static let emRepouso: CGFloat = 0.28
 
-    static func altura(largura: CGFloat) -> CGFloat { largura * 0.62 }
+    // CAIXA DE FÓSFOROS NOVA DA GEORGIA (25/11): "Caixa_Fósforos_Cheia" separada em duas peças:
+    //   "caixaFosforo"   = a luva (capa), com a lixa hachurada em cima (562 × 384 px)
+    //   "gavetaFosforos" = a parte da gaveta que sai da luva, com os fósforos (217 × 384 px)
+    // Com a gaveta toda para dentro, fica igual à "Caixa_Fósforos_Fechada".
+    private static let luvaArte = CGSize(width: 562, height: 384)
+    private static let gavetaLargura: CGFloat = 217
+    private static let gavetaAberta: CGFloat = -207     // x da gaveta toda aberta (a partir da luva)
+    private static let corridaArte: CGFloat = 184       // quanto ela anda entre fechada e aberta
+
+    static func altura(largura: CGFloat) -> CGFloat { largura * luvaArte.height / luvaArte.width }
 
     // Quanto a gaveta anda para a esquerda quando abre
-    static func corrida(largura: CGFloat) -> CGFloat { largura * 0.44 }
+    static func corrida(largura: CGFloat) -> CGFloat { largura * corridaArte / luvaArte.width }
 
-    // A faixa de riscar, em coordenadas de dentro da própria caixa
+    // A faixa de riscar (a parte hachurada de cima), em coordenadas de dentro da própria caixa
     static func faixaDaLixa(largura: CGFloat) -> CGRect {
         let h = altura(largura: largura)
-        return CGRect(x: largura * 0.04, y: h * 0.08, width: largura * 0.92, height: h * 0.26)
+        return CGRect(x: largura * 0.041, y: h * 0.052, width: largura * 0.916, height: h * 0.229)
     }
 
     var body: some View {
@@ -208,6 +217,13 @@ struct CaixaFosforoView: View {
 
         ZStack(alignment: .leading) {
             // GAVETA (atrás da luva): desliza para a esquerda e mostra os fósforos deitados
+            if arteExiste("gavetaFosforos") {
+                let f = largura / CaixaFosforoView.luvaArte.width
+                Image("gavetaFosforos")
+                    .resizable()
+                    .frame(width: CaixaFosforoView.gavetaLargura * f, height: h)
+                    .offset(x: (CaixaFosforoView.gavetaAberta + (1 - aberta) * CaixaFosforoView.corridaArte) * f)
+            } else {
             ZStack(alignment: .leading) {
                 // O fundo da gaveta é mais escuro, para ela ler como "dentro da caixa"
                 RoundedRectangle(cornerRadius: 4)
@@ -227,6 +243,7 @@ struct CaixaFosforoView: View {
             }
             .frame(width: largura * 0.90, height: h * 0.82)
             .offset(x: -aberta * CaixaFosforoView.corrida(largura: largura))
+            }
 
             // LUVA (na frente): o corpo da caixa, com a lixa e o desenho
             Arte("caixaFosforo") {
@@ -311,9 +328,19 @@ struct FosforoView: View {
         return CGSize(width: -comprimento * sin(a), height: comprimento * cos(a))
     }
 
+    // Fósforo da Georgia (25/11): o desenho dela veio deitado (cabeça à esquerda) e foi
+    // guardado EM PÉ, com a cabeça em cima ("fosforo", 58 × 324 px). Ele ocupa 95% da altura
+    // da vista: assim a cabeça fica nos mesmos 10% de cima e o pé nos mesmos 95% de antes.
+    private static let arte = CGSize(width: 58, height: 324)
+
     var body: some View {
-        Arte(aceso ? "fosforoAceso" : "fosforo") {
-            ZStack(alignment: .top) {
+        ZStack(alignment: .top) {
+            if arteExiste("fosforo") {
+                let altura = tamanho * 0.95
+                Image("fosforo")
+                    .resizable()
+                    .frame(width: altura * FosforoView.arte.width / FosforoView.arte.height, height: altura)
+            } else {
                 Capsule()
                     .fill(Color(red: 0.85, green: 0.7, blue: 0.48))
                     .overlay(Capsule().stroke(Cores.tinta, lineWidth: 1))
@@ -323,10 +350,11 @@ struct FosforoView: View {
                     .fill(Cores.cortina)
                     .overlay(Ellipse().stroke(Cores.tinta, lineWidth: 1))
                     .frame(width: tamanho * 0.14, height: tamanho * 0.2)
-                if aceso {
-                    ChamaView(tamanho: tamanho * 0.4)
-                        .offset(y: -tamanho * 0.28)
-                }
+            }
+            // Aceso: a chama (a mesma da vela) sai da cabeça
+            if aceso {
+                ChamaView(tamanho: tamanho * 0.4)
+                    .offset(y: -tamanho * 0.28)
             }
         }
         .frame(width: tamanho * 0.4, height: tamanho)
