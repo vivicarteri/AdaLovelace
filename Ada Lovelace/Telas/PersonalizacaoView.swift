@@ -41,6 +41,8 @@ struct PersonalizacaoView: View {
     private let acimaDoDedo: CGFloat = 36
 
     @Namespace private var rotorEnfeites   // VoiceOver: rotor "Enfeites"
+    @AccessibilityFocusState private var focoNaVela: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduzirMovimento
 
     init(config: VelaConfig, haptics: Haptics, fechar: @escaping () -> Void, confirmar: @escaping (VelaConfig) -> Void) {
         self.haptics = haptics
@@ -96,6 +98,29 @@ struct PersonalizacaoView: View {
                 }
             }
         }
+        // Ao entrar, o VoiceOver começa na vela (antes ficava no lugar do toque anterior, no Confirmar).
+        // Espera a cortina subir; com Reduzir movimento a tela só aparece, sem cortina.
+        .task {
+            if !reduzirMovimento { try? await Task.sleep(for: .seconds(1.6)) }
+            focoNaVela = true
+        }
+    }
+
+    // O tipo de enfeite da aba escolhida (nil na aba de duração)
+    private var tipoDaAba: TipoEnfeite? {
+        switch aba {
+        case .tempo: nil
+        case .alfinete: .alfinete
+        case .penduricalho: .penduricalho
+        }
+    }
+
+    private var dicaDaVela: String {
+        switch tipoDaAba {
+        case .alfinete: "Use as ações para inserir alfinetes, e o rotor Enfeites para visitar cada um"
+        case .penduricalho: "Use as ações para inserir penduricalhos, e o rotor Enfeites para visitar cada um"
+        case nil: ""
+        }
     }
 
     // MARK: Partes da tela
@@ -149,18 +174,20 @@ struct PersonalizacaoView: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Vela")
                 .accessibilityValue("\(DescricaoDaDuracao.texto(minutos: rascunho.minutos)). \(rascunho.quantos(.alfinete)) alfinetes e \(rascunho.quantos(.penduricalho)) penduricalhos")
-                .accessibilityHint("Use as ações para inserir enfeites, e o rotor Enfeites para visitar cada um")
+                .accessibilityHint(dicaDaVela)
+                // As ações seguem a aba: na Duração não tem nenhuma (a duração fica no ajustável);
+                // em Alfinetes e Penduricalhos, só as daquele tipo.
                 .accessibilityActions {
-                    ForEach(LugarNaVela.allCases, id: \.self) { lugar in
-                        Button("Inserir alfinete \(lugar.texto)") { colocarPeloVoiceOver(.alfinete, lugar, g) }
-                    }
-                    ForEach(LugarNaVela.allCases, id: \.self) { lugar in
-                        Button("Inserir penduricalho \(lugar.texto)") { colocarPeloVoiceOver(.penduricalho, lugar, g) }
-                    }
-                    if let ultimo = rascunho.enfeites.last {
-                        Button("Tirar o último enfeite") { remover(ultimo) }
+                    if let tipo = tipoDaAba {
+                        ForEach(LugarNaVela.allCases, id: \.self) { lugar in
+                            Button("Inserir \(tipo.nome) \(lugar.texto)") { colocarPeloVoiceOver(tipo, lugar, g) }
+                        }
+                        if let ultimo = rascunho.enfeites.last(where: { $0.tipo == tipo }) {
+                            Button("Tirar o último \(tipo.nome)") { remover(ultimo) }
+                        }
                     }
                 }
+                .accessibilityFocused($focoNaVela)
                 // A vela muda de tamanho junto com o dedo (antes uma mola deixava a vela atrasada
                 // em relação à bolinha)
                 .position(x: g.centroX, y: g.baseY - (alturaCheia + espacoChama) / 2)
@@ -243,15 +270,18 @@ struct PersonalizacaoView: View {
                     }
             )
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Tamanho da vela")
-            // Sem números, como na tela: só a sensação da duração
-            .accessibilityValue(DescricaoDaDuracao.texto(minutos: rascunho.minutos))
-            .accessibilityHint("Deslize para cima ou para baixo com um dedo para mudar a duração")
-            .accessibilityInputLabels(["Tamanho da vela", "Duração", "Tempo da vela"])
+            // Sem dica: o próprio VoiceOver já fala "ajustável, deslize para cima ou para baixo"
+            .accessibilityLabel("Duração da vela")
+            // Sem minutos, como na tela: a faixa e onde a vela está nela ("2 de 4, Duração curta")
+            .accessibilityValue(DescricaoDaDuracao.valorAcessivel(minutos: rascunho.minutos))
+            .accessibilityInputLabels(["Duração da vela", "Tamanho da vela", "Duração", "Tempo da vela"])
+            // No VoiceOver cada deslize anda 5 minutos (antes andava 1/20 do slider, e o valor
+            // muitas vezes não mudava). O arraste com o dedo continua com a conta de sempre.
             .accessibilityAdjustableAction { direcao in
+                let passo = DescricaoDaDuracao.passoDoVoiceOver
                 switch direcao {
-                case .increment: mudarTamanho(rascunho.posicaoSlider + 0.05)
-                case .decrement: mudarTamanho(rascunho.posicaoSlider - 0.05)
+                case .increment: mudarDuracao(rascunho.minutos + passo)
+                case .decrement: mudarDuracao(rascunho.minutos - passo)
                 @unknown default: break
                 }
             }
@@ -438,6 +468,11 @@ struct PersonalizacaoView: View {
         if rascunho.minutos != antes { haptics.tique() }
 
         // Se a vela ficou menor, os enfeites continuam na mesma altura relativa (não precisa mexer)
+    }
+
+    private func mudarDuracao(_ minutos: Int) {
+        let limitado = min(max(minutos, Int(VelaConfig.minimoMinutos)), Int(VelaConfig.maximoMinutos))
+        mudarTamanho(DescricaoDaDuracao.posicao(paraMinutos: limitado))
     }
 
     // VoiceOver e Controle por Voz: coloca o enfeite perto do lugar pedido (topo, metade ou base).

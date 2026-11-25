@@ -44,16 +44,46 @@ extension Sessao {
 }
 
 enum DescricaoDaDuracao {
-    // Faixas combinadas com o time (o slider vai de 10 minutos a 3 horas)
+    // Faixas combinadas com o time (o slider vai de 10 minutos a 3 horas).
+    // Os minutos andam de 5 em 5 (VelaConfig.minutos), então cada faixa tem uma conta certa de passos.
+    struct Faixa {
+        let nome: String
+        let minutos: ClosedRange<Int>
+        var passos: Int { (minutos.upperBound - minutos.lowerBound) / passoDoVoiceOver + 1 }
+    }
+
+    static let passoDoVoiceOver = 5   // minutos por deslize no VoiceOver
+
+    static let faixas: [Faixa] = [
+        Faixa(nome: "Duração mínima", minutos: Int(VelaConfig.minimoMinutos)...Int(VelaConfig.minimoMinutos)),
+        Faixa(nome: "Duração curta", minutos: 15...30),
+        Faixa(nome: "Duração curta a média", minutos: 35...60),
+        Faixa(nome: "Duração média", minutos: 65...120),
+        Faixa(nome: "Duração longa", minutos: 125...150),
+        Faixa(nome: "Duração extra longa", minutos: 155...Int(VelaConfig.maximoMinutos))
+    ]
+
+    static func faixa(minutos: Int) -> Faixa {
+        faixas.first { minutos <= $0.minutos.upperBound } ?? faixas[faixas.count - 1]
+    }
+
     static func texto(minutos: Int) -> String {
-        switch minutos {
-        case ...Int(VelaConfig.minimoMinutos): return "Duração mínima"
-        case ...30: return "Duração curta"
-        case ...60: return "Duração curta a média"
-        case ...120: return "Duração média"
-        case ...150: return "Duração longa"
-        default: return "Duração extra longa"
-        }
+        faixa(minutos: minutos).nome
+    }
+
+    // O valor do ajustável no VoiceOver: "2 de 4, Duração curta".
+    // A faixa com um passo só fala apenas o nome ("Duração mínima").
+    static func valorAcessivel(minutos: Int) -> String {
+        let f = faixa(minutos: minutos)
+        guard f.passos > 1 else { return f.nome }
+        let posicao = (min(max(minutos, f.minutos.lowerBound), f.minutos.upperBound) - f.minutos.lowerBound) / passoDoVoiceOver + 1
+        return "\(posicao) de \(f.passos), \(f.nome)"
+    }
+
+    // A conta inversa de VelaConfig.minutos(para:): a posição do slider que dá estes minutos
+    static func posicao(paraMinutos minutos: Int) -> Double {
+        let m = min(max(Double(minutos), VelaConfig.minimoMinutos), VelaConfig.maximoMinutos)
+        return log(m / VelaConfig.minimoMinutos) / log(VelaConfig.maximoMinutos / VelaConfig.minimoMinutos)
     }
 }
 
