@@ -123,15 +123,19 @@ struct CaixaTeatroView: View {
         ZStack {
             // Corpo da caixa (quando a arte da Georgia chegar, entra inteira aqui)
             Arte("caixaTeatro") {
+                // Os cantos de cima acompanham o telhado arredondado
+                let forma = UnevenRoundedRectangle(topLeadingRadius: caixa.width * 0.09, bottomLeadingRadius: 5,
+                                                   bottomTrailingRadius: 5, topTrailingRadius: caixa.width * 0.09)
                 ZStack {
-                    RoundedRectangle(cornerRadius: 5).fill(Cores.papel)
+                    forma.fill(Cores.papel)
                     // Colunas listradas dos dois lados, como a frente de um teatrinho
                     HStack(spacing: a.width) {
                         ColunaListrada(largura: medidas.coluna)
                         ColunaListrada(largura: medidas.coluna)
                     }
-                    RoundedRectangle(cornerRadius: 5).stroke(Cores.tinta, lineWidth: 2)
+                    forma.stroke(Cores.tinta, lineWidth: 2)
                 }
+                .clipShape(forma)
             }
             .frame(width: caixa.width, height: caixa.height)
 
@@ -179,6 +183,19 @@ struct CaixaTeatroView: View {
                     .offset(y: -medidas.telhado * 0.35)
             }
             .frame(width: caixa.width, height: medidas.telhado, alignment: .bottom)
+            // Topo arredondado (pedido da mentora: a quina reta destoava do resto do app).
+            // A máscara desce além do telhado, para não cortar as franjas de baixo.
+            .mask(alignment: .top) {
+                UnevenRoundedRectangle(topLeadingRadius: caixa.width * 0.09, topTrailingRadius: caixa.width * 0.09)
+                    .frame(height: medidas.telhado + caixa.width / 6)
+            }
+            .overlay(alignment: .top) {
+                UnevenRoundedRectangle(topLeadingRadius: caixa.width * 0.09, topTrailingRadius: caixa.width * 0.09)
+                    .trim(from: 0, to: 1)
+                    .stroke(Cores.tinta, lineWidth: 2)
+                    .frame(height: medidas.telhado * 0.6)
+                    .mask(alignment: .top) { Rectangle().frame(height: medidas.telhado * 0.45) }
+            }
             .offset(y: -caixa.height / 2 + medidas.telhado / 2)
 
             // Palco embaixo, um pouquinho mais largo que a caixa
