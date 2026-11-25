@@ -162,13 +162,21 @@ enum DescricaoDaCena {
     }
 }
 
-// Elementos invisíveis, um por camada, mais o estado da vela, com o rotor "Camadas de papel".
+// Elementos invisíveis, um por camada, com o rotor "Camadas de papel".
 // Eles ficam por último na ordem do VoiceOver: quem desliza pela tela ouve primeiro os botões.
+//
+// A última entrada do rotor é "Verificar estado da vela":
+// - Dentro da caixa a vela já é um elemento na tela: passe estadoDaVela = nil e marque a vela
+//   com .accessibilityRotorEntry(id: CamadasDaCenaAcessiveis.idDaVela, in: rotor).
+//   (Antes havia um quadrado só para isso, e o estado da vela era lido duas vezes.)
+// - No teatro de sombras a vela fica dentro da caixa: passe o texto e um ponto pequeno faz esse papel.
+// O rotor em si é declarado no container de fora (.rotorCamadasDePapel), que contém a vela e as camadas.
 struct CamadasDaCenaAcessiveis: View {
-    var camadas: [CamadaDescrita]
-    var estadoDaVela: String
+    static let idDaVela = "estadoDaVela"
 
-    @Namespace private var rotor
+    var camadas: [CamadaDescrita]
+    var estadoDaVela: String? = nil
+    var rotor: Namespace.ID
 
     var body: some View {
         GeometryReader { geo in
@@ -176,37 +184,45 @@ struct CamadasDaCenaAcessiveis: View {
                 ForEach(camadas) { camada in
                     let alto = geo.size.height * camada.faixa.lowerBound
                     let baixo = geo.size.height * camada.faixa.upperBound
-                    Alvo()
+                    AlvoAcessivel()
                         .frame(width: geo.size.width * 0.7, height: max(1, baixo - alto))
                         .position(x: geo.size.width / 2, y: (alto + baixo) / 2)
                         .accessibilityElement()
                         .accessibilityLabel(camada.descricao)
                         .accessibilityRotorEntry(id: camada.id, in: rotor)
                 }
-                // Estado da vela: um ponto pequeno, para não cobrir os botões no toque do VoiceOver
-                Alvo()
-                    .frame(width: 44, height: 44)
-                    .position(x: geo.size.width * 0.82, y: geo.size.height * 0.74)
-                    .accessibilityElement()
-                    .accessibilityLabel("Estado da vela")
-                    .accessibilityValue(estadoDaVela)
-                    .accessibilityRotorEntry(id: "estadoDaVela", in: rotor)
+                if let estadoDaVela {
+                    // Um ponto pequeno, para não cobrir os botões no toque do VoiceOver
+                    AlvoAcessivel()
+                        .frame(width: 44, height: 44)
+                        .position(x: geo.size.width * 0.82, y: geo.size.height * 0.74)
+                        .accessibilityElement()
+                        .accessibilityLabel("Estado da vela")
+                        .accessibilityValue(estadoDaVela)
+                        .accessibilityRotorEntry(id: Self.idDaVela, in: rotor)
+                }
             }
         }
         .allowsHitTesting(false)
         .accessibilityElement(children: .contain)
-        .accessibilityRotor("Camadas de papel") {
-            ForEach(camadas) { camada in
-                AccessibilityRotorEntry(Text(camada.titulo), id: camada.id, in: rotor)
-            }
-            AccessibilityRotorEntry(Text("Verificar estado da vela"), id: "estadoDaVela", in: rotor)
-        }
         .accessibilitySortPriority(-1)
     }
 }
 
+extension View {
+    // O rotor "Camadas de papel": as camadas, de cima para baixo, e por último o estado da vela
+    func rotorCamadasDePapel(_ camadas: [CamadaDescrita], in rotor: Namespace.ID) -> some View {
+        accessibilityRotor("Camadas de papel") {
+            ForEach(camadas) { camada in
+                AccessibilityRotorEntry(Text(camada.titulo), id: camada.id, in: rotor)
+            }
+            AccessibilityRotorEntry(Text("Verificar estado da vela"), id: CamadasDaCenaAcessiveis.idDaVela, in: rotor)
+        }
+    }
+}
+
 // Quase transparente (e não .clear): uma vista totalmente transparente pode sumir para o VoiceOver
-private struct Alvo: View {
+struct AlvoAcessivel: View {
     var body: some View {
         Color.black.opacity(0.001)
     }

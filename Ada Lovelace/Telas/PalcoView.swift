@@ -19,6 +19,10 @@ struct PalcoView: View {
     var abrirConfiguracoes: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduzirMovimento
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverLigado
+    @Namespace private var rotorDaCena
+    @AccessibilityFocusState private var focoNoFim: Bool
+    @State private var confirmarDerreter = false   // balão "Derreter a vela até o fim?" (botão ou ações da vela)
 
     @State private var personalizando = false
     @AppStorage(Chaves.iluminacaoDramatica) private var iluminacaoDramatica = true
@@ -38,6 +42,7 @@ struct PalcoView: View {
     @State private var mostrarBotoes = true     // os botões saem de cena durante o zoom
     @State private var caixaAberta: CGFloat = CaixaFosforoView.emRepouso   // gaveta da caixa de fósforos
     @State private var dicas = TipGroup(.firstAvailable) {
+        DicaRiscarOFosforo()   // primeiro: só vale com a caixa aberta, e aí é a dica que importa
         DicaSairDaCaixa()
         DicaEntrarNaCaixa()
         DicaOutroJeitoDeApagar()
@@ -142,6 +147,15 @@ struct PalcoView: View {
         .onChange(of: podeApagarNaCaixa, initial: true) { _, podeApagar in
             DicaOutroJeitoDeApagar.velaAcesa = podeApagar
         }
+        // Com o VoiceOver não dá para fazer pinça nem riscar à mão: essas dicas não aparecem
+        .onChange(of: voiceOverLigado, initial: true) { _, ligado in
+            DicaSairDaCaixa.voiceOverLigado = ligado
+            DicaEntrarNaCaixa.voiceOverLigado = ligado
+            DicaRiscarOFosforo.voiceOverLigado = ligado
+        }
+        .onChange(of: etapa != .guardado, initial: true) { _, aberta in
+            DicaRiscarOFosforo.caixaAberta = aberta
+        }
         // O fósforo voltou para a caixa (por qualquer caminho): esquece o arraste que estava
         // no meio e fecha a gaveta. Se a vista do fósforo some no meio de um arraste (a vela
         // acendeu, ele queimou até o fim), o fim do gesto não chega; sem isto, o próximo fósforo
@@ -166,6 +180,10 @@ struct PalcoView: View {
                 Task {
                     try? await Task.sleep(for: .seconds(1.5))
                     withAnimation(.easeInOut(duration: 1.6)) { cortinaFechada = true }
+                    // Com a cortina fechada, o VoiceOver vai direto para o "Fim" e lê
+                    // "Toque duas vezes para colocar uma vela nova" (no lugar do anúncio "A vela acabou")
+                    try? await Task.sleep(for: .seconds(1.7))
+                    if sessao.estado == .acabou { focoNoFim = true }
                 }
             }
         }
@@ -208,13 +226,11 @@ struct PalcoView: View {
             CenarioView(acesa: acesa, progresso: sessao.progresso,
                         mostrarPersonagens: estado == .acesa || estado == .apagada, quadro: g.quadro)
                 .accessibilityHint(acesa ? "Use o rotor Camadas de papel para explorar a cena" : "")
-                .accessibilityActions { atalhos(g) }
 
             // VoiceOver: uma camada de papel por vez (rotor "Camadas de papel"). Fica embaixo
             // da vela e dos botões, para o toque do VoiceOver achar eles primeiro.
             if !miniatura {
-                CamadasDaCenaAcessiveis(camadas: estado == .acesa ? DescricaoDaCena.camadas(sombra: false) : [],
-                                        estadoDaVela: sessao.descricaoDaVela)
+                CamadasDaCenaAcessiveis(camadas: camadasDoRotor, rotor: rotorDaCena)
             }
 
             // Cortina lateral (arte "Cortina_Horizontal" da Georgia), ATRÁS da vela: fecha dos lados
@@ -259,11 +275,7 @@ struct PalcoView: View {
                          movimento: sessao.movimento,
                          enfeites: sessao.config.enfeites,
                          caidos: sessao.caidos)
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("Vela")
-                    .accessibilityValue(sessao.descricaoDaVela)
-                    .accessibilityHint(acesa ? "Para apagar, toque na chama ou use as ações" : "Use as ações para atalhos")
-                    .accessibilityActions { atalhos(g) }
+                    .accessibilityHidden(true)   // o VoiceOver usa o alvo "vela + prato" (velaAcessivel)
                     .position(x: g.centroX,
                               y: g.baseY - (alturaCheia + espacoChama) / 2 + (afundando ? alturaCheia + espacoChama : 0))
             }
@@ -288,6 +300,10 @@ struct PalcoView: View {
                 .position(x: g.centroX + SuporteView.desvioX(largura: g.larguraVela),
                           y: g.baseY + SuporteView.desvioY(largura: g.larguraVela))
 
+            if !miniatura {
+                velaAcessivel(g, topoCera: topoCera, espacoChama: espacoChama)
+            }
+
             // A vela acabou e a cortina fechou: letreiro de "Fim" e a cortina inteira vira
             // um botão para começar de novo (antes não tinha nenhuma pista e parecia travado).
             if estado == .acabou && cortinaFechada && !trocando && !miniatura {
@@ -303,33 +319,114 @@ struct PalcoView: View {
                     fosforo(g)
                         .opacity(mostrarBotoes ? 1 : 0)
                 }
+
+                if let dica = dicaAtual as? DicaRiscarOFosforo {
+                    dicaDoFosforo(dica, g)
+                        .opacity(mostrarBotoes ? 1 : 0)
+                }
             }
         }
         .coordinateSpace(.named("palco"))
         .accessibilityElement(children: .contain)
+        .rotorCamadasDePapel(miniatura ? [] : camadasDoRotor, in: rotorDaCena)
     }
 
-    // Atalhos do VoiceOver (menu de ações). São também a alternativa a virar o aparelho,
+    private var camadasDoRotor: [CamadaDescrita] {
+        sessao.estado == .acesa ? DescricaoDaCena.camadas(sombra: false) : []
+    }
+
+    // VoiceOver: a vela e o prato são UM elemento só (antes a moldura pegava só a vela).
+    // Vai do alto da chama até o fim do prato. O toque duplo acende ou apaga;
+    // o resto fica nas ações. É também o "Verificar estado da vela" do rotor Camadas de papel.
+    private func velaAcessivel(_ g: LayoutPalco, topoCera: CGFloat, espacoChama: CGFloat) -> some View {
+        let estado = sessao.estado
+        let alto = topoCera - espacoChama
+        let baixo = g.baseY + SuporteView.desvioY(largura: g.larguraVela) + SuporteView.altura(largura: g.larguraVela) / 2
+        // Na largura, só um pouco mais que a vela: o prato vai quase de ponta a ponta no iPhone
+        // e a moldura cobriria os botões de baixo no toque do VoiceOver.
+        let largura = g.larguraVela * 2
+        let hint: String
+        switch estado {
+        case .acesa: hint = "Toque duas vezes para apagar"
+        case .nova, .apagada: hint = "Toque duas vezes para acender"
+        case .acabou: hint = ""
+        }
+        return AlvoAcessivel()
+            .frame(width: largura, height: max(44, baixo - alto))
+            .position(x: g.centroX + SuporteView.desvioX(largura: g.larguraVela), y: (alto + baixo) / 2)
+            .allowsHitTesting(false)
+            .accessibilityElement()
+            .accessibilityLabel("Vela")
+            .accessibilityValue(sessao.descricaoDaVela)
+            .accessibilityHint(trocando ? "" : hint)
+            .accessibilityAction { acaoPrincipalDaVela(g) }
+            .accessibilityActions { atalhos(g) }
+            .accessibilityRotorEntry(id: CamadasDaCenaAcessiveis.idDaVela, in: rotorDaCena)
+            .accessibilitySortPriority(3)   // ordem: vela, botão de baixo, caixa de fósforos, cenário
+            .accessibilityHidden(estado == .acabou && cortinaFechada)   // aí quem fala é o "Fim"
+    }
+
+    // A dica de riscar à mão, logo acima do fósforo, com a ponta apontando para ele
+    private func dicaDoFosforo(_ dica: DicaRiscarOFosforo, _ g: LayoutPalco) -> some View {
+        let margem: CGFloat = 16
+        let largura = min(340, g.tamanho.width - margem * 2)
+        let esquerda = g.tamanho.width - margem - largura
+        // O alto do fósforo em pé (a cabeça fica em repousoDoFosforo)
+        let altoDoFosforo = g.repousoDoFosforo.y - FosforoView.posicaoCabeca(tamanho: tamanhoFosforo) - 8
+        return VStack(spacing: 0) {
+            Spacer(minLength: 0)
+            HStack(spacing: 0) {
+                Spacer(minLength: 0)
+                BalaoDeDica(dica: dica, pontaX: g.repousoDoFosforo.x - esquerda, pontaEmCima: false)
+                    .frame(width: largura)
+            }
+            .padding(.trailing, margem)
+        }
+        .frame(width: g.tamanho.width, height: max(0, altoDoFosforo))
+        .position(x: g.tamanho.width / 2, y: max(0, altoDoFosforo) / 2)
+        .transition(.opacity)
+    }
+
+    // Toque duplo do VoiceOver na vela
+    private func acaoPrincipalDaVela(_ g: LayoutPalco) {
+        guard !trocando else { return }
+        switch sessao.estado {
+        case .acesa: apagarTocandoNaChama()
+        case .nova, .apagada: acenderSozinho(g)
+        case .acabou: break
+        }
+    }
+
+    // Atalhos do VoiceOver (menu de ações da vela). São também a alternativa a virar o aparelho,
     // soprar, riscar o fósforo e segurar o botão: nenhum gesto físico é o único caminho.
+    // Só ações da vela: os botões da tela (configurações, afastar…) já se encontram deslizando.
+    //   nova:            Acender vela, Personalizar vela
+    //   acesa:           Apagar chama, Acelerar derretimento (ou Voltar ao ritmo normal)
+    //   apagada no meio: Acender vela, Derreter a vela até o fim
     @ViewBuilder
     private func atalhos(_ g: LayoutPalco) -> some View {
-        let estado = sessao.estado
-        if (estado == .nova || estado == .apagada) && !trocando {
-            Button("Acender vela") { acenderSozinho(g) }
-        }
-        if estado == .acesa && !trocando {
-            Button("Apagar chama") { apagarTocandoNaChama() }
-            Button(sessao.derretimentoAcelerado ? "Voltar ao ritmo normal da vela" : "Acelerar derretimento da vela") {
-                sessao.alternarDerretimentoAcelerado()
+        if !trocando {
+            switch sessao.estado {
+            case .nova:
+                Button("Acender vela") { acenderSozinho(g) }
+                Button("Personalizar vela") { abrirPersonalizacao() }
+            case .acesa:
+                Button("Apagar chama") { apagarTocandoNaChama() }
+                Button(sessao.derretimentoAcelerado ? "Voltar ao ritmo normal da vela" : "Acelerar derretimento da vela") {
+                    sessao.alternarDerretimentoAcelerado()
+                }
+            case .apagada:
+                Button("Acender vela") { acenderSozinho(g) }
+                Button("Derreter a vela até o fim") { confirmarDerreter = true }
+            case .acabou:
+                EmptyView()
             }
         }
-        if podeSairDaCaixa {
-            Button("Ver o teatro de sombras") { sairDaCaixa() }
-        }
-        if estado == .nova && !trocando {
-            Button("Abrir personalização") { trocarComCortina { personalizando = true } }
-        }
-        Button("Abrir configurações") { abrirConfiguracoes() }
+    }
+
+    private func abrirPersonalizacao() {
+        etapa = .guardado
+        trocarComCortina { personalizando = true }
     }
 
     // Letreiro pendurado na cortina fechada. Tocar em qualquer lugar da cortina abre uma vela nova.
@@ -367,24 +464,28 @@ struct PalcoView: View {
         .accessibilityInputLabels(["Vela nova", "Acender vela nova", "Fim"])
         .accessibilityAddTraits(.isButton)
         .accessibilityAction { descartar() }
+        .accessibilityFocused($focoNoFim)
     }
 
     // MARK: Botões
 
     private var barraSuperior: some View {
-        let dica = dicaAtual
+        // A dica do fósforo aparece lá embaixo, perto da caixa (dicaDoFosforo)
+        let dica = dicaAtual is DicaRiscarOFosforo ? nil : dicaAtual
         let mostraSeta = dica is DicaSairDaCaixa || dica is DicaEntrarNaCaixa
 
         return VStack {
             HStack {
                 if sessao.foraDaCaixa {
-                    BotaoRedondo(icone: "arrow.up.left.and.arrow.down.right", rotulo: "Entrar na caixa",
+                    BotaoRedondo(icone: "arrow.up.left.and.arrow.down.right", rotulo: "Aproximar a caixa",
                                  tamanho: MedidasBarraDoPalco.diametro,
-                                 comandosDeVoz: ["Voltar para a vela", "Aproximar"], acao: entrarNaCaixa)
+                                 comandosDeVoz: ["Entrar na caixa", "Voltar para a vela", "Aproximar"],
+                                 dica: "Volta para a vela dentro da caixa", acao: entrarNaCaixa)
                 } else if podeSairDaCaixa {
-                    BotaoRedondo(icone: "arrow.down.right.and.arrow.up.left", rotulo: "Ver o teatro de sombras",
+                    BotaoRedondo(icone: "arrow.down.right.and.arrow.up.left", rotulo: "Afastar a caixa",
                                  tamanho: MedidasBarraDoPalco.diametro,
-                                 comandosDeVoz: ["Teatro de sombras", "Afastar", "Sair da caixa"], acao: sairDaCaixa)
+                                 comandosDeVoz: ["Teatro de sombras", "Afastar", "Sair da caixa"],
+                                 dica: "Mostra as sombras da vela na parede", acao: sairDaCaixa)
                         .transition(.opacity)
                 }
                 Spacer()
@@ -394,9 +495,12 @@ struct PalcoView: View {
             .animation(.spring(duration: 0.6), value: podeSairDaCaixa)
 
             // As duas cenas compartilham o mesmo espaço para dicas, inclusive durante o zoom.
-            TipView(dica, arrowEdge: mostraSeta ? .top : nil)
-                .frame(maxWidth: 340)
-                .frame(maxWidth: .infinity, alignment: mostraSeta ? .leading : .center)
+            // A ponta sai do centro do botão de cima à esquerda
+            if dica != nil {
+                BalaoDeDica(dica: dica, pontaX: mostraSeta ? MedidasBarraDoPalco.diametro / 2 : nil)
+                    .frame(maxWidth: 340)
+                    .frame(maxWidth: .infinity, alignment: mostraSeta ? .leading : .center)
+            }
             Spacer()
         }
         .padding(.horizontal, 20)
@@ -407,16 +511,16 @@ struct PalcoView: View {
         let estado = sessao.estado
 
         return ZStack {
-            // Embaixo à esquerda: personalizar (vela nova) ou descartar (depois de acender).
-            // Some enquanto o fósforo está fora (a lixa aparece nesse lugar).
-            Group {
-                if estado == .nova && !trocando && etapa == .guardado {
+            // Embaixo à esquerda: personalizar (vela nova) ou derreter (depois de acender).
+            // Continua na tela com a caixa aberta (a gaveta e o fósforo ficam do outro lado).
+            ZStack {
+                if estado == .nova && !trocando {
                     BotaoRedondo(icone: "paintbrush.pointed", rotulo: "Personalizar vela", tamanho: 60,
                                  comandosDeVoz: ["Abrir personalização", "Personalizar", "Ateliê"]) {
-                        trocarComCortina { personalizando = true }
+                        abrirPersonalizacao()
                     }
                     .transition(entradaPelaEsquerda)
-                } else if estado != .nova && estado != .acabou && !trocando && etapa == .guardado {
+                } else if estado != .nova && estado != .acabou && !trocando {
                     // (Quando a vela acaba não tem botão aqui: o "Fim" no meio da cortina é o toque)
                     // Acesa ou apagada: segurar derrete a vela rápido; soltar para
                     BotaoDescartar(tamanho: 60, haptics: sessao.haptics,
@@ -424,9 +528,15 @@ struct PalcoView: View {
                                    derreter: { segurando in
                                        if segurando { sessao.comecarADerreter() } else { sessao.pararDeDerreter() }
                                    },
+                                   pedirConfirmacao: { confirmarDerreter = true },
                                    descartar: { sessao.derreterAteOFim() })
                         .transition(entradaPelaEsquerda)
                 }
+            }
+            .accessibilitySortPriority(2)
+            .confirmationDialog("Derreter a vela até o fim?", isPresented: $confirmarDerreter,
+                                titleVisibility: .visible) {
+                BotoesDeDerreter { sessao.derreterAteOFim() }
             }
             .position(x: g.botaoBaixoX, y: g.botaoBaixoY)
 
@@ -444,6 +554,7 @@ struct PalcoView: View {
                     .accessibilityAddTraits(.isButton)
                     // VoiceOver e Controle por Voz: o fósforo faz o caminho todo sozinho
                     .accessibilityAction { acenderSozinho(g) }
+                    .accessibilitySortPriority(2)
                     .position(g.caixa)
                     .transition(entradaPelaDireita)
             }
@@ -496,7 +607,7 @@ struct PalcoView: View {
             .gesture(
                 DragGesture(minimumDistance: 0, coordinateSpace: .named("palco"))
                     .onChanged { valor in arrastarFosforo(valor, g) }
-                    .onEnded { _ in soltarFosforo(g) }
+                    .onEnded { valor in soltarFosforo(valor, g) }
             )
             // posiciona a vista para a CABEÇA ficar em posFosforo
             .position(x: posFosforo.x,
@@ -621,6 +732,7 @@ struct PalcoView: View {
                 zerarRisco()
                 etapa = .aceso
                 sessao.haptics.acenderFosforo()
+                DicaRiscarOFosforo().invalidate(reason: .actionPerformed)   // aprendeu a riscar à mão
                 return
             }
         } else {
@@ -653,7 +765,10 @@ struct PalcoView: View {
         caminhoNaLixa = 0
     }
 
-    private func soltarFosforo(_ g: LayoutPalco) {
+    // ⚙️ Até quanto o dedo pode andar (pontos) para o gesto no fósforo contar como um toque
+    private let distanciaDeUmToque: CGFloat = 8
+
+    private func soltarFosforo(_ valor: DragGesture.Value, _ g: LayoutPalco) {
         inicioArraste = nil
         toqueDoArraste = nil
         zerarRisco()
@@ -661,6 +776,11 @@ struct PalcoView: View {
             sessao.haptics.cancelarSomRiscoFosforo()
         }
         guard etapa != .guardado else { return }
+        // Um toque no fósforo (sem arrastar): ele risca sozinho e acende a vela
+        if hypot(valor.translation.width, valor.translation.height) < distanciaDeUmToque {
+            acenderSozinho(g, peloToque: true)
+            return
+        }
         withAnimation(.spring(duration: 0.5)) { posFosforo = repousoFosforo(g) }
     }
 
@@ -673,7 +793,8 @@ struct PalcoView: View {
     // A gaveta abre, o fósforo sobe, risca na lixa, acende e vai até o pavio,
     // com as mesmas vibrações de quando a pessoa faz com o dedo.
     // Com "Reduzir movimento", a vela só acende (sem o fósforo voando pela tela).
-    private func acenderSozinho(_ g: LayoutPalco) {
+    // peloToque: a pessoa tocou no fósforo (sem VoiceOver). Conta para a dica de riscar à mão.
+    private func acenderSozinho(_ g: LayoutPalco, peloToque: Bool = false) {
         guard sessao.estado == .nova || sessao.estado == .apagada,
               !acendendoSozinho, !trocando, !trocandoCena else { return }
         sessao.haptics.cancelarSomRiscoFosforo()
@@ -685,6 +806,7 @@ struct PalcoView: View {
             caixaAberta = CaixaFosforoView.emRepouso
             sessao.haptics.acenderFosforo()   // a chama pegando toca, mesmo sem a animação
             sessao.acender()
+            if peloToque { DicaRiscarOFosforo.acendeuPeloToque.sendDonation() }
             return
         }
 
@@ -733,6 +855,7 @@ struct PalcoView: View {
             withAnimation(.easeInOut(duration: 0.4).delay(0.1)) { caixaAberta = CaixaFosforoView.emRepouso }
             sessao.acender()
             acendendoSozinho = false
+            if peloToque { await DicaRiscarOFosforo.acendeuPeloToque.donate() }
         }
     }
 
@@ -896,9 +1019,11 @@ struct PalcoView: View {
         guard !trocandoCena else { return nil }
         // O contexto da tela muda antes de o TipKit reavaliar as regras.
         switch dicas.currentTip {
-        case let dica as DicaEntrarNaCaixa where sessao.foraDaCaixa:
+        case let dica as DicaRiscarOFosforo where etapa != .guardado && !voiceOverLigado && !sessao.foraDaCaixa:
             return dica
-        case let dica as DicaSairDaCaixa where podeSairDaCaixa:
+        case let dica as DicaEntrarNaCaixa where sessao.foraDaCaixa && !voiceOverLigado:
+            return dica
+        case let dica as DicaSairDaCaixa where podeSairDaCaixa && !voiceOverLigado:
             return dica
         case let dica as DicaOutroJeitoDeApagar where podeApagarNaCaixa:
             return dica

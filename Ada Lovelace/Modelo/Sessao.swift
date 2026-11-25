@@ -397,7 +397,7 @@ final class Sessao: ObservableObject {
         ambiente.parar()
         if comSom {
             haptics.fim()
-            anunciar("A vela acabou")
+            // Sem anúncio: quando a cortina fecha, a PalcoView leva o foco do VoiceOver para o "Fim"
         }
         salvar()
     }

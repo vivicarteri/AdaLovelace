@@ -9,6 +9,7 @@ struct BotaoRedondo: View {
     var rotulo: String
     var tamanho: CGFloat = 52
     var comandosDeVoz: [String] = []   // Controle por Voz: outros nomes que também ativam o botão
+    var dica: String? = nil            // VoiceOver: o que acontece ao tocar
     var acao: () -> Void
 
     var body: some View {
@@ -24,6 +25,7 @@ struct BotaoRedondo: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(rotulo)
+        .accessibilityHint(dica ?? "")
         .accessibilityInputLabels([rotulo] + comandosDeVoz)
     }
 }
@@ -42,6 +44,9 @@ struct BotaoDescartar: View {
     var haptics: Haptics
     var anel: Double? = nil                      // quanto da vela já derreteu (modo derreter)
     var derreter: ((Bool) -> Void)? = nil        // true = começou a segurar, false = soltou
+    // Quem usa o botão pode cuidar da confirmação (a PalcoView abre o mesmo balão pela vela).
+    // Sem isso, o próprio botão mostra o balão.
+    var pedirConfirmacao: (() -> Void)? = nil
     var descartar: () -> Void
 
     @State private var segurando = false
@@ -100,18 +105,31 @@ struct BotaoDescartar: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(modoDerreter ? "Descartar vela" : "Vela nova")
-        .accessibilityHint(modoDerreter ? "Derrete a vela até o fim" : "Joga esta vela fora e coloca uma nova")
+        .accessibilityLabel(modoDerreter ? "Derreter a vela até o fim" : "Vela nova")
+        .accessibilityHint(modoDerreter ? "Pede confirmação antes de derreter" : "Joga esta vela fora e coloca uma nova")
         .accessibilityInputLabels(modoDerreter
-                                  ? ["Descartar vela", "Derreter a vela", "Descartar"]
+                                  ? ["Derreter a vela até o fim", "Derreter a vela", "Descartar vela", "Descartar"]
                                   : ["Vela nova", "Descartar vela", "Colocar vela nova"])
         .accessibilityAddTraits(.isButton)
-        .accessibilityAction { confirmar = true }
-        .confirmationDialog(modoDerreter ? "Descartar a vela? Ela derrete até o fim." : "Colocar uma vela nova?",
-                            isPresented: $confirmar, titleVisibility: .visible) {
-            Button(modoDerreter ? "Descartar" : "Vela nova", role: .destructive, action: descartar)
-            Button("Cancelar", role: .cancel) {}
+        .accessibilityAction {
+            if let pedirConfirmacao { pedirConfirmacao() } else { confirmar = true }
         }
+        .confirmationDialog(modoDerreter ? "Derreter a vela até o fim?" : "Colocar uma vela nova?",
+                            isPresented: $confirmar, titleVisibility: .visible) {
+            BotoesDeDerreter(modoDerreter: modoDerreter, confirmar: descartar)
+        }
+    }
+}
+
+// Os botões do balão de derreter. O "Continuar" não tem papel de cancelar de propósito:
+// no balão do iOS 26 o botão de cancelar some, e a pessoa ficava só com a opção destrutiva.
+struct BotoesDeDerreter: View {
+    var modoDerreter: Bool = true
+    var confirmar: () -> Void
+
+    var body: some View {
+        Button(modoDerreter ? "Derreter até o fim" : "Vela nova", role: .destructive, action: confirmar)
+        Button(modoDerreter ? "Continuar com a vela" : "Continuar com esta vela") {}
     }
 }
 
