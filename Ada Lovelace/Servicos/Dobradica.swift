@@ -13,7 +13,7 @@
 //  Posturas (combinadas com a Sofia):
 //  A/B aberto  de 180° até 100°, tela interna        → a caixa inteira, travada em paisagem
 //  C   laptop  100° ou menos e a dobra na horizontal  → vela embaixo, teatro de sombras em cima
-//  D   fechado o sistema passou para a tela externa   → travado no teatro de sombras, em pé
+//  D   fechado o sistema passou para a tela externa   → travado no teatro de sombras, em pé ou deitado
 //  E   tenda   entreaberto com a tela externa acesa   → troca manual (botão e pinça), em paisagem
 
 import SwiftUI
@@ -167,7 +167,7 @@ final class Dobradica: ObservableObject {
     var orientacoesDoDuo: UIInterfaceOrientationMask? {
         guard ehDuo else { return nil }
         switch postura {
-        case .fechado: return .portrait                 // D: tela externa, em pé
+        case .fechado: return .allButUpsideDown         // D: tela externa, em pé ou deitada (teste)
         case .tenda: return .landscape                  // E: tela externa, deitada
         case .laptop: return .allButUpsideDown          // C
         case .aberto:
