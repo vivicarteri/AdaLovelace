@@ -35,7 +35,15 @@ struct PalcoView: View {
     @State private var cortinaTela = false      // cortina que desce para trocar de tela (personalização)
     @State private var mostrarBotoes = true     // os botões saem de cena durante o zoom
     @State private var caixaAberta: CGFloat = CaixaFosforoView.emRepouso   // gaveta da caixa de fósforos
+    // iPhone Duo: a postura do aparelho (aberto, abrindo, laptop, fechado, tenda)
+    @ObservedObject private var dobradica = Dobradica.compartilhada
+    #if DEBUG
+    @AppStorage(Chaves.simularDuo) private var simularDuo = false
+    @AppStorage(Chaves.anguloSimulado) private var anguloSimulado = 180.0
+    @AppStorage(Chaves.tendaSimulada) private var tendaSimulada = false
+    #endif
     @State private var dicas = TipGroup(.firstAvailable) {
+        DicaDobrarODuo()
         DicaSairDaCaixa()
         DicaEntrarNaCaixa()
         DicaOutroJeitoDeApagar()
@@ -80,11 +88,12 @@ struct PalcoView: View {
             ZStack {
                 if sessao.foraDaCaixa || cameraAtiva {
                     // Vista de fora. A "câmera" (EfeitoCamera) aproxima ou afasta da caixa.
-                    TeatroSombrasView(entrar: entrarNaCaixa,
+                    TeatroSombrasView(entrar: { if trocaManual { entrarNaCaixa() } },
                                       aberturaCaixa: aberturaCaixa,
                                       conteudoDaCaixa: mostrarMiniatura ? AnyView(dentroDaCaixa(g, miniatura: true)) : nil,
                                       congelado: trocandoCena,
-                                      mostrarCamadas: !trocandoCena)
+                                      mostrarCamadas: !trocandoCena,
+                                      podeEntrar: trocaManual)
                         .modifier(EfeitoCamera(z: camera, zoomFinal: caixa.zoomFinal,
                                                alvo: caixa.centroDaAbertura, tela: geo.size))
                         .transition(.opacity)
@@ -95,6 +104,9 @@ struct PalcoView: View {
                         trocarComCortina { sessao.config = nova; personalizando = false }
                     }
                     .transition(.opacity)
+                } else if dobradica.ehDuo {
+                    palcoDoDuo(g, geo)
+                        .transition(.opacity)
                 } else {
                     dentroDaCaixa(g)
                         .transition(.opacity)
@@ -108,9 +120,16 @@ struct PalcoView: View {
 
                 // Cortina que desce para trocar de tela
                 CortinaView(fechada: cortinaTela)
+
+                #if DEBUG
+                if simularDuo && !personalizando {
+                    controleDeTesteDoDuo
+                }
+                #endif
             }
             .simultaneousGesture(MagnifyGesture().onEnded { valor in
-                guard !personalizando, !trocandoCena, !trocando else { return }
+                // iPhone Duo: a pinça só vale no modo tenda (no resto, quem troca é a dobra)
+                guard !personalizando, !trocandoCena, !trocando, trocaManual else { return }
                 if sessao.foraDaCaixa && valor.magnification > 1.3 {
                     DicaEntrarNaCaixa().invalidate(reason: .actionPerformed)
                     entrarNaCaixa()
@@ -138,10 +157,15 @@ struct PalcoView: View {
         .onChange(of: podeApagarNaCaixa, initial: true) { _, podeApagar in
             DicaOutroJeitoDeApagar.velaAcesa = podeApagar
         }
+        // iPhone Duo: a dobra decide se a tela é a vela ou o teatro de sombras
+        .onChange(of: dobradica.postura.tipo, initial: true) { antes, agora in
+            mudouPostura(de: antes, para: agora)
+        }
         .onChange(of: sessao.estado) { _, novo in
             if novo != .nova && novo != .apagada { etapa = .guardado }
-            if novo == .acabou && sessao.foraDaCaixa {
-                entrarNaCaixa()   // a vela acabou nas sombras: entra na caixa
+            // A vela acabou nas sombras: entra na caixa (menos no Duo fechado, que fica preso nas sombras)
+            if novo == .acabou && sessao.foraDaCaixa && !(dobradica.ehDuo && dobradica.postura.tipo == .fechado) {
+                entrarNaCaixa()
             }
             if novo == .acabou {
                 Task {
@@ -286,7 +310,7 @@ struct PalcoView: View {
                 sessao.alternarDerretimentoAcelerado()
             }
         }
-        if podeSairDaCaixa {
+        if podeSairDaCaixa && trocaManual {
             Button("Ver o teatro de sombras") { sairDaCaixa() }
         }
         if estado == .nova && !trocando {
@@ -340,20 +364,25 @@ struct PalcoView: View {
 
         return VStack {
             HStack {
-                if sessao.foraDaCaixa {
+                // iPhone Duo: sem botão de trocar de cena (quem troca é a dobra), menos no modo tenda
+                if sessao.foraDaCaixa && trocaManual {
                     BotaoRedondo(icone: "arrow.up.left.and.arrow.down.right", rotulo: "Entrar na caixa",
                                  tamanho: MedidasBarraDoPalco.diametro,
                                  comandosDeVoz: ["Voltar para a vela", "Aproximar"], acao: entrarNaCaixa)
-                } else if podeSairDaCaixa {
+                } else if podeSairDaCaixa && trocaManual {
                     BotaoRedondo(icone: "arrow.down.right.and.arrow.up.left", rotulo: "Ver o teatro de sombras",
                                  tamanho: MedidasBarraDoPalco.diametro,
-                                 comandosDeVoz: ["Teatro de sombras", "Afastar", "Sair da caixa"], acao: sairDaCaixa)
+                                 comandosDeVoz: ["Teatro de sombras", "Afastar", "Sair da caixa"], acao: { sairDaCaixa() })
                         .transition(.opacity)
                 }
                 Spacer()
-                BotaoRedondo(icone: "gearshape", rotulo: "Configurações", tamanho: MedidasBarraDoPalco.diametro,
-                             comandosDeVoz: ["Abrir configurações", "Ajustes"], acao: abrirConfiguracoes)
+                // iPhone Duo: a engrenagem é o botão nativo da barra de navegação (ContentView)
+                if !dobradica.ehDuo {
+                    BotaoRedondo(icone: "gearshape", rotulo: "Configurações", tamanho: MedidasBarraDoPalco.diametro,
+                                 comandosDeVoz: ["Abrir configurações", "Ajustes"], acao: abrirConfiguracoes)
+                }
             }
+            .frame(minHeight: MedidasBarraDoPalco.diametro)
             .animation(.spring(duration: 0.6), value: podeSairDaCaixa)
 
             // As duas cenas compartilham o mesmo espaço para dicas, inclusive durante o zoom.
@@ -691,10 +720,13 @@ struct PalcoView: View {
     // O segredo para ficar liso: é UMA animação só do começo ao fim (a cortina entra
     // com .delay, não com espera no meio), os botões saem de cena antes de começar
     // (senão cresceriam junto com o zoom) e as sombras ficam paradas durante o caminho.
-    private func sairDaCaixa() {
-        guard sessao.estado == .acesa || sessao.estado == .apagada,
-              !trocando, !trocandoCena, !acendendoSozinho, !sessao.foraDaCaixa else { return }
+    // forcar: iPhone Duo fechando. Sai da caixa em qualquer estado da vela.
+    private func sairDaCaixa(forcar: Bool = false) {
+        guard forcar || sessao.estado == .acesa || sessao.estado == .apagada,
+              forcar || (!trocando && !acendendoSozinho),
+              !trocandoCena, !sessao.foraDaCaixa else { return }
         etapa = .guardado
+        if forcar { zerarRisco(); sessao.haptics.cancelarSomRiscoFosforo() }
         if reduzirMovimento {
             aberturaCaixa = 0
             camera = 0
@@ -726,6 +758,7 @@ struct PalcoView: View {
             cameraAtiva = false
             trocandoCena = false
             withAnimation(.easeIn(duration: 0.3)) { mostrarBotoes = true }
+            conferirPostura()   // iPhone Duo: o aparelho pode ter aberto no meio da animação
         }
     }
 
@@ -760,6 +793,7 @@ struct PalcoView: View {
             aberturaCaixa = 0
             trocandoCena = false
             withAnimation(.easeIn(duration: 0.3)) { mostrarBotoes = true }
+            conferirPostura()   // iPhone Duo: o aparelho pode ter fechado no meio da animação
         }
     }
 
@@ -830,9 +864,11 @@ struct PalcoView: View {
         guard !trocandoCena else { return nil }
         // O contexto da tela muda antes de o TipKit reavaliar as regras.
         switch dicas.currentTip {
-        case let dica as DicaEntrarNaCaixa where sessao.foraDaCaixa:
+        case let dica as DicaDobrarODuo where dobradica.ehDuo && !trocaManual:
             return dica
-        case let dica as DicaSairDaCaixa where podeSairDaCaixa:
+        case let dica as DicaEntrarNaCaixa where sessao.foraDaCaixa && trocaManual:
+            return dica
+        case let dica as DicaSairDaCaixa where podeSairDaCaixa && trocaManual:
             return dica
         case let dica as DicaOutroJeitoDeApagar where podeApagarNaCaixa:
             return dica
@@ -840,6 +876,189 @@ struct PalcoView: View {
             return nil
         }
     }
+
+    // MARK: - iPhone Duo
+    // Tudo aqui só roda com dobradica.ehDuo. No iPhone comum e no iPad, trocaManual é sempre true.
+
+    // Dá para trocar de cena pelo botão, pela pinça e pelo VoiceOver?
+    // No Duo, só no modo tenda: no resto, quem troca é abrir e fechar o aparelho.
+    private var trocaManual: Bool {
+        !dobradica.ehDuo || dobradica.postura.tipo == .tenda
+    }
+
+    // ⚙️ Modo abrindo (B): quanto a vela encolhe quando chega nos 90° (0,45 = 45% do tamanho).
+    private let escalaDoPalcoAos90: CGFloat = 0.45
+
+    // Dentro da caixa no Duo. Aberto (A) e abrindo (B) são a MESMA vista (B com t = 0 é o A),
+    // para a vela não piscar ao passar dos 180°. Com Reduzir Movimento não tem zoom contínuo.
+    @ViewBuilder
+    private func palcoDoDuo(_ g: LayoutPalco, _ geo: GeometryProxy) -> some View {
+        switch dobradica.postura {
+        case .laptop:
+            vistaLaptop(geo)
+        case .abrindo(let t):
+            vistaAbrindo(g, geo, t: reduzirMovimento ? 0 : t)
+        default:
+            vistaAbrindo(g, geo, t: 0)
+        }
+    }
+
+    // A tela inteira, contando as áreas fora da área segura (a arte vai até a borda)
+    private func telaCheia(_ geo: GeometryProxy) -> CGRect {
+        let i = geo.safeAreaInsets
+        return CGRect(x: -i.leading, y: -i.top,
+                      width: geo.size.width + i.leading + i.trailing,
+                      height: geo.size.height + i.top + i.bottom)
+    }
+
+    // B: fechando de 180° para 90°, a vela encolhe e vai para o meio da metade esquerda,
+    // e a borda da caixa vai aparecendo em volta (como uma câmera saindo da caixa).
+    private func vistaAbrindo(_ g: LayoutPalco, _ geo: GeometryProxy, t: Double) -> some View {
+        let cheia = telaCheia(geo)
+        let t = CGFloat(t)
+        let lado = min(cheia.width, cheia.height)
+        // A abertura da caixa é a tela inteira: em t = 0 a moldura fica toda fora da tela
+        let medidas = MedidasCaixa(tela: cheia.size, aberturaFixa: cheia.size,
+                                   molduraFixa: (coluna: lado * 0.07, telhado: lado * 0.12, palco: lado * 0.07))
+        let desvio = -medidas.caixa.height / 2 + medidas.telhado + cheia.height / 2
+        let escala = 1 - (1 - escalaDoPalcoAos90) * t
+        let destinoX = cheia.minX + cheia.width * 0.25          // meio da metade esquerda
+        let acesa = sessao.estado == .acesa && !trocando
+        let ancora = UnitPoint(x: cheia.midX / max(geo.size.width, 1), y: cheia.midY / max(geo.size.height, 1))
+
+        return ZStack {
+            // A parede do teatro, atrás da caixa
+            (acesa ? Cores.papel : Cores.fundoEscuro)
+                .ignoresSafeArea()
+                .opacity(t > 0 ? 1 : 0)
+                .accessibilityHidden(true)
+
+            ZStack {
+                CaixaTeatroView(medidas: medidas, acesa: acesa, aberturaCortina: 1)
+                    .position(x: cheia.midX, y: cheia.midY - desvio)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+                dentroDaCaixa(g)
+                    .mask {
+                        Rectangle()
+                            .frame(width: cheia.width, height: cheia.height)
+                            .position(x: cheia.midX, y: cheia.midY)
+                    }
+            }
+            .scaleEffect(escala, anchor: ancora)
+            .offset(x: (destinoX - cheia.midX) * t)
+        }
+    }
+
+    // C: modo laptop. Embaixo, a caixa do teatro do tamanho da metade, com a cortina aberta
+    // e a vela de verdade dentro (com os botões de sempre). Em cima, o teatro de sombras,
+    // acompanhando a vela em tempo real.
+    private func vistaLaptop(_ geo: GeometryProxy) -> some View {
+        let cheia = telaCheia(geo)
+        let metade = cheia.height / 2
+        let lado = min(cheia.width, metade)
+        let moldura = (coluna: lado * 0.07, telhado: lado * 0.16, palco: lado * 0.08)
+        let margem: CGFloat = 8
+        let abertura = CGSize(width: max(1, (cheia.width - margem * 2) / 1.14 - moldura.coluna * 2),
+                              height: max(1, metade - moldura.telhado - moldura.palco - margem * 2))
+        let medidas = MedidasCaixa(tela: abertura, aberturaFixa: abertura, molduraFixa: moldura)
+        let centroDaCaixa = CGPoint(x: cheia.midX, y: cheia.minY + metade * 1.5)
+        let centroDaAbertura = CGPoint(x: centroDaCaixa.x,
+                                       y: centroDaCaixa.y - medidas.caixa.height / 2 + moldura.telhado + abertura.height / 2)
+        let acesa = sessao.estado == .acesa && !trocando
+
+        return ZStack {
+            Cores.fundoEscuro
+                .ignoresSafeArea()
+                .accessibilityHidden(true)
+
+            // Metade de cima: as sombras na parede (a caixa delas fica de fora: é a de baixo)
+            TeatroSombrasView(entrar: {}, mostrarCaixa: false, podeEntrar: false)
+                .frame(width: cheia.width, height: metade)
+                .clipped()
+                .position(x: cheia.midX, y: cheia.minY + metade / 2)
+
+            // Metade de baixo: a caixa grande, aberta
+            CaixaTeatroView(medidas: medidas, acesa: acesa, aberturaCortina: 1)
+                .position(centroDaCaixa)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+
+            dentroDaCaixa(LayoutPalco(tamanho: abertura))
+                .frame(width: abertura.width, height: abertura.height)
+                .clipped()
+                .position(centroDaAbertura)
+        }
+    }
+
+    private func mudouPostura(de antes: PosturaDuo.Tipo, para agora: PosturaDuo.Tipo) {
+        let duo = dobradica.ehDuo
+        DicaSairDaCaixa.pincaPermitida = trocaManual
+        DicaEntrarNaCaixa.pincaPermitida = trocaManual
+        DicaDobrarODuo.ehDuo = duo && agora != .tenda
+        DicaDobrarODuo.fechado = duo && agora == .fechado
+        guard duo else { return }
+
+        // Abriu o app (ou a tela foi montada de novo): já começa no lugar certo, sem animação
+        if antes == agora {
+            if agora == .fechado { sessao.foraDaCaixa = true }
+            else if agora != .tenda { sessao.foraDaCaixa = false }
+            return
+        }
+
+        // A dica do Duo já cumpriu o papel quando a pessoa abre ou fecha o aparelho
+        if antes == .fechado || agora == .fechado {
+            DicaDobrarODuo().invalidate(reason: .actionPerformed)
+        }
+        anunciarPostura(agora)
+        conferirPostura()
+    }
+
+    // Leva a tela para onde a dobra manda (fechado = sombras; aberto, abrindo e laptop = vela)
+    private func conferirPostura() {
+        guard dobradica.ehDuo, !personalizando, !trocandoCena else { return }
+        switch dobradica.postura.tipo {
+        case .fechado:
+            if !sessao.foraDaCaixa { sairDaCaixa(forcar: true) }
+        case .tenda:
+            break
+        case .aberto, .abrindo, .laptop:
+            if sessao.foraDaCaixa { entrarNaCaixa() }
+        }
+    }
+
+    // VoiceOver: diz a tela nova na hora (interrompe a fala, porque é o que está na tela agora)
+    private func anunciarPostura(_ tipo: PosturaDuo.Tipo) {
+        let texto: String
+        switch tipo {
+        case .aberto: texto = "Dentro da caixa, com a vela"
+        case .abrindo: return   // é só o caminho entre o aberto e o laptop
+        case .laptop: texto = "Vela embaixo e teatro de sombras em cima"
+        case .fechado: texto = "Teatro de sombras"
+        case .tenda: texto = "Modo tenda. Use o botão ou a pinça para trocar de cena"
+        }
+        var fala = AttributedString(texto)
+        fala.accessibilitySpeechAnnouncementPriority = .high
+        AccessibilityNotification.Announcement(fala).post()
+    }
+
+    #if DEBUG
+    // Só para testar sem o aparelho: finge a dobra (Configurações → Para testar → Simular iPhone Duo)
+    private var controleDeTesteDoDuo: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Dobra simulada: \(Int(anguloSimulado))°")
+                .font(.caption.monospacedDigit())
+            Slider(value: $anguloSimulado, in: 0...180, step: 1) { Text("Ângulo da dobra") }
+            Toggle("Tenda (V invertido)", isOn: $tendaSimulada)
+                .font(.caption)
+        }
+        .padding(10)
+        .frame(width: 240)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .padding(.top, 64)
+    }
+    #endif
 
     private var entradaPelaEsquerda: AnyTransition {
         reduzirMovimento ? .opacity : .move(edge: .leading).combined(with: .opacity)
@@ -858,6 +1077,12 @@ private struct LayoutPalco {
     init(geo: GeometryProxy) {
         tamanho = geo.size
         quadro = Quadro(geo: geo)
+    }
+
+    // iPhone Duo, modo laptop: o palco dentro da abertura da caixa grande
+    init(tamanho: CGSize) {
+        self.tamanho = tamanho
+        quadro = Quadro(tela: tamanho)
     }
 
     var centroX: CGFloat { quadro.x(ArteVela.centroX) }

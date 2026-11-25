@@ -63,6 +63,8 @@ final class Sopro {
         didSet {
             // No iPad a tela fica deitada: "em cima" da tela não é onde ficam os microfones de cima
             guard UIDevice.current.userInterfaceIdiom == .phone else { return }
+            // iPhone Duo: os microfones não ficam no "em cima" e "embaixo" da janela (igual ao iPad)
+            guard !Dobradica.compartilhada.ehDuo else { return }
             let novo: Lado
             switch lado {
             case .cima:  novo = alturaDaChama < Sopro.alturaDaTroca - Sopro.folgaDaTroca ? .baixo : .cima

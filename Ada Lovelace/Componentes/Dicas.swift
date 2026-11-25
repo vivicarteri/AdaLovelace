@@ -9,22 +9,49 @@ import TipKit
 struct DicaSairDaCaixa: Tip {
     // Ligado pela PalcoView: só dá para sair da caixa com a vela acesa ou apagada.
     @Parameter static var podeSair: Bool = false
+    // false no iPhone Duo (fora do modo tenda): lá a troca é abrindo e fechando o aparelho
+    @Parameter static var pincaPermitida: Bool = true
 
     var title: Text { Text("Veja o teatro de sombras").font(ADAFont.font(for: .tipTitle)) }
     var message: Text? { Text("Toque no botão no canto de cima ou junte dois dedos na tela, como uma pinça, para ver o teatro de sombras.").font(ADAFont.font(for: .tipMessage)) }
     var image: Image? { Image(systemName: "hand.pinch") }
-    var rules: [Rule] { #Rule(Self.$podeSair) { $0 } }
+    var rules: [Rule] {
+        #Rule(Self.$podeSair) { $0 }
+        #Rule(Self.$pincaPermitida) { $0 }
+    }
 }
 
 // Teatro de sombras → dentro da caixa
 struct DicaEntrarNaCaixa: Tip {
     // Ligado pela PalcoView: só vale enquanto a pessoa está fora da caixa.
     @Parameter static var estaForaDaCaixa: Bool = false
+    @Parameter static var pincaPermitida: Bool = true
 
     var title: Text { Text("Volte para a vela").font(ADAFont.font(for: .tipTitle)) }
     var message: Text? { Text("Toque no botão no canto de cima ou afaste dois dedos na tela, como uma pinça, para voltar para a vela.").font(ADAFont.font(for: .tipMessage)) }
     var image: Image? { Image(systemName: "hand.pinch") }
-    var rules: [Rule] { #Rule(Self.$estaForaDaCaixa) { $0 } }
+    var rules: [Rule] {
+        #Rule(Self.$estaForaDaCaixa) { $0 }
+        #Rule(Self.$pincaPermitida) { $0 }
+    }
+}
+
+// Só no iPhone Duo (fora do modo tenda): no lugar das dicas de pinça, ensina a abrir e fechar.
+// Aparece no primeiro uso. Com o aparelho fechado, pede para abrir e criar uma vela nova.
+struct DicaDobrarODuo: Tip {
+    @Parameter static var ehDuo: Bool = false
+    @Parameter static var fechado: Bool = false
+
+    var title: Text {
+        Text(Self.fechado ? "Abra o iPhone Duo" : "Abra e feche o aparelho").font(ADAFont.font(for: .tipTitle))
+    }
+    var message: Text? {
+        Text(Self.fechado ? "Abra o iPhone Duo para criar uma nova vela."
+                          : "Abra ou feche o aparelho para entrar na caixa da vela ou observar o teatro de sombras.")
+            .font(ADAFont.font(for: .tipMessage))
+    }
+    var image: Image? { Image(systemName: "book.pages") }
+    var rules: [Rule] { #Rule(Self.$ehDuo) { $0 } }
 }
 
 // Quem apaga a vela do MESMO jeito 3 vezes seguidas ganha a dica de um jeito diferente

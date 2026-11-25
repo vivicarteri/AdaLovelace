@@ -42,7 +42,9 @@ enum Floresta {
     // Só o iPhone desliza a floresta. No iPad ela fica parada (só o céu se mexe).
     static var desliza: Bool {
         #if canImport(UIKit)
-        UIDevice.current.userInterfaceIdiom == .phone
+        // iPhone Duo: vale a janela, não o aparelho (aberto e deitado ele é como um iPad)
+        if Dobradica.compartilhada.ehDuo { return Dobradica.compartilhada.telaEmPe }
+        return UIDevice.current.userInterfaceIdiom == .phone
         #else
         false
         #endif

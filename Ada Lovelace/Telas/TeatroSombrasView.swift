@@ -11,6 +11,8 @@ struct TeatroSombrasView: View {
     var conteudoDaCaixa: AnyView? = nil   // palco em miniatura (só na animação de entrar e sair)
     var congelado = false                 // durante o zoom as sombras param, para o movimento ficar liso
     var mostrarCamadas = true             // VoiceOver: rotor das camadas (fica de fora na animação)
+    var mostrarCaixa = true               // iPhone Duo, modo laptop: a caixa fica na metade de baixo, fora daqui
+    var podeEntrar = true                 // iPhone Duo fechado: a caixa não abre (só abrindo o aparelho)
 
     var body: some View {
         let acesa = sessao.estado == .acesa
@@ -97,15 +99,25 @@ struct TeatroSombrasView: View {
                 .accessibilityHidden(true)
 
                 // A caixa do teatro, lá embaixo. Tocar nela entra de novo (a câmera vai até ela).
-                Button(action: entrar) {
+                if mostrarCaixa && podeEntrar {
+                    Button(action: entrar) {
+                        CaixaTeatroView(medidas: caixa, acesa: acesa,
+                                        aberturaCortina: aberturaCaixa, conteudo: conteudoDaCaixa)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Entrar na caixa")
+                    .accessibilityHint("Volta para a vela")
+                    .accessibilityInputLabels(["Entrar na caixa", "Voltar para a vela", "Caixa de teatro"])
+                    .position(caixa.centro)
+                } else if mostrarCaixa {
+                    // iPhone Duo fechado: a caixa é só desenho
                     CaixaTeatroView(medidas: caixa, acesa: acesa,
                                     aberturaCortina: aberturaCaixa, conteudo: conteudoDaCaixa)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("Caixa de teatro")
+                        .accessibilityHint("Abra o aparelho para entrar na caixa")
+                        .position(caixa.centro)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Entrar na caixa")
-                .accessibilityHint("Volta para a vela")
-                .accessibilityInputLabels(["Entrar na caixa", "Voltar para a vela", "Caixa de teatro"])
-                .position(caixa.centro)
 
                 // Rotor "Camadas de papel": céu, floresta e estado da vela, uma de cada vez
                 if mostrarCamadas {

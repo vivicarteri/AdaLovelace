@@ -10,10 +10,14 @@ import Foundation
 
 struct MedidasCaixa {
     let tela: CGSize                 // tamanho da área da tela onde tudo é desenhado
+    // Só no iPhone Duo (modos abrindo e laptop): a caixa grande, com a vela de verdade dentro.
+    var aberturaFixa: CGSize? = nil
+    var molduraFixa: (coluna: CGFloat, telhado: CGFloat, palco: CGFloat)? = nil
 
     // A ABERTURA tem o mesmo formato da tela: é o que faz o zoom encaixar certinho
     // quando a câmera chega nela.
     var abertura: CGSize {
+        if let aberturaFixa { return aberturaFixa }
         let largura = min(tela.width * 0.16, 70)
         return CGSize(width: largura, height: largura * tela.height / max(tela.width, 1))
     }
@@ -21,9 +25,19 @@ struct MedidasCaixa {
     // A MOLDURA em volta da abertura: colunas dos lados, telhado em cima e palco embaixo.
     // É ela que dá cara de caixa de teatro. Sem moldura, a caixa ficava com o formato
     // comprido e estreito da tela do iPhone e parecia uma cartinha em pé.
-    var coluna: CGFloat { abertura.width * 0.55 }
-    var telhado: CGFloat { abertura.width * 0.42 }
-    var palco: CGFloat { abertura.width * 0.30 }
+    var coluna: CGFloat { molduraFixa?.coluna ?? abertura.width * 0.55 }
+    var telhado: CGFloat { molduraFixa?.telhado ?? abertura.width * 0.42 }
+    var palco: CGFloat { molduraFixa?.palco ?? abertura.width * 0.30 }
+
+    // Franjas do telhado: 6 na largura. Na caixa grande do Duo ficariam enormes,
+    // então lá elas têm o tamanho do telhado e cabem mais.
+    // (Na primeira passada de layout a tela pode ter tamanho zero: sem esta proteção, a conta dava infinito.)
+    var franjas: Int {
+        guard molduraFixa != nil, telhado > 0 else { return 6 }
+        let conta = (caixa.width / (telhado * 0.5)).rounded()
+        guard conta.isFinite else { return 6 }
+        return min(60, max(6, Int(conta)))
+    }
 
     var caixa: CGSize {
         CGSize(width: abertura.width + coluna * 2,
@@ -163,15 +177,16 @@ struct CaixaTeatroView: View {
             // Telhado: cortininha vermelha com franjas caindo por cima da abertura
             ZStack(alignment: .bottom) {
                 Cores.cortina
+                let n = medidas.franjas
                 HStack(spacing: 0) {
-                    ForEach(0..<6, id: \.self) { _ in
+                    ForEach(0..<n, id: \.self) { _ in
                         Circle()
                             .fill(Cores.cortina)
                             .overlay(Circle().stroke(Cores.tinta, lineWidth: 1))
-                            .frame(width: caixa.width / 6, height: caixa.width / 6)
+                            .frame(width: caixa.width / CGFloat(n), height: caixa.width / CGFloat(n))
                     }
                 }
-                .offset(y: caixa.width / 12)
+                .offset(y: caixa.width / CGFloat(n) / 2)
                 Estrela()
                     .fill(Cores.dourado)
                     .overlay(Estrela().stroke(Cores.tinta, lineWidth: 1))

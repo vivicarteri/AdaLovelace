@@ -191,6 +191,8 @@ final class Movimento: ObservableObject {
     // A orientação da tela agora (em pé, deitada para um lado ou para o outro).
     // No iPhone é sempre em pé; no iPad, deitada.
     private static func orientacaoDaTela() -> UIInterfaceOrientation {
+        // iPhone Duo: a orientação da janela onde o app está (a Dobradica lê da própria janela)
+        if Dobradica.compartilhada.ehDuo { return Dobradica.compartilhada.orientacao }
         let cenas = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
         let ativa = cenas.first { $0.activationState == .foregroundActive } ?? cenas.first
         return ativa?.effectiveGeometry.interfaceOrientation ?? .portrait
