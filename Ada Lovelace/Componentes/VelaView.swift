@@ -136,9 +136,18 @@ struct VelaView: View {
         let alturaDesenho = liso > 0 ? corpo * inteiro / liso : 0
 
         return VStack(spacing: 0) {
-            Image("velaTopo")
-                .resizable()
-                .frame(width: larguraDesenho, height: topo)
+            if arteExiste(CeraView.quadros[0]) {
+                // Topo liso da própria vela; a cera animada vai por cima (overlay abaixo)
+                Image("velaCorpo")
+                    .resizable()
+                    .frame(width: larguraDesenho, height: inteiro)
+                    .frame(width: larguraDesenho, height: topo, alignment: .top)
+                    .clipped()
+            } else {
+                Image("velaTopo")
+                    .resizable()
+                    .frame(width: larguraDesenho, height: topo)
+            }
             if corpo > 0 {
                 Image("velaCorpo")
                     .resizable()
@@ -147,11 +156,43 @@ struct VelaView: View {
                     .clipped()
             }
         }
+        // Cera derretendo por cima do topo (os escorridos podem descer pelo corpo)
+        .overlay(alignment: .top) {
+            if arteExiste(CeraView.quadros[0]) {
+                CeraView(progresso: progresso)
+                    .frame(width: larguraDesenho, height: ArteVela.ceraAltura * s)
+                    .frame(width: larguraDesenho, height: 0, alignment: .top)
+            }
+        }
         // No fim da vela a cera fica mais baixa que os escorridos: aí eles vão sumindo
         // por baixo, derretendo dentro do suporte.
         .frame(width: larguraDesenho, height: visivel, alignment: .top)
         .clipped()
         .offset(y: escondido)
+    }
+}
+
+// Cera da Georgia derretendo no topo da vela, conforme a vela queima.
+// Quadros "velaCera_N" (mesma escala e recorte de 300 px de largura do "velaCorpo").
+// O 16 é a cera nova (vela inteira); do 1 ao 12 os escorridos crescem, pinga uma gota
+// e a cera vai virando um escorrido só. Entre um quadro e outro, um dissolve deixa
+// a passagem macia em vez de "pular".
+struct CeraView: View {
+    var progresso: Double
+    static let quadros = ["velaCera_16"] + (1...12).map { "velaCera_\($0)" }
+
+    var body: some View {
+        let n = CeraView.quadros.count
+        let p = min(max(progresso, 0), 1) * Double(n - 1)
+        let i = min(Int(p), n - 2)
+        let f = p - Double(i)
+        ZStack(alignment: .top) {
+            Image(CeraView.quadros[i]).resizable()
+                .opacity(f < 0.5 ? 1 : 2 * (1 - f))
+            Image(CeraView.quadros[i + 1]).resizable()
+                .opacity(f > 0.5 ? 1 : 2 * f)
+        }
+        .accessibilityHidden(true)
     }
 }
 
