@@ -5,63 +5,163 @@ import OSLog
 import CoreHaptics
 import AVFoundation
 
-/// Reproduz o som de raspagem em sincronia com a distância percorrida na lixa.
+// MARK: - Som do fósforo raspando na lixa
+
+/// Atrito do fósforo na lixa (Riscando.m4a) tocando em loop, sem emenda.
+/// O áudio NUNCA é esticado: só o volume acompanha a velocidade do dedo,
+/// e o som entra e sai com um fade de 20 ms (parar o dedo = silêncio quase na hora).
 private final class SomRiscoFosforo {
+    // ⚙️ O arquivo original é muito baixo: ele é normalizado até este pico (0 a 1).
+    static let picoDesejado: Float = 0.5
+    // ⚙️ Fade de entrada e saída
+    static let duracaoDoFade: Double = 0.02
+    // ⚙️ Emenda do loop: o fim do áudio se mistura com o começo por este tempo
+    static let duracaoDaEmenda: Double = 0.04
+
+    private let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "AdaLovelace", category: "SomRiscoFosforo")
     private let engine = AVAudioEngine()
-    private let player = AVAudioPlayerNode()
-    private let timePitch = AVAudioUnitTimePitch()
-    private var arquivo: AVAudioFile?
-    private var audioAgendado = false
+    private var loop: LoopDoRisco?
+
+    /// Duração do arquivo original. É o tempo que a pessoa tem para riscar a distância mínima.
+    private(set) var duracao: TimeInterval = 0
 
     init() {
-        guard let url = Bundle.main.url(forResource: "Acender", withExtension: "wav") else {
-            print("Não achei Acender.wav no bundle do app")
+        guard let url = Bundle.main.url(forResource: "Riscando", withExtension: "m4a") else {
+            log.warning("Não achei Riscando.m4a no bundle do app")
             return
         }
         do {
             let arquivo = try AVAudioFile(forReading: url)
-            self.arquivo = arquivo
-            engine.attach(player)
-            engine.attach(timePitch)
-            engine.connect(player, to: timePitch, format: arquivo.processingFormat)
-            engine.connect(timePitch, to: engine.mainMixerNode, format: arquivo.processingFormat)
+            let taxa = arquivo.processingFormat.sampleRate
+            guard let mono = Self.lerEmMono(arquivo) else { return }
+            duracao = Double(mono.count) / taxa
+            let amostras = Self.fazerLoop(Self.normalizar(mono), emenda: Int(Self.duracaoDaEmenda * taxa))
+            let loop = LoopDoRisco(amostras: amostras, passoDoFade: Float(1 / (Self.duracaoDoFade * taxa)))
+            guard let formato = AVAudioFormat(standardFormatWithSampleRate: taxa, channels: 1) else { return }
+            let fonte = Self.criarFonte(loop)
+            engine.attach(fonte)
+            engine.connect(fonte, to: engine.mainMixerNode, format: formato)
+            self.loop = loop
         } catch {
-            print("Erro ao preparar Acender.wav: \(error)")
+            log.error("Erro ao preparar Riscando.m4a: \(error.localizedDescription)")
         }
     }
 
     func preparar() {
-        guard let arquivo else { return }
+        guard loop != nil, !engine.isRunning else { return }
         do {
-            if !engine.isRunning { try engine.start() }
-            if !audioAgendado {
-                timePitch.rate = 1.0 / 32.0
-                player.scheduleFile(arquivo, at: nil, completionHandler: nil)
-                audioAgendado = true
-            }
+            try engine.start()
         } catch {
-            print("Erro ao preparar o risco do fósforo: \(error)")
+            log.error("Erro ao ligar o som do risco: \(error.localizedDescription)")
         }
     }
 
-    func atualizar(velocidade: CGFloat, distanciaNecessaria: CGFloat) {
-        guard let arquivo, distanciaNecessaria > 0 else { return }
-        let duracaoAudio = Double(arquivo.length) / arquivo.processingFormat.sampleRate
-        let taxaDesejada = duracaoAudio * Double(max(0, velocidade)) / Double(distanciaNecessaria)
-        timePitch.rate = Float(min(32, max(1.0 / 32.0, taxaDesejada)))
-
+    /// volume: 0 a 1. Muda com fade, então pode ser chamado a cada movimento do dedo.
+    func tocar(volume: Float) {
         preparar()
-        if !player.isPlaying { player.play() }
+        loop?.volumeAlvo = max(0, min(1, volume))
     }
 
-    func pausar() {
-        player.pause()
+    /// Fade de 20 ms até o silêncio. O loop continua de onde parou na próxima vez.
+    func silenciar() {
+        loop?.volumeAlvo = 0
     }
 
-    func cancelar() {
-        player.stop()
-        audioAgendado = false
-        timePitch.rate = 1
+    /// Silencia e desliga o motor de áudio depois do fade (o fósforo saiu da lixa de vez).
+    func desligar() {
+        silenciar()
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(0.1))
+            guard let self, (self.loop?.volumeAlvo ?? 0) == 0 else { return }
+            self.engine.stop()
+        }
+    }
+
+    // MARK: Preparar o áudio
+
+    private static func lerEmMono(_ arquivo: AVAudioFile) -> [Float]? {
+        let quadros = AVAudioFrameCount(arquivo.length)
+        guard quadros > 0,
+              let buffer = AVAudioPCMBuffer(pcmFormat: arquivo.processingFormat, frameCapacity: quadros),
+              (try? arquivo.read(into: buffer)) != nil,
+              let canais = buffer.floatChannelData else { return nil }
+        let n = Int(buffer.frameLength)
+        let numeroDeCanais = Int(buffer.format.channelCount)
+        var mono = [Float](repeating: 0, count: n)
+        for canal in 0..<numeroDeCanais {
+            let dados = canais[canal]
+            for i in 0..<n { mono[i] += dados[i] / Float(numeroDeCanais) }
+        }
+        return mono
+    }
+
+    private static func normalizar(_ amostras: [Float]) -> [Float] {
+        let pico = amostras.reduce(0) { max($0, abs($1)) }
+        guard pico > 0 else { return amostras }
+        let ganho = picoDesejado / pico
+        return amostras.map { $0 * ganho }
+    }
+
+    // O fim do áudio entra no começo com um cruzamento suave (mesma potência),
+    // assim o loop não tem estalo nem buraco na emenda.
+    private static func fazerLoop(_ amostras: [Float], emenda: Int) -> [Float] {
+        let n = amostras.count
+        let x = min(emenda, n / 4)
+        guard x > 0 else { return amostras }
+        var saida = Array(amostras[0..<(n - x)])
+        for i in 0..<x {
+            let t = Float(i) / Float(x)
+            let entra = sin(t * .pi / 2)
+            let sai = cos(t * .pi / 2)
+            saida[i] = amostras[i] * entra + amostras[n - x + i] * sai
+        }
+        return saida
+    }
+
+    // Fora do ator principal: este bloco roda na thread de áudio.
+    private nonisolated static func criarFonte(_ loop: LoopDoRisco) -> AVAudioSourceNode {
+        AVAudioSourceNode { silencio, _, quadros, listaDeBuffers in
+            loop.preencher(quadros: Int(quadros), listaDeBuffers: listaDeBuffers, silencio: silencio)
+        }
+    }
+}
+
+/// As amostras do loop e o volume, lidos pela thread de áudio.
+/// O volume muda em linha reta até o alvo (fade), amostra por amostra.
+private nonisolated final class LoopDoRisco: @unchecked Sendable {
+    private let amostras: [Float]
+    private let passoDoFade: Float
+    private var posicao = 0
+    private var volume: Float = 0
+    var volumeAlvo: Float = 0   // escrito pela tela, lido pela thread de áudio
+
+    init(amostras: [Float], passoDoFade: Float) {
+        self.amostras = amostras
+        self.passoDoFade = passoDoFade
+    }
+
+    func preencher(quadros: Int, listaDeBuffers: UnsafeMutablePointer<AudioBufferList>,
+                   silencio: UnsafeMutablePointer<ObjCBool>) -> OSStatus {
+        let buffers = UnsafeMutableAudioBufferListPointer(listaDeBuffers)
+        let alvo = volumeAlvo
+        if volume == 0 && alvo == 0 {
+            for buffer in buffers {
+                if let dados = buffer.mData { memset(dados, 0, Int(buffer.mDataByteSize)) }
+            }
+            silencio.pointee = true
+            return noErr
+        }
+        let total = amostras.count
+        for quadro in 0..<quadros {
+            if volume < alvo { volume = min(alvo, volume + passoDoFade) }
+            else if volume > alvo { volume = max(alvo, volume - passoDoFade) }
+            let valor = total > 0 ? amostras[posicao] * volume : 0
+            if total > 0 { posicao = (posicao + 1) % total }
+            for buffer in buffers {
+                buffer.mData?.assumingMemoryBound(to: Float.self)[quadro] = valor
+            }
+        }
+        return noErr
     }
 }
 
@@ -78,11 +178,14 @@ final class Haptics {
     private var chama: CHHapticAdvancedPatternPlayer?
     private var chamaTocando = false   // para religar a chama se o sistema reiniciar o motor
     private var segurar: CHHapticAdvancedPatternPlayer?
-//<<<<<<< Updated upstream
     private var audioPrego: AVAudioPlayer?
-//=======
     private let somRiscoFosforo = SomRiscoFosforo()
-//>>>>>>> Stashed changes
+
+    // SEM MOTOR DE VIBRAÇÃO (iPad): os sons que vão junto com a vibração no iPhone (acender, apagar
+    // e fim, dentro dos .ahap) não tocavam; no iPad os mesmos .wav tocam sozinhos.
+    // Só sons que o time já tinha: nada de som novo inventado. O riscar do fósforo e o prego já têm
+    // som próprio; as batidinhas (tique) ficam sem som, como no iPhone.
+    private var sonsSemVibracao: [String: AVAudioPlayer] = [:]
 
     init() {
         criarMotor()
@@ -91,10 +194,14 @@ final class Haptics {
     // MARK: Motor
 
     private func criarMotor() {
-        // .ambient: o som do app não para a música da pessoa
-        try? AVAudioSession.sharedInstance().setCategory(.ambient)
+        // .playback: o app toca mesmo com o iPhone no silencioso.
+        // .mixWithOthers: o som do app não para a música da pessoa.
+        try? AVAudioSession.sharedInstance().setCategory(.playback, options: [.mixWithOthers])
         carregarAudioDoPrego()
-        guard suportado else { return }
+        guard suportado else {
+            carregarSonsSemVibracao()
+            return
+        }
         do {
             let motor = try CHHapticEngine(audioSession: .sharedInstance())
 
@@ -135,6 +242,23 @@ final class Haptics {
         } catch {
             print("Erro ao carregar Prego.wav: \(error)")
         }
+    }
+
+    private func carregarSonsSemVibracao() {
+        for nome in ["Acender", "Apagar", "Fim"] {
+            guard let url = Bundle.main.url(forResource: nome, withExtension: "wav"),
+                  let player = try? AVAudioPlayer(contentsOf: url) else { continue }
+            player.prepareToPlay()
+            sonsSemVibracao[nome] = player
+        }
+    }
+
+    private func tocarSemVibracao(_ nome: String, volume: Float) {
+        guard volume > 0, let player = sonsSemVibracao[nome] else { return }
+        player.stop()
+        player.currentTime = 0
+        player.volume = max(0, min(1, volume))
+        player.play()
     }
 
     // O enfeite leva 0,45 s para cair. Agenda o WAV original para tocar ao atingir o pote.
@@ -201,7 +325,11 @@ final class Haptics {
 
     // Toca um .ahap. "forca" muda a vibração e "volume" muda o som (os dois de 0 a 1).
     private func tocar(_ nome: String, forca: Float = 1, volume: Float = 1) {
-        guard suportado, let player = players[nome] else { return }
+        guard suportado else {
+            tocarSemVibracao(nome, volume: volume)   // iPad: só o som do mesmo momento
+            return
+        }
+        guard let player = players[nome] else { return }
         let f = max(0, min(1, forca))
         let v = max(0, min(1, volume))
         do {
@@ -234,43 +362,72 @@ final class Haptics {
 
     // MARK: Momentos da vela
 
+    // Interruptor "Sons do fósforo e da chama": riscar, o fósforo acendendo,
+    // a chama da vela aparecendo e a chama apagando. As vibrações continuam sempre.
+    private var volumeFosforoEChama: Float {
+        Chaves.ligado(Chaves.somFosforoEChama) ? 1 : 0
+    }
+
+    // A chama da vela aparece. Ainda não tem som próprio: só a vibração.
+    // Quando chegar um som, ele deve usar volumeFosforoEChama.
     func acender() { tocar("Acender", volume: 0) }
 
-    func apagar() { tocar("Apagar") }
+    func apagar() { tocar("Apagar", volume: volumeFosforoEChama) }
 
     func fim() { tocar("Fim") }
 
     // forca: 0 a 1 (enfeite mais alto = cai de mais alto = batida mais forte e som mais alto)
     func prego(forca: Float) {
         let f = max(0, min(1, forca))
-        tocar("Prego", forca: 0.5 + 0.5 * f, volume: 0)
+        // Vibração mais forte que antes (pedido da mentora); o som vem do Prego.wav (Sofia)
+        tocar("Prego", forca: 0.7 + 0.3 * f, volume: 0)
         tocarAudioDoPrego(forca: 0.4 + 0.6 * f)
     }
 
     // Enfeite que não encostou na vela e caiu no pote
     func caiuNoPote() {
-        tocar("Prego", forca: 0.3, volume: 0)
+        tocar("Prego", forca: 0.55, volume: 0)
         tocarAudioDoPrego(forca: 0.25)
     }
 
-    // Batidinha leve (slider, encaixar enfeite…)
-    func tique() { toque(forca: 0.5, nitidez: 0.5) }
+    // ⚙️ As batidas foram reforçadas (pedido da mentora: os haptics podiam ser mais intensos).
+    // A vibração contínua da chama NÃO mudou (ela já tinha sido suavizada a pedido do time).
+    // Batidinha (slider, encaixar enfeite…)
+    func tique() { toque(forca: 0.7, nitidez: 0.55) }
 
-    // O padrão Acender continua dando a vibração, mas seu áudio é raspado pelo gesto.
+    // MARK: Fósforo
+
+    /// Duração do som de riscar. Riscar a distância mínima neste tempo (ou menos) acende o fósforo.
+    var duracaoDoRisco: TimeInterval { somRiscoFosforo.duracao }
+
     func prepararSomRiscoFosforo() { somRiscoFosforo.preparar() }
 
-    func atualizarSomRiscoFosforo(velocidade: CGFloat, distanciaNecessaria: CGFloat) {
-        somRiscoFosforo.atualizar(velocidade: velocidade, distanciaNecessaria: distanciaNecessaria)
+    /// Atrito na lixa. volume: 0 a 1 (acompanha a velocidade do dedo).
+    func tocarSomRiscoFosforo(volume: Float) {
+        guard volumeFosforoEChama > 0 else { somRiscoFosforo.silenciar(); return }
+        somRiscoFosforo.tocar(volume: volume)
     }
 
-    func pausarSomRiscoFosforo() { somRiscoFosforo.pausar() }
-    func cancelarSomRiscoFosforo() { somRiscoFosforo.cancelar() }
+    /// O dedo parou ou saiu da lixa: o atrito some com fade de 20 ms.
+    func silenciarSomRiscoFosforo() { somRiscoFosforo.silenciar() }
 
-    // Fósforo riscando na caixa: batida seca e áspera
-    func riscar() { toque(forca: 0.9, nitidez: 0.2) }
+    /// O fósforo voltou para a caixa ou acendeu: silencia e desliga o motor de áudio.
+    func cancelarSomRiscoFosforo() { somRiscoFosforo.desligar() }
 
-    // Fósforo raspando na lixa (antes de acender): batidinhas fracas e ásperas
-    func raspar() { toque(forca: 0.35, nitidez: 0.05) }
+    /// O fósforo acende: o padrão Acender, com a vibração e o som da chama pegando juntos.
+    func acenderFosforo() {
+        somRiscoFosforo.silenciar()
+        tocar("Acender", volume: volumeFosforoEChama)
+    }
+
+    // ⚙️ Vibração do fósforo raspando na lixa: bem perceptível enquanto risca.
+    // lentidao: 0 = na velocidade de acender (ou mais rápido), 1 = bem devagar.
+    // Rápido = mais suave (força 0,65, um pouco mais nítida).
+    // Devagar = mais forte e arrastada (força até 0,9, nitidez zero = batida grossa).
+    func raspar(lentidao: Float = 0) {
+        let l = max(0, min(1, lentidao))
+        toque(forca: 0.65 + 0.25 * l, nitidez: 0.2 * (1 - l))
+    }
 
     // MARK: Segurar para descartar (vibração que vai crescendo durante 1 segundo)
 
@@ -340,17 +497,18 @@ final class Haptics {
     func ligarMotor() {}
     func desligarMotor() {}
     func acender() {}
+    var duracaoDoRisco: TimeInterval { 0.68 }
     func prepararSomRiscoFosforo() {}
-    func atualizarSomRiscoFosforo(velocidade: CGFloat, distanciaNecessaria: CGFloat) {}
-    func pausarSomRiscoFosforo() {}
+    func tocarSomRiscoFosforo(volume: Float) {}
+    func silenciarSomRiscoFosforo() {}
     func cancelarSomRiscoFosforo() {}
+    func acenderFosforo() {}
     func apagar() {}
     func fim() {}
     func prego(forca: Float) {}
     func caiuNoPote() {}
     func tique() {}
-    func riscar() {}
-    func raspar() {}
+    func raspar(lentidao: Float = 0) {}
     func iniciarSegurar(duracao: TimeInterval) {}
     func cancelarSegurar() {}
     func iniciarChama() {}

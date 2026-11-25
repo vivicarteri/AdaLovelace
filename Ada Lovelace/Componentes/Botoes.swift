@@ -8,16 +8,14 @@ struct BotaoRedondo: View {
     var icone: String
     var rotulo: String
     var tamanho: CGFloat = 52
+    var comandosDeVoz: [String] = []   // Controle por Voz: outros nomes que também ativam o botão
     var acao: () -> Void
 
     var body: some View {
         Button(action: acao) {
             Image(systemName: icone)
-//<<<<<<< Updated upstream
-                .font(.custom("ViaodaLibre-Regular", size: tamanho * 0.4))
-//=======
+                // O ícone tem tamanho fixo de propósito: crescer com o texto desmontaria a caixa
                 .adaFont(.iconButton, containerSize: tamanho)
-//>>>>>>> Stashed changes
                 .foregroundStyle(Cores.tinta)
                 .frame(width: tamanho, height: tamanho)
                 .background(Circle().fill(Cores.papel))
@@ -26,6 +24,7 @@ struct BotaoRedondo: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(rotulo)
+        .accessibilityInputLabels([rotulo] + comandosDeVoz)
     }
 }
 
@@ -61,8 +60,9 @@ struct BotaoDescartar: View {
                 .padding(3)
             Arte("iconeDescartar") {
                 ZStack {
+                    // O botão antigo: as setas girando em volta, com uma chaminha no meio.
+                    // (Numa junção, as setas perderam o tamanho e entrou uma chama grande no lugar.)
                     Image(systemName: "arrow.triangle.2.circlepath")
-                    Image(systemName: "flame.fill")
                         .adaFont(.iconButtonProminent, containerSize: tamanho)
                     Image(systemName: "flame.fill")
                         .adaFont(.iconButtonDetail, containerSize: tamanho)
@@ -100,13 +100,16 @@ struct BotaoDescartar: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(modoDerreter ? "Derreter a vela" : "Vela nova")
+        .accessibilityLabel(modoDerreter ? "Descartar vela" : "Vela nova")
         .accessibilityHint(modoDerreter ? "Derrete a vela até o fim" : "Joga esta vela fora e coloca uma nova")
+        .accessibilityInputLabels(modoDerreter
+                                  ? ["Descartar vela", "Derreter a vela", "Descartar"]
+                                  : ["Vela nova", "Descartar vela", "Colocar vela nova"])
         .accessibilityAddTraits(.isButton)
         .accessibilityAction { confirmar = true }
-        .confirmationDialog(modoDerreter ? "Derreter a vela até o fim?" : "Colocar uma vela nova?",
+        .confirmationDialog(modoDerreter ? "Descartar a vela? Ela derrete até o fim." : "Colocar uma vela nova?",
                             isPresented: $confirmar, titleVisibility: .visible) {
-            Button(modoDerreter ? "Derreter" : "Vela nova", role: .destructive, action: descartar)
+            Button(modoDerreter ? "Descartar" : "Vela nova", role: .destructive, action: descartar)
             Button("Cancelar", role: .cancel) {}
         }
     }
@@ -119,25 +122,21 @@ struct CortinaView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let tecido = Arte("cortina") {
-                ZStack {
-                    Cores.cortina
-                    HStack(spacing: 0) {
-                        ForEach(0..<8, id: \.self) { _ in
-                            LinearGradient(colors: [.black.opacity(0.25), .clear, .black.opacity(0.25)],
-                                           startPoint: .leading, endPoint: .trailing)
-                        }
-                    }
-                }
-            }
-            .frame(width: geo.size.width, height: geo.size.height + 60)
+            // O pano é mais comprido que a tela: a barra de baixo (as pontas recortadas, com
+            // buracos entre elas) fica TODA abaixo da tela quando a cortina está fechada.
+            // Assim, fechada, ela cobre a tela inteira até o fim; subindo e descendo, as pontas
+            // aparecem passando. Vale para qualquer tamanho de iPhone ou iPad.
+            let comprimento = TecidoDaCortina.comprimento(tela: geo.size.height)
+            let tecido = TecidoDaCortina()
+                .frame(width: geo.size.width, height: comprimento, alignment: .top)
+                .clipped()
 
             Group {
                 if reduzirMovimento {
                     // Sem movimento: a cortina só aparece e some
                     tecido.opacity(fechada ? 1 : 0)
                 } else {
-                    tecido.offset(y: fechada ? 0 : -(geo.size.height + 60))
+                    tecido.offset(y: fechada ? 0 : -comprimento)
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
@@ -145,6 +144,39 @@ struct CortinaView: View {
         .ignoresSafeArea()
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+}
+
+// O pano da cortina. A arte da Georgia ("cortina") é deitada: ela PREENCHE a tela
+// (corta um pouco dos lados) em vez de encolher para caber, senão sobrava tela vazia.
+private struct TecidoDaCortina: View {
+    // Na arte da Georgia (3032 × 2348) o pano é inteiro (sem nenhum buraco) até 85,5% da
+    // altura; daí para baixo vêm as pontas recortadas.
+    static let parteInteira: CGFloat = 2009.0 / 2348.0
+
+    // Altura do pano para a parte inteira chegar até o fim da tela (com folga)
+    static func comprimento(tela altura: CGFloat) -> CGFloat {
+        arteExiste("cortina") ? altura / parteInteira + 20 : altura + 60
+    }
+
+    var body: some View {
+        if arteExiste("cortina") {
+            // Preenche a largura/altura pedida, sempre presa no ALTO (o bando de cima aparece inteiro)
+            GeometryReader { geo in
+                Image("cortina").resizable().scaledToFill()
+                    .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
+            }
+        } else {
+            ZStack {
+                Cores.cortina
+                HStack(spacing: 0) {
+                    ForEach(0..<8, id: \.self) { _ in
+                        LinearGradient(colors: [.black.opacity(0.25), .clear, .black.opacity(0.25)],
+                                       startPoint: .leading, endPoint: .trailing)
+                    }
+                }
+            }
+        }
     }
 }
 

@@ -1,7 +1,7 @@
 //  ConfiguracoesView.swift
 //  Abre de qualquer tela pela engrenagem (também com a vela acesa).
 //
-//  Regras de negócio (Configurações): ligar/desligar sons dos objetos, música de fundo,
+//  Regras de negócio (Configurações): ligar/desligar sons dos objetos, sons do fósforo e da chama, música de fundo,
 //  apagar com sopro e sensores de movimento (Core Motion).
 
 import SwiftUI
@@ -9,9 +9,11 @@ import SwiftUI
 struct ConfiguracoesView: View {
     @AppStorage(Chaves.somAmbiente) private var somAmbiente = true
     @AppStorage(Chaves.somObjetos) private var somObjetos = true
+    @AppStorage(Chaves.somFosforoEChama) private var somFosforoEChama = true
     @AppStorage(Chaves.apagarSoprando) private var apagarSoprando = true
     @AppStorage(Chaves.movimento) private var movimento = true
     @AppStorage(Chaves.resetarDicas) private var resetarDicas = false
+    @AppStorage(Chaves.iluminacaoDramatica) private var iluminacaoDramatica = true
     #if DEBUG
     @AppStorage(Chaves.acelerarTempo) private var acelerarTempo = false
     @AppStorage(Chaves.velocidadeDoTempo) private var velocidadeDoTempo = 2.0
@@ -24,22 +26,30 @@ struct ConfiguracoesView: View {
         NavigationStack {
             Form {
                 Section {
-                    Toggle("Música de fundo", isOn: $somAmbiente)
-                    Toggle("Sons dos objetos", isOn: $somObjetos)
+                    // Os nomes dizem exatamente o que muda na experiência
+                    Toggle("Tocar música enquanto a vela está acesa", isOn: $somAmbiente)
+                        .accessibilityInputLabels(["Música de fundo", "Música"])
+                    Toggle("Sons dos alfinetes e penduricalhos caindo", isOn: $somObjetos)
+                        .accessibilityInputLabels(["Sons dos objetos", "Sons"])
+                    Toggle("Sons do fósforo e da chama (riscar, acender e apagar)", isOn: $somFosforoEChama)
+                        .accessibilityInputLabels(["Sons do fósforo", "Sons da chama"])
                 } header: {
                     Text("Som")
                 } footer: {
-                    Text("A música toca enquanto a vela está acesa. Os sons dos objetos são os alfinetes e penduricalhos caindo. As vibrações continuam.")
+                    Text("Desligar os sons não desliga as vibrações.")
                         .adaFont(.footnote)
                 }
 
                 Section {
-                    Toggle("Apagar soprando", isOn: $apagarSoprando)
-                    Toggle("Usar o movimento do aparelho", isOn: $movimento)
+                    Toggle("Apagar a vela com um sopro (usa o microfone)", isOn: $apagarSoprando)
+                        .accessibilityInputLabels(["Apagar soprando", "Sopro", "Microfone"])
+                    Toggle("Inclinar e virar o aparelho mexem na vela (sensores de movimento)", isOn: $movimento)
+                        .accessibilityInputLabels(["Usar o movimento do aparelho", "Movimento", "Sensores"])
                 } header: {
                     Text("Jeitos de apagar")
                 } footer: {
-                    Text("Sopre na direção da chama com a vela acesa (se precisar, permita o microfone nos Ajustes do aparelho). Com o movimento ligado, inclinar faz a vela derreter mais rápido e virar de cabeça para baixo apaga. Tocar na chama sempre apaga.")
+                    Text("Sopre na direção da chama com a vela acesa (se precisar, permita o microfone nos Ajustes do aparelho). Com o movimento ligado, inclinar faz a vela derreter mais rápido e virar de cabeça para baixo apaga. Tocar na chama sempre apaga. Com o VoiceOver, as ações da vela também apagam a chama e aceleram o derretimento.")
+                        .adaFont(.footnote)
                 }
 
                 Section {
@@ -47,6 +57,7 @@ struct ConfiguracoesView: View {
                         resetarDicas = true
                     }
                     .disabled(resetarDicas)
+                    Toggle("Iluminação dramática", isOn: $iluminacaoDramatica)
                     #if DEBUG
                     Toggle("Acelerar a vela", isOn: $acelerarTempo)
                     if acelerarTempo {
@@ -91,7 +102,7 @@ struct ConfiguracoesView: View {
             } minimumValueLabel: {
                 Text("2×")
             } maximumValueLabel: {
-                Text("10/0×")
+                Text("100×")
             }
             .accessibilityValue("\(multiplicador) vezes mais rápido")
         }

@@ -30,8 +30,10 @@ enum Chaves {
     #endif
     static let sessaoSalva = "sessaoSalva"
     static let somObjetos = "somObjetos"          // sons dos alfinetes e penduricalhos caindo
+    static let somFosforoEChama = "somFosforoEChama"   // riscar, fósforo acendendo, chama aparecendo e apagando
     static let movimento = "movimentoLigado"      // Core Motion: inclinar e virar o aparelho
     static let resetarDicas = "resetarDicas"      // mostra as dicas de novo na próxima abertura
+    static let iluminacaoDramatica = "iluminacaoDramatica"   // a chama como única luz do palco (teste)
 
     // Lê uma chave de liga/desliga (quando nunca foi mexida, vale o padrão)
     static func ligado(_ chave: String, padrao: Bool = true) -> Bool {
@@ -80,6 +82,9 @@ final class Sessao: ObservableObject {
     // o microfone desliga junto para um sopro não apagar uma vela que a pessoa não vê.
     @Published var foraDaCaixa = false { didSet { atualizarSopro() } }
     @Published private(set) var derretendoRapido = false       // a pessoa está segurando o Descartar
+    // Acessibilidade: o mesmo que inclinar o aparelho ao máximo, para quem não pode
+    // (ou não quer) virar o celular. Liga e desliga pelas ações do VoiceOver na vela.
+    @Published private(set) var derretimentoAcelerado = false
 
     // ⚙️ Segurando o Descartar, uma vela INTEIRA derrete em 4 segundos (uma pela metade, em 2).
     static let segundosParaDerreterTudo: Double = 4
@@ -147,6 +152,7 @@ final class Sessao: ObservableObject {
         movimento.fixarReferencia()
         ligarVibracaoDaChama()
         if somAmbienteLigado { ambiente.tocar() }
+        AvisoDeFim.pedirPermissao()          // para avisar quando ela acabar com o app fechado
         anunciar("Vela acesa")
         atualizarRelogio()
         salvar()
@@ -158,6 +164,7 @@ final class Sessao: ObservableObject {
         tique()                       // guarda o tempo que queimou até agora
         guard estado == .acesa else { return }   // pode ter acabado nesse último tique
         estado = .apagada
+        derretimentoAcelerado = false
         RelogioDaHistoria.pausar()
         // Se a pessoa está segurando o Descartar, a vela continua derretendo mesmo apagada
         ultimoTique = derretendoRapido ? Date() : nil
@@ -218,6 +225,15 @@ final class Sessao: ObservableObject {
         salvar()
     }
 
+    // Alternativa a inclinar o aparelho: a vela derrete no ritmo da inclinação máxima
+    func alternarDerretimentoAcelerado() {
+        guard estado == .acesa || derretimentoAcelerado else { return }
+        tique()                                   // guarda o tempo no ritmo de antes
+        derretimentoAcelerado.toggle()
+        anunciar(derretimentoAcelerado ? "A vela está derretendo mais rápido"
+                                       : "A vela voltou ao ritmo normal")
+    }
+
     // VoiceOver (não dá para segurar): derrete tudo de uma vez, depois de confirmar
     func derreterAteOFim() {
         guard estado == .acesa || estado == .apagada else { return }
@@ -234,6 +250,7 @@ final class Sessao: ObservableObject {
         desligarVibracaoDaChama()
         ambiente.parar()
         estado = .nova
+        derretimentoAcelerado = false
         queimado = 0
         progresso = 0
         caidos = []
@@ -256,6 +273,7 @@ final class Sessao: ObservableObject {
             ativo = true
             if movimentoLigado { movimento.iniciar() }
             haptics.ligarMotor()
+            AvisoDeFim.cancelar()     // voltou para o app: o aviso de fim não precisa mais
             tique()                   // conta o tempo que passou com o app fechado
             if estado == .acesa {
                 RelogioDaHistoria.acender()      // app abriu com a vela acesa
@@ -270,6 +288,10 @@ final class Sessao: ObservableObject {
             atualizarRelogio()
             tique()
             salvar()
+            // Vela acesa indo para o segundo plano: avisa quando ela acabar
+            if estado == .acesa {
+                AvisoDeFim.agendar(daquiA: max(0, config.duracao - queimado) / max(Sessao.velocidade, 0.01))
+            }
             movimento.parar()
             ambiente.parar()
             desligarVibracaoDaChama()
@@ -328,7 +350,8 @@ final class Sessao: ObservableObject {
             // Segurando o Descartar: derrete rápido (a vela inteira em poucos segundos)
             queimado += passou * config.duracao / Sessao.segundosParaDerreterTudo
         } else {
-            let fator = 1 + (Sessao.aceleracaoAoGirar - 1) * movimento.inclinacao
+            let inclinacao = derretimentoAcelerado ? 1 : movimento.inclinacao
+            let fator = 1 + (Sessao.aceleracaoAoGirar - 1) * inclinacao
             queimado += passou * Sessao.velocidade * fator
         }
         ultimoTique = agora
@@ -360,6 +383,7 @@ final class Sessao: ObservableObject {
     private func terminar(comSom: Bool) {
         guard estado != .acabou else { return }
         estado = .acabou
+        derretimentoAcelerado = false
         RelogioDaHistoria.pausar()
         ultimoTique = nil
         if derretendoRapido {
