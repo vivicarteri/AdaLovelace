@@ -37,11 +37,6 @@ struct PalcoView: View {
     @State private var caixaAberta: CGFloat = CaixaFosforoView.emRepouso   // gaveta da caixa de fósforos
     // iPhone Duo: a postura do aparelho (aberto, abrindo, laptop, fechado, tenda)
     @ObservedObject private var dobradica = Dobradica.compartilhada
-    #if DEBUG
-    @AppStorage(Chaves.simularDuo) private var simularDuo = false
-    @AppStorage(Chaves.anguloSimulado) private var anguloSimulado = 180.0
-    @AppStorage(Chaves.tendaSimulada) private var tendaSimulada = false
-    #endif
     @State private var dicas = TipGroup(.firstAvailable) {
         DicaDobrarODuo()
         DicaSairDaCaixa()
@@ -121,12 +116,6 @@ struct PalcoView: View {
 
                 // Cortina que desce para trocar de tela
                 CortinaView(fechada: cortinaTela)
-
-                #if DEBUG
-                if simularDuo && !personalizando {
-                    controleDeTesteDoDuo
-                }
-                #endif
             }
             .simultaneousGesture(MagnifyGesture().onEnded { valor in
                 // iPhone Duo: a pinça só vale no modo tenda (no resto, quem troca é a dobra)
@@ -1045,24 +1034,6 @@ struct PalcoView: View {
         fala.accessibilitySpeechAnnouncementPriority = .high
         AccessibilityNotification.Announcement(fala).post()
     }
-
-    #if DEBUG
-    // Só para testar sem o aparelho: finge a dobra (Configurações → Para testar → Simular iPhone Duo)
-    private var controleDeTesteDoDuo: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Dobra simulada: \(Int(anguloSimulado))°")
-                .font(.caption.monospacedDigit())
-            Slider(value: $anguloSimulado, in: 0...180, step: 1) { Text("Ângulo da dobra") }
-            Toggle("Tenda (V invertido)", isOn: $tendaSimulada)
-                .font(.caption)
-        }
-        .padding(10)
-        .frame(width: 240)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .padding(.top, 64)
-    }
-    #endif
 
     private var entradaPelaEsquerda: AnyTransition {
         reduzirMovimento ? .opacity : .move(edge: .leading).combined(with: .opacity)

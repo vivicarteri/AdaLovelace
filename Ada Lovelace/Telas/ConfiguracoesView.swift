@@ -18,7 +18,6 @@ struct ConfiguracoesView: View {
     @AppStorage(Chaves.velocidadeDoTempo) private var velocidadeDoTempo = 2.0
     @AppStorage(Chaves.acelerarCenario) private var acelerarCenario = false
     @AppStorage(Chaves.velocidadeDoCenario) private var velocidadeDoCenario = 2.0
-    @AppStorage(Chaves.simularDuo) private var simularDuo = false
     #endif
     @Environment(\.dismiss) private var dismiss
 
@@ -66,8 +65,6 @@ struct ConfiguracoesView: View {
                     if acelerarCenario {
                         controleDeVelocidade("Velocidade do cenário", valor: $velocidadeDoCenario)
                     }
-                    // Finge ser um iPhone Duo: aparece um controle de dobra no alto do palco
-                    Toggle("Simular iPhone Duo", isOn: $simularDuo)
                     #endif
                 } header: {
                     Text("Para testar")

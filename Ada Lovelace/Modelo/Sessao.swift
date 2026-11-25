@@ -33,10 +33,6 @@ enum Chaves {
     static let somFosforoEChama = "somFosforoEChama"   // riscar, fósforo acendendo, chama aparecendo e apagando
     static let movimento = "movimentoLigado"      // Core Motion: inclinar e virar o aparelho
     static let resetarDicas = "resetarDicas"      // mostra as dicas de novo na próxima abertura
-    // Só para teste (DEBUG): finge ser um iPhone Duo e escolhe o ângulo da dobra
-    static let simularDuo = "simularDuo"
-    static let anguloSimulado = "anguloSimulado"  // 0 = fechado, 180 = aberto
-    static let tendaSimulada = "tendaSimulada"    // entreaberto em "V" invertido, tela externa acesa
 
     // Lê uma chave de liga/desliga (quando nunca foi mexida, vale o padrão)
     static func ligado(_ chave: String, padrao: Bool = true) -> Bool {

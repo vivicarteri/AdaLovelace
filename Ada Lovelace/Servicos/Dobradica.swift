@@ -14,6 +14,7 @@
 //  A/B aberto  de 180° até 100°, tela interna        → a caixa inteira, travada em paisagem
 //  C   laptop  100° ou menos e a dobra na horizontal  → vela embaixo, teatro de sombras em cima
 //  D   fechado o sistema passou para a tela externa   → travado no teatro de sombras, em pé ou deitado
+//                                                       (vindo do laptop, já nasce no lado certo da paisagem)
 //  E   tenda   entreaberto com a tela externa acesa   → troca manual (botão e pinça), em paisagem
 
 import SwiftUI
@@ -39,6 +40,15 @@ final class Dobradica: ObservableObject {
     // ⚙️ Tempo para confirmar o modo tenda: abrindo o aparelho fechado, a tela externa fica acesa
     // um instante antes de o app passar para a interna, e isso não pode virar tenda.
     static let esperaDaTenda: Duration = .milliseconds(400)
+    #if canImport(UIKit)
+    // ⚙️ Fechando a partir do laptop, a tela de fora fica deitada e o "em cima" se inverte
+    // (a metade de cima tomba sobre a de baixo). O sistema leva a orientação antiga e a tela
+    // nasce de cabeça para baixo. Então o app já pede ESTE lado da paisagem na hora de fechar.
+    // Se no teste ela continuar invertida, troque para .landscapeLeft.
+    static let ladoAoFecharDoLaptop: UIInterfaceOrientation = .landscapeRight
+    #endif
+    // ⚙️ Por quanto tempo esse lado fica travado depois de fechar (depois a pessoa gira à vontade)
+    static let travaAoFecharDoLaptop: Duration = .milliseconds(1500)
 
     @Published private(set) var ehDuo = false
     @Published private(set) var postura: PosturaDuo = .aberto
@@ -58,19 +68,17 @@ final class Dobradica: ObservableObject {
 
     private var confirmacaoDaTenda: Task<Void, Never>?
 
+    // Acabou de fechar vindo do laptop: trava o lado da paisagem por um instante
+    private var fechouDoLaptop = false
+    private var fimDaTrava: Task<Void, Never>?
+
     #if DEBUG
-    private var observador: AnyCancellable?
+    private var ultimoStatusRegistrado: Status?
+    private var ultimaDezenaRegistrada = -1
+    private var observadoresDasCenas: [NSKeyValueObservation] = []
     #endif
 
-    private init() {
-        #if DEBUG
-        // Configurações → "Para testar" → Simular iPhone Duo
-        observador = NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in self?.recalcular() }
-        recalcular()
-        #endif
-    }
+    private init() {}
 
     // MARK: Leituras
 
@@ -89,6 +97,16 @@ final class Dobradica: ObservableObject {
         default: status = .aberto
         }
         angulo = hinge.angle.degrees
+        #if DEBUG
+        // Registra quando o status muda ou o ângulo passa de uma dezena para outra
+        let dezena = Int(angulo / 10)
+        if status != ultimoStatusRegistrado || dezena != ultimaDezenaRegistrada {
+            ultimoStatusRegistrado = status
+            ultimaDezenaRegistrada = dezena
+            Dobradica.registrar("dobradiça: \(status) \(Int(angulo.rounded()))°")
+        }
+        observarCenas()
+        #endif
         recalcular()
     }
 
@@ -97,6 +115,9 @@ final class Dobradica: ObservableObject {
         guard tamanho.width > 0, tamanho.height > 0 else { return }
         let emPe = tamanho.height >= tamanho.width
         guard temDobra != naTelaInterna || dobraDeitada != self.dobraDeitada || emPe != telaEmPe else { return }
+        #if DEBUG
+        Dobradica.registrar("tela: \(temDobra ? "de dentro" : "de fora"), dobra \(dobraDeitada ? "deitada" : "em pé ou inativa"), \(Int(tamanho.width))×\(Int(tamanho.height))")
+        #endif
         naTelaInterna = temDobra
         self.dobraDeitada = dobraDeitada
         if telaEmPe != emPe { telaEmPe = emPe }
@@ -106,22 +127,11 @@ final class Dobradica: ObservableObject {
     // MARK: Postura
 
     private func recalcular() {
-        var duo = temDobradica
-        var st = status
-        var graus = angulo
-        var interna = naTelaInterna
-        var deitada = dobraDeitada
-
-        #if DEBUG
-        let padrao = UserDefaults.standard
-        if padrao.bool(forKey: Chaves.simularDuo) {
-            duo = true
-            graus = padrao.object(forKey: Chaves.anguloSimulado) as? Double ?? 180
-            st = graus <= 0 ? .fechado : graus >= 180 ? .aberto : .entreaberto
-            interna = !(st == .entreaberto && padrao.bool(forKey: Chaves.tendaSimulada))
-            deitada = telaEmPe   // sem dobra de verdade: em pé conta como a dobra na horizontal
-        }
-        #endif
+        let duo = temDobradica
+        let st = status
+        let graus = angulo
+        let interna = naTelaInterna
+        let deitada = dobraDeitada
 
         // Respiro: quem já está no laptop só sai acima de 105°; quem não está, só entra em 100°
         laptopPeloAngulo = st == .entreaberto
@@ -157,7 +167,40 @@ final class Dobradica: ObservableObject {
         }
         confirmacaoDaTenda?.cancel()
         confirmacaoDaTenda = nil
-        if postura != nova { postura = nova }
+        guard postura != nova else { return }
+        #if DEBUG
+        Dobradica.registrar("postura: \(postura) → \(nova)")
+        #endif
+        let vinhaDoLaptop = postura == .laptop
+        postura = nova
+        if nova == .fechado && vinhaDoLaptop { travarLadoAoFechar() }
+        else if nova != .fechado { soltarLado() }
+    }
+
+    // Fechou vindo do laptop: pede já o lado certo da paisagem, em vez de esperar o sistema
+    // descobrir sozinho (é aí que a tela aparecia de cabeça para baixo e girava)
+    private func travarLadoAoFechar() {
+        fechouDoLaptop = true
+        #if canImport(UIKit)
+        pedirGiro(para: Dobradica.mascara(de: Dobradica.ladoAoFecharDoLaptop))
+        #endif
+        fimDaTrava?.cancel()
+        fimDaTrava = Task { [weak self] in
+            try? await Task.sleep(for: Dobradica.travaAoFecharDoLaptop)
+            guard let self, !Task.isCancelled else { return }
+            self.soltarLado()
+            #if DEBUG
+            Dobradica.registrar("trava do lado solta")
+            #endif
+        }
+    }
+
+    private func soltarLado() {
+        fimDaTrava?.cancel()
+        fimDaTrava = nil
+        guard fechouDoLaptop else { return }
+        fechouDoLaptop = false
+        atualizarOrientacoes()
     }
 
     // MARK: Orientação (só no Duo)
@@ -167,7 +210,9 @@ final class Dobradica: ObservableObject {
     var orientacoesDoDuo: UIInterfaceOrientationMask? {
         guard ehDuo else { return nil }
         switch postura {
-        case .fechado: return .allButUpsideDown         // D: tela externa, em pé ou deitada (teste)
+        case .fechado:
+            // D: tela externa, em pé ou deitada (teste). Logo depois de fechar vindo do laptop, só um lado.
+            return fechouDoLaptop ? Dobradica.mascara(de: Dobradica.ladoAoFecharDoLaptop) : .allButUpsideDown
         case .tenda: return .landscape                  // E: tela externa, deitada
         case .laptop: return .allButUpsideDown          // C
         case .aberto:
@@ -184,12 +229,90 @@ final class Dobradica: ObservableObject {
         let agora = orientacoesDoDuo
         guard agora != ultimasOrientacoes else { return }
         ultimasOrientacoes = agora
-        for cena in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }) {
+        #if DEBUG
+        Dobradica.registrar("orientações permitidas: \(agora.map(Dobradica.nome(de:)) ?? "as do Info.plist")")
+        #endif
+        for cena in cenas {
             for janela in cena.windows {
                 janela.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
             }
         }
     }
+
+    private var cenas: [UIWindowScene] {
+        UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+    }
+
+    // Pede ao sistema para girar agora (ele pode não atender: a Apple não garante)
+    private func pedirGiro(para mascara: UIInterfaceOrientationMask) {
+        ultimasOrientacoes = mascara
+        #if DEBUG
+        Dobradica.registrar("pedindo giro para \(Dobradica.nome(de: mascara))")
+        #endif
+        for cena in cenas {
+            for janela in cena.windows {
+                janela.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
+            }
+            cena.requestGeometryUpdate(.iOS(interfaceOrientations: mascara)) { erro in
+                #if DEBUG
+                Dobradica.registrar("o sistema recusou o giro: \(erro.localizedDescription)")
+                #endif
+            }
+        }
+    }
+
+    private static func mascara(de orientacao: UIInterfaceOrientation) -> UIInterfaceOrientationMask {
+        switch orientacao {
+        case .landscapeLeft: .landscapeLeft
+        case .landscapeRight: .landscapeRight
+        case .portraitUpsideDown: .portraitUpsideDown
+        default: .portrait
+        }
+    }
+
+    #if DEBUG
+    // MARK: Registro de teste (console do Xcode, só em DEBUG)
+    // Mostra a ordem do que acontece ao abrir e fechar: dobradiça, tela, postura e giros.
+
+    private static let inicio = Date()
+
+    static func registrar(_ texto: String) {
+        print(String(format: "[Duo %7.3f s] ", Date().timeIntervalSince(inicio)) + texto)
+    }
+
+    // Registra cada vez que a cena gira ou muda de tamanho (inclusive o giro de 180°,
+    // que não muda o tamanho e por isso a PalcoView não vê)
+    @available(iOS 26.0, *)
+    private func observarCenas() {
+        guard observadoresDasCenas.isEmpty else { return }
+        observadoresDasCenas = cenas.map { cena in
+            cena.observe(\.effectiveGeometry, options: [.initial, .new]) { cena, _ in
+                let geometria = cena.effectiveGeometry
+                let tamanho = geometria.coordinateSpace.bounds.size
+                Dobradica.registrar("cena: \(Dobradica.nome(de: geometria.interfaceOrientation)), \(Int(tamanho.width))×\(Int(tamanho.height))\(geometria.isInterfaceOrientationLocked ? ", travada" : "")")
+            }
+        }
+    }
+
+    static func nome(de o: UIInterfaceOrientation) -> String {
+        switch o {
+        case .portrait: "em pé"
+        case .portraitUpsideDown: "em pé de cabeça para baixo"
+        case .landscapeLeft: "paisagem esquerda"
+        case .landscapeRight: "paisagem direita"
+        default: "desconhecida"
+        }
+    }
+
+    static func nome(de m: UIInterfaceOrientationMask) -> String {
+        var partes: [String] = []
+        if m.contains(.portrait) { partes.append("em pé") }
+        if m.contains(.portraitUpsideDown) { partes.append("de cabeça para baixo") }
+        if m.contains(.landscapeLeft) { partes.append("paisagem esquerda") }
+        if m.contains(.landscapeRight) { partes.append("paisagem direita") }
+        return partes.joined(separator: " + ")
+    }
+    #endif
     #else
     private func atualizarOrientacoes() {}
     #endif
@@ -201,7 +324,13 @@ final class Dobradica: ObservableObject {
 final class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication,
                      supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
-        Dobradica.compartilhada.orientacoesDoDuo ?? AppDelegate.orientacoesDoInfoPlist
+        let mascara = Dobradica.compartilhada.orientacoesDoDuo ?? AppDelegate.orientacoesDoInfoPlist
+        #if DEBUG
+        if Dobradica.compartilhada.ehDuo {
+            Dobradica.registrar("o sistema perguntou as orientações: \(Dobradica.nome(de: mascara))")
+        }
+        #endif
+        return mascara
     }
 
     // As mesmas chaves que o sistema lê quando o app não responde a pergunta acima
