@@ -193,7 +193,7 @@ struct CenaArte: View {
     var camadaDaSombra: CamadaDaSombra? = nil   // na floresta: só uma camada de sombras (nil = todas)
 
     // ⚙️ Quanto as sombras andam quando a chama deita (em pixels do Quadro) e quanto elas giram
-    static let andarDaSombra: CGFloat = 110
+    static let andarDaSombra: CGFloat = 60   // (era 110: as sombras andavam demais ao mexer o aparelho)
     static let giroDaSombra: Double = 0.05
 
     @Environment(\.accessibilityReduceMotion) private var reduzirMovimento

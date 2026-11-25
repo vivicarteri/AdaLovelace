@@ -26,6 +26,7 @@ struct PalcoView: View {
     @State private var trocando = false        // animação de descartar
     @State private var afundando = false       // vela descendo pelo alçapão
     @State private var velaNovaVisivel = true  // a vela nova aparece devagar (na troca de vela)
+    @State private var conjuntoEscondido = false   // prato + vela lá embaixo, fora da tela (a vela nova sobe do chão)
     @State private var fumacaDaTroca: Date?
 
     // Transições
@@ -38,6 +39,8 @@ struct PalcoView: View {
     @State private var mostrarBotoes = true     // os botões saem de cena durante o zoom
     @State private var caixaAberta: CGFloat = CaixaFosforoView.emRepouso   // gaveta da caixa de fósforos
     @State private var dicas = TipGroup(.firstAvailable) {
+        DicaPegarFosforo()
+        DicaRiscarFosforo()
         DicaSairDaCaixa()
         DicaEntrarNaCaixa()
         DicaOutroJeitoDeApagar()
@@ -79,17 +82,21 @@ struct PalcoView: View {
     var body: some View {
         GeometryReader { geo in
             let g = LayoutPalco(geo: geo)
-            let caixa = MedidasCaixa(tela: geo.size)
+            let caixa = MedidasCaixa(tela: geo.size, margens: geo.safeAreaInsets)
             ZStack {
                 if sessao.foraDaCaixa || cameraAtiva {
                     // Vista de fora. A "câmera" (EfeitoCamera) aproxima ou afasta da caixa.
                     TeatroSombrasView(entrar: entrarNaCaixa,
                                       aberturaCaixa: aberturaCaixa,
-                                      conteudoDaCaixa: mostrarMiniatura ? AnyView(dentroDaCaixa(g, miniatura: true)) : nil,
-                                      congelado: trocandoCena,
-                                      mostrarCamadas: !trocandoCena)
+                                      conteudoDaCaixa: mostrarMiniatura ? miniaturaDoPalco(g, geo, caixa) : nil,
+                                      // As sombras continuam andando durante o zoom. Antes elas
+                                      // paravam e voltavam a andar de uma vez no fim do zoom out
+                                      // (era a "travadinha" quando a tela de sombras terminava).
+                                      congelado: false,
+                                      mostrarCamadas: !trocandoCena,
+                                      margens: geo.safeAreaInsets)
                         .modifier(EfeitoCamera(z: camera, zoomFinal: caixa.zoomFinal,
-                                               alvo: caixa.centroDaAbertura, tela: geo.size))
+                                               alvo: caixa.alvoDaCamera, tela: geo.size))
                         .transition(.opacity)
                 } else if personalizando {
                     PersonalizacaoView(config: sessao.config, haptics: sessao.haptics) {
@@ -129,9 +136,20 @@ struct PalcoView: View {
                 sessao.chamaMudouDeLugar(altura)
             }
         }
+        // A caixa de fósforos fica lá embaixo, encostada na borda: riscando o fósforo, o dedo
+        // passava pela barrinha de baixo do iPhone e trocava de app sem querer (teste da Sofia).
+        // Assim o primeiro deslize na borda de baixo fica com o app; para sair, desliza de novo.
+        .defersSystemGestures(on: .bottom)
         .onAppear {
             // Vela nova (ainda não acesa) ou que acabou: a cortina está fechada
             cortinaFechada = sessao.estado == .acabou || sessao.estado == .nova
+            // A vela acabou com o app fechado: já coloca a vela nova (não tem mais tela de "Fim")
+            if sessao.estado == .acabou {
+                Task {
+                    try? await Task.sleep(for: .seconds(0.6))
+                    if sessao.estado == .acabou { descartar() }
+                }
+            }
         }
         .onChange(of: podeSairDaCaixa, initial: true) { _, podeSair in
             DicaSairDaCaixa.podeSair = podeSair
@@ -141,6 +159,16 @@ struct PalcoView: View {
         }
         .onChange(of: podeApagarNaCaixa, initial: true) { _, podeApagar in
             DicaOutroJeitoDeApagar.velaAcesa = podeApagar
+        }
+        // Dicas do fósforo: pegar (vela apagada, caixa na tela) e riscar (fósforo na mão).
+        // Quem já fez uma vez não vê mais a dica daquele passo.
+        .onChange(of: podePegarFosforo, initial: true) { _, pode in
+            DicaPegarFosforo.podePegar = pode
+        }
+        .onChange(of: etapa, initial: true) { _, agora in
+            DicaRiscarFosforo.fosforoNaMao = agora == .fora
+            if agora == .fora { DicaPegarFosforo().invalidate(reason: .actionPerformed) }
+            if agora == .aceso { DicaRiscarFosforo().invalidate(reason: .actionPerformed) }
         }
         // O fósforo voltou para a caixa (por qualquer caminho): esquece o arraste que estava
         // no meio e fecha a gaveta. Se a vista do fósforo some no meio de um arraste (a vela
@@ -166,6 +194,10 @@ struct PalcoView: View {
                 Task {
                     try? await Task.sleep(for: .seconds(1.5))
                     withAnimation(.easeInOut(duration: 1.6)) { cortinaFechada = true }
+                    // Não tem mais tela de "Fim" (teste da Sofia: ficava anticlimático e era um
+                    // toque a mais): com a cortina fechada, a vela nova já sobe sozinha do prato.
+                    try? await Task.sleep(for: .seconds(1.8))
+                    if sessao.estado == .acabou { descartar() }
                 }
             }
         }
@@ -186,6 +218,18 @@ struct PalcoView: View {
         let margens = geo.safeAreaInsets
         let alturaDaTela = max(geo.size.height + margens.top + margens.bottom, 1)
         return min(1, max(0, Double(1 - (y + margens.top) / alturaDaTela)))
+    }
+
+    // O palco em miniatura que aparece dentro da caixa durante o zoom: o MESMO palco, desenhado
+    // na tela inteira (com as margens da área segura), para bater certinho com o palco de verdade
+    // quando a câmera chega.
+    private func miniaturaDoPalco(_ g: LayoutPalco, _ geo: GeometryProxy, _ caixa: MedidasCaixa) -> AnyView {
+        guard caixa.usaArte else { return AnyView(dentroDaCaixa(g, miniatura: true)) }
+        return AnyView(
+            dentroDaCaixa(g, miniatura: true)
+                .frame(width: geo.size.width, height: geo.size.height)
+                .safeAreaPadding(geo.safeAreaInsets)
+        )
     }
 
     // MARK: - Dentro da caixa (zoom in)
@@ -270,6 +314,7 @@ struct PalcoView: View {
             .frame(width: g.tamanho.width, height: g.tamanho.height)
             .mask(alignment: .top) { Rectangle().frame(height: g.baseY + 2) }
             .opacity(velaNovaVisivel ? 1 : 0)
+            .offset(y: conjuntoEscondido ? g.fundoDaTela : 0)
 
             // Tocar na chama apaga a vela.
             // É também o jeito de apagar SEM virar o aparelho: importante para quem não pode
@@ -287,13 +332,7 @@ struct PalcoView: View {
             SuporteView(largura: g.larguraVela)
                 .position(x: g.centroX + SuporteView.desvioX(largura: g.larguraVela),
                           y: g.baseY + SuporteView.desvioY(largura: g.larguraVela))
-
-            // A vela acabou e a cortina fechou: letreiro de "Fim" e a cortina inteira vira
-            // um botão para começar de novo (antes não tinha nenhuma pista e parecia travado).
-            if estado == .acabou && cortinaFechada && !trocando && !miniatura {
-                fimDoEspetaculo(g)
-                    .transition(.opacity)
-            }
+                .offset(y: conjuntoEscondido ? g.fundoDaTela : 0)
 
             if !miniatura {
                 botoesInferiores(g)
@@ -330,43 +369,6 @@ struct PalcoView: View {
             Button("Abrir personalização") { trocarComCortina { personalizando = true } }
         }
         Button("Abrir configurações") { abrirConfiguracoes() }
-    }
-
-    // Letreiro pendurado na cortina fechada. Tocar em qualquer lugar da cortina abre uma vela nova.
-    private func fimDoEspetaculo(_ g: LayoutPalco) -> some View {
-        ZStack {
-            Color.clear
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    sessao.haptics.tique()
-                    descartar()
-                }
-            VStack(spacing: 14) {
-                Text("Fim")
-                    .adaFont(.screenTitle)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.5)
-                    .foregroundStyle(Cores.tinta)
-                    .padding(.horizontal, 30)
-                    .padding(.vertical, 10)
-                    .background(Capsule().fill(Cores.papel))
-                    .overlay(Capsule().stroke(Cores.tinta, lineWidth: 2))
-                Text("Toque para acender uma vela nova")
-                    .adaFont(.body)
-                    .foregroundStyle(Cores.papel)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: max(0, g.tamanho.width - 48))
-            .position(x: g.tamanho.width / 2, y: g.tamanho.height * 0.42)
-            .allowsHitTesting(false)
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Fim. A vela acabou")
-        .accessibilityHint("Toque duas vezes para colocar uma vela nova")
-        .accessibilityInputLabels(["Vela nova", "Acender vela nova", "Fim"])
-        .accessibilityAddTraits(.isButton)
-        .accessibilityAction { descartar() }
     }
 
     // MARK: Botões
@@ -768,9 +770,14 @@ struct PalcoView: View {
             cameraAtiva = true
             try? await Task.sleep(for: .seconds(0.03))
 
-            // 3. A câmera se afasta e a cortina da caixa fecha no fim do caminho
-            withAnimation(.easeInOut(duration: 1.5)) { camera = 0 }
-            withAnimation(.easeInOut(duration: 0.55).delay(1.15)) { aberturaCaixa = 0 }
+            // 3. A câmera se afasta e a cortina da caixa fecha JUNTO, no mesmo ritmo: os panos
+            //    entram pelas beiradas da tela desde o primeiro instante e vão se encontrando no
+            //    meio. (Antes a cortina só começava a fechar depois, e por um instante aparecia a
+            //    caixa aberta com o palco bem fininho no meio, "do nada".)
+            withAnimation(.easeInOut(duration: 1.5)) {
+                camera = 0
+                aberturaCaixa = 0
+            }
             try? await Task.sleep(for: .seconds(1.75))
 
             // 4. Daqui para a frente é a tela das sombras de verdade
@@ -800,10 +807,13 @@ struct PalcoView: View {
             cameraAtiva = true
             try? await Task.sleep(for: .seconds(0.03))
 
-            // A cortina abre e a câmera já começa a entrar atrás dela
-            withAnimation(.easeInOut(duration: 0.55)) { aberturaCaixa = 1 }
-            withAnimation(.easeInOut(duration: 1.5).delay(0.4)) { camera = 1 }
-            try? await Task.sleep(for: .seconds(2.0))
+            // A câmera entra e a cortina vai abrindo JUNTO, no mesmo ritmo: quando a câmera
+            // chega, os panos acabaram de sair pelas beiradas da tela
+            withAnimation(.easeInOut(duration: 1.5)) {
+                aberturaCaixa = 1
+                camera = 1
+            }
+            try? await Task.sleep(for: .seconds(1.6))
 
             // Troca a miniatura pelo palco de verdade (de novo, a imagem é a mesma)
             sessao.foraDaCaixa = false
@@ -846,6 +856,9 @@ struct PalcoView: View {
     private func descartar() {
         guard !trocando else { return }
         let estavaAcesa = sessao.estado == .acesa
+        // A vela já acabou: não tem o que afundar e a cortina já está fechada.
+        // Pula direto para a vela nova subindo (sem esperar à toa).
+        let jaAcabou = sessao.estado == .acabou
         trocando = true
         etapa = .guardado
         sessao.haptics.pararChama()
@@ -855,18 +868,25 @@ struct PalcoView: View {
         }
         Task {
             if estavaAcesa { try? await Task.sleep(for: .seconds(0.8)) }
-            if !reduzirMovimento {
-                withAnimation(.easeIn(duration: 0.9)) { afundando = true }
+            if jaAcabou {
+                // A vela já acabou e a cortina já está fechada: não tem o que afundar
+                var semAnimacao = Transaction()
+                semAnimacao.disablesAnimations = true
+                withTransaction(semAnimacao) { cortinaFechada = true }
+            } else {
+                // A vela velha afunda pelo alçapão do prato e a cortina fecha
+                if !reduzirMovimento {
+                    withAnimation(.easeIn(duration: 0.9)) { afundando = true }
+                }
+                try? await Task.sleep(for: .seconds(0.9))
+                withAnimation(.easeInOut(duration: 0.9)) { cortinaFechada = true }
+                try? await Task.sleep(for: .seconds(1.0))
             }
-            try? await Task.sleep(for: .seconds(0.9))
-            withAnimation(.easeInOut(duration: 0.9)) { cortinaFechada = true }
-            try? await Task.sleep(for: .seconds(1.0))
-            sessao.descartar()
-            fumacaDaTroca = nil
-            // A vela nova SOBE DO CHÃO: sai de dentro do prato, pelo mesmo alçapão por onde
-            // a velha desceu. A cortina continua fechada atrás dela (só abre quando a vela é acesa).
-            // Com "Reduzir movimento" ela só aparece devagar, sem subir.
+
             if reduzirMovimento {
+                // Com "Reduzir movimento" a vela nova só aparece devagar, sem subir
+                sessao.descartar()
+                fumacaDaTroca = nil
                 var semAnimacao = Transaction()
                 semAnimacao.disablesAnimations = true
                 withTransaction(semAnimacao) {
@@ -876,8 +896,19 @@ struct PalcoView: View {
                 withAnimation(.easeOut(duration: 0.6)) { velaNovaVisivel = true }
                 try? await Task.sleep(for: .seconds(0.6))
             } else {
-                // Ela começa escondida embaixo do prato (afundando = true) e sobe até o lugar
-                withAnimation(.easeOut(duration: 1.1)) { afundando = false }
+                // A vela nova SOBE DO CHÃO já INTEIRA, em pé no prato: o prato vazio desce para
+                // baixo do palco e volta subindo com a vela nova. Antes ela saía de dentro do
+                // prato e, por um instante, parecia uma vela cortada "crescendo".
+                withAnimation(.easeIn(duration: 0.45)) { conjuntoEscondido = true }
+                try? await Task.sleep(for: .seconds(0.45))
+                sessao.descartar()
+                fumacaDaTroca = nil
+                var semAnimacao = Transaction()
+                semAnimacao.disablesAnimations = true
+                withTransaction(semAnimacao) { afundando = false }
+                // Uma pausinha, para a vela nova ser desenhada lá embaixo antes de subir
+                try? await Task.sleep(for: .milliseconds(50))
+                withAnimation(.easeOut(duration: 1.1)) { conjuntoEscondido = false }
                 try? await Task.sleep(for: .seconds(1.1))
             }
             trocando = false
@@ -888,6 +919,12 @@ struct PalcoView: View {
         !sessao.foraDaCaixa && !trocando && (sessao.estado == .acesa || sessao.estado == .apagada)
     }
 
+    // A caixa de fósforos está na tela e dá para pegar um fósforo
+    private var podePegarFosforo: Bool {
+        (sessao.estado == .nova || sessao.estado == .apagada) && !trocando && !sessao.foraDaCaixa
+            && etapa == .guardado && !personalizando
+    }
+
     private var podeApagarNaCaixa: Bool {
         podeSairDaCaixa && sessao.estado == .acesa
     }
@@ -896,6 +933,10 @@ struct PalcoView: View {
         guard !trocandoCena else { return nil }
         // O contexto da tela muda antes de o TipKit reavaliar as regras.
         switch dicas.currentTip {
+        case let dica as DicaPegarFosforo where podePegarFosforo:
+            return dica
+        case let dica as DicaRiscarFosforo where etapa == .fora && !sessao.foraDaCaixa:
+            return dica
         case let dica as DicaEntrarNaCaixa where sessao.foraDaCaixa:
             return dica
         case let dica as DicaSairDaCaixa where podeSairDaCaixa:

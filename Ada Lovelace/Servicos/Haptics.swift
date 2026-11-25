@@ -307,6 +307,11 @@ final class Haptics {
         }
     }
 
+    // ⚙️ Vibrações mais fortes (pedido da mentora): a força de cada batida do .ahap é multiplicada
+    // por este número (no máximo 1, que é o mais forte que o iPhone faz). Os arquivos da Sofia
+    // continuam iguais: o reforço é feito aqui, na hora de carregar.
+    static let reforcoDaVibracao: [String: Double] = ["Acender": 1.8, "Apagar": 1.25]
+
     private func padrao(_ nome: String) -> CHHapticPattern? {
         guard let url = Bundle.main.url(forResource: nome, withExtension: "ahap") else {
             log.warning("Arquivo \(nome, privacy: .public).ahap não encontrado no bundle.")
@@ -315,12 +320,34 @@ final class Haptics {
         do {
             let dados = try Data(contentsOf: url)
             let json = try JSONSerialization.jsonObject(with: dados)
-            guard let dicionario = json as? [CHHapticPattern.Key: Any] else { return nil }
-            return try CHHapticPattern(dictionary: dicionario)
+            guard var dicionario = json as? [String: Any] else { return nil }
+            if let reforco = Haptics.reforcoDaVibracao[nome],
+               let partes = dicionario["Pattern"] as? [[String: Any]] {
+                dicionario["Pattern"] = partes.map { Haptics.reforcar($0, por: reforco) }
+            }
+            let comChaves = Dictionary(uniqueKeysWithValues: dicionario.map { (CHHapticPattern.Key(rawValue: $0.key), $0.value) })
+            return try CHHapticPattern(dictionary: comChaves)
         } catch {
             log.error("Erro ao ler \(nome, privacy: .public).ahap: \(error.localizedDescription)")
             return nil
         }
+    }
+
+    // Multiplica a força ("HapticIntensity") de um evento de vibração do .ahap
+    private static func reforcar(_ parte: [String: Any], por reforco: Double) -> [String: Any] {
+        guard var evento = parte["Event"] as? [String: Any],
+              let tipo = evento["EventType"] as? String, tipo.hasPrefix("Haptic"),
+              let parametros = evento["EventParameters"] as? [[String: Any]] else { return parte }
+        evento["EventParameters"] = parametros.map { parametro -> [String: Any] in
+            guard parametro["ParameterID"] as? String == "HapticIntensity",
+                  let valor = (parametro["ParameterValue"] as? NSNumber)?.doubleValue else { return parametro }
+            var novo = parametro
+            novo["ParameterValue"] = min(1, valor * reforco)
+            return novo
+        }
+        var nova = parte
+        nova["Event"] = evento
+        return nova
     }
 
     // Toca um .ahap. "forca" muda a vibração e "volume" muda o som (os dois de 0 a 1).

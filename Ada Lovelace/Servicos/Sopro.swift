@@ -19,6 +19,11 @@ final class Sopro {
     // ⚙️ Folga em volta da troca, para o microfone não ficar trocando com a chama bem no meio.
     static let folgaDaTroca = 0.05
 
+    // ⚙️ Quanto tempo o sopro precisa durar para apagar (em segundos). Era 0,15: barulhos curtos
+    // (apertar o volume, encostar o celular numa garrafa) chegavam a apagar a vela. Um sopro de
+    // verdade dura bem mais que isso.
+    static let duracaoMinimaDoSopro = 0.3
+
     private enum Lado { case cima, baixo }
 
     // O resultado da parte cara (AVAudioSession + AVAudioEngine), montado fora da main thread.
@@ -358,7 +363,7 @@ final class Sopro {
             if tempoQuieto > 0.08 { tempoSoprando = 0 }
         }
 
-        if tempoSoprando >= 0.15 {
+        if tempoSoprando >= Sopro.duracaoMinimaDoSopro {
             tempoSoprando = 0
             tempoQuieto = 0
             aoSoprar?()

@@ -16,6 +16,12 @@ struct Enfeite: Identifiable, Codable, Equatable {
     var tipo: TipoEnfeite
     var altura: Double   // 0 = base da vela, 1 = topo
     var lado: Double     // -1 = esquerda, 1 = direita
+    // Qual dos desenhos de alfinete da Georgia (0 = estrela, 1 = coração, 2 = bolinha).
+    // Opcional: velas salvas antes de existir isso continuam abrindo (aí sai do próprio id).
+    var estilo: Int? = nil
+
+    var desenho: Int { estilo ?? Int(id.uuid.0) % Enfeite.quantosEstilos }
+    static let quantosEstilos = 3
 }
 
 // Furinho que fica na cera quando a pessoa tira um enfeite do lugar
@@ -76,12 +82,18 @@ struct VelaConfig: Codable, Equatable {
     // Se a pessoa solta em cima de um enfeite que já está lá, o app empurra o novo
     // um pouquinho para cima ou para baixo — o que estiver mais perto de onde ela soltou.
     //
+    // distanciaMaxima: o quanto o app pode empurrar (fração da altura da vela). Soltando com o
+    // dedo, ele só empurra um pouquinho; se ali perto não couber, o enfeite volta para a caixinha.
+    // Antes ele ia parar em qualquer lugar livre: um alfinete solto lá embaixo foi parar no topo
+    // (teste da Sofia). Sem limite (nil) é para o VoiceOver, que procura um lugar livre na vela.
+    //
     // Cada lado da vela (esquerda e direita) é contado separado: um alfinete na esquerda
     // não atrapalha um penduricalho na direita.
     //
     // Devolve a altura onde o enfeite coube, ou nil se não tem mais espaço
     // (aí ele cai no pote, como quando não encosta na vela).
-    func acomodar(_ tipo: TipoEnfeite, altura: Double, lado: Double, tamanho: TamanhoEnfeite) -> Double? {
+    func acomodar(_ tipo: TipoEnfeite, altura: Double, lado: Double, tamanho: TamanhoEnfeite,
+                  distanciaMaxima: Double? = nil) -> Double? {
         guard sobram(tipo) > 0 else { return nil }
         let faixa = VelaConfig.faixaPermitida
         let vizinhos = enfeites.filter { ($0.lado < 0) == (lado < 0) }
@@ -106,6 +118,7 @@ struct VelaConfig: Codable, Equatable {
                     }
                 }
             }
+            .filter { lugar in distanciaMaxima.map { abs(lugar - altura) <= $0 } ?? true }
             .min { abs($0 - altura) < abs($1 - altura) }   // o mais perto de onde ela soltou
     }
 
@@ -116,6 +129,9 @@ struct VelaConfig: Codable, Equatable {
 }
 
 // Quanto cada enfeite ocupa na vela, para cima e para baixo da linha onde ele espeta.
+// Conta só a CABEÇA (o que fica espetado na cera). O fio e a estrelinha do penduricalho
+// ficam pendurados e podem passar na frente de outro enfeite: a vela é redonda, então
+// dá para pôr um penduricalho logo ao lado do outro (pedido da Sofia).
 // Os números saem do tamanho do desenho (em pontos) e chegam aqui já em fração da
 // altura da vela — assim a regra funciona igual para vela pequena e vela grande.
 // Quem monta isso é a tela: veja TamanhoEnfeite.daVela(...) na VelaView.
