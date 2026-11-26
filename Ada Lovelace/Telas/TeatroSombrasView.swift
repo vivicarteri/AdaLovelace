@@ -19,18 +19,17 @@ struct TeatroSombrasView: View {
     var conteudoDaCaixa: AnyView? = nil   // palco em miniatura (só na animação de entrar e sair)
     var congelado = false                 // durante o zoom as sombras param, para o movimento ficar liso
     var mostrarCamadas = true             // VoiceOver: rotor das camadas (fica de fora na animação)
+    var margens = EdgeInsets()            // margens da área segura do aparelho (vêm da PalcoView)
 
     var body: some View {
         let acesa = sessao.estado == .acesa
 
         GeometryReader { geo in
             let w = geo.size.width, h = geo.size.height
-            let caixa = MedidasCaixa(tela: geo.size)
+            // As margens vêm de fora: aqui dentro o GeometryReader não enxerga a área segura
+            let caixa = MedidasCaixa(tela: geo.size, margens: margens)
             let luz = Projecao(sessao: sessao, caixa: caixa, tela: geo.size)
             ZStack {
-                // Parede: clara com a vela acesa, escura com ela apagada.
-                // Na floresta a parede é quase branca (referência da Georgia), para as sombras cinza
-                // ficarem bem definidas.
                 (acesa ? (Floresta.ligada ? Color(white: 0.96) : Cores.papel) : Cores.fundoEscuro)
                     .ignoresSafeArea()
 
@@ -106,7 +105,7 @@ struct TeatroSombrasView: View {
                     CaixaTeatroView(medidas: caixa, acesa: acesa,
                                     aberturaCortina: aberturaCaixa, conteudo: conteudoDaCaixa)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SemEfeitoAoTocar())
                 .accessibilityLabel("Aproximar a caixa")
                 .accessibilityHint("Volta para a vela dentro da caixa")
                 .accessibilityInputLabels(["Aproximar a caixa", "Entrar na caixa", "Voltar para a vela", "Caixa de teatro"])
@@ -127,6 +126,13 @@ struct TeatroSombrasView: View {
     }
 }
 
+// Botão que não muda nada no desenho quando é tocado (o .plain deixa ele meio transparente)
+private struct SemEfeitoAoTocar: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+    }
+}
+
 // MEDIDAS DA CORTINA DE CIMA (bambinela)
 // A faixa tem 14% da altura da tela. Se a tela for larga demais para isso (iPad deitado),
 // ela cresce até a arte caber inteira na largura (no máximo 22% da altura), para as
@@ -135,7 +141,6 @@ enum MedidasBambinela {
     static let nome = "bambinela"
     static let alturaPadrao: CGFloat = 0.14
     static let alturaMaxima: CGFloat = 0.22
-    // Na arte da Georgia (3032 × 476), as franjas terminam a 437 px do alto
     static let fimDasFranjas: CGFloat = 437.0 / 476.0
 
     // Largura ÷ altura da arte (lida do Assets; se a Georgia trocar a imagem, acompanha)
@@ -217,8 +222,9 @@ struct Projecao {
         let chamaNaArte = ArteVela.baseY - ArteVela.alturaMaxima * altura
             + VelaView.centroDaChama(largura: ArteVela.largura).y
         let fracaoNoPalco = min(1, max(0, chamaNaArte / Quadro.altura))
-        let topoDaAbertura = caixa.centroDaAbertura.y - caixa.abertura.height / 2
-        let y = topoDaAbertura + fracaoNoPalco * caixa.abertura.height
+        // (O palco em miniatura fica no meio da abertura, do tamanho da tela vista de longe)
+        let topoDaAbertura = caixa.centroDaAbertura.y - caixa.miniatura.height / 2
+        let y = topoDaAbertura + fracaoNoPalco * caixa.miniatura.height
         let h = max(tela.height, 1)
         ancora = UnitPoint(x: caixa.centroDaAbertura.x / max(tela.width, 1), y: y / h)
 

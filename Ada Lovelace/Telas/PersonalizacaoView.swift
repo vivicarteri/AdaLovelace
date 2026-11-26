@@ -3,7 +3,10 @@
 //
 //  Regras:
 //  - Fechar: perde tudo o que mudou. Confirmar: salva e o modal desce para a home.
-//  - Até 6 alfinetes e 6 penduricalhos (o limite é o que tem na caixinha), para qualquer tamanho de vela.
+//  - Até 6 alfinetes (o limite é o que tem nas almofadas), para qualquer tamanho de vela.
+//  - Sem abas (ideia da Sofia, mais "dentro da cena"): o slider do tamanho fica sempre ao lado
+//    da vela e as almofadas com os alfinetes ficam sempre à mostra, embaixo.
+//    Os penduricalhos saíram da tela, mas o código deles continua (VelaView/VelaConfig).
 //  - Arrastar da caixinha até a vela. Se não encostar na vela, cai no pote, faz barulho e volta para a caixinha.
 //  - Dá para tirar e reposicionar: fica um furinho onde ele estava.
 //  - Slider exponencial de 10 a 180 minutos. Na tela não aparece nenhum número.
@@ -20,8 +23,6 @@ struct PersonalizacaoView: View {
     private let original: VelaConfig                 // como a vela estava ao entrar
     @State private var confirmarSaida = false        // "sair sem salvar?"
 
-    private enum Aba { case tempo, alfinete, penduricalho }
-    @State private var aba: Aba = .tempo
 
     // Enfeite sendo arrastado (da caixinha ou tirado da vela)
     private struct Arrastando {
@@ -29,6 +30,7 @@ struct PersonalizacaoView: View {
         var ponto: CGPoint          // onde o alfinete vai espetar
         var tiradoDe: Enfeite?      // se veio da vela
         var daCaixinha: Int? = nil  // qual peça da caixinha está na mão (a que a pessoa pegou)
+        var estilo = 0              // qual desenho de alfinete (estrela, coração ou bolinha)
         var caindo = false
     }
     @State private var arrastando: Arrastando?
@@ -36,6 +38,10 @@ struct PersonalizacaoView: View {
     // A ordem das peças na caixinha (cada peça tem um número que não muda). Assim, quando uma sai,
     // as outras andam para fechar o buraco, com animação, em vez de sumir sempre a última.
     @State private var pecasNaCaixinha: [TipoEnfeite: [Int]] = [:]
+
+    // Quais alfinetes já saíram das almofadas (o número é a vaga, veja ArteAtelie.vagas).
+    // Cada alfinete tem o seu lugar: quando um sai, os outros não mudam de lugar.
+    @State private var vagasUsadas: Set<Int>
 
     // Para o enfeite ficar visível acima do dedo
     private let acimaDoDedo: CGFloat = 36
@@ -49,6 +55,7 @@ struct PersonalizacaoView: View {
         self.fechar = fechar
         self.confirmar = confirmar
         _rascunho = State(initialValue: config)
+        _vagasUsadas = State(initialValue: PersonalizacaoView.vagasOcupadas(por: config))
         original = config
     }
 
@@ -62,32 +69,29 @@ struct PersonalizacaoView: View {
 
                 velaEmEdicao(g)
 
-                if aba == .tempo {
-                    slider(g)
-                        .transition(.opacity)
-                }
+                // O slider do tamanho, sempre ao lado da vela
+                slider(g)
 
+                // As almofadas com os alfinetes, sempre à mostra
                 caixinha(g)
-
-                abas(g)
 
                 // Enfeite voando com o dedo (ou caindo no pote)
                 if let arrastando {
                     EnfeiteView(tipo: arrastando.tipo,
                                 lado: arrastando.ponto.x < g.centroX ? -1 : 1,
-                                largura: g.larguraVela)
+                                largura: g.larguraVela,
+                                estilo: arrastando.estilo)
                         // A linha do alfinete fica EXATAMENTE onde ele vai espetar (igual na vela).
                         // Antes a conta estava invertida: no penduricalho, o que ficava no ponto era a
                         // estrelinha, e ao soltar ele subia (não ficava onde a pessoa escolheu).
                         .position(x: arrastando.ponto.x,
                                   y: arrastando.ponto.y
-                                     + EnfeiteView.alturaDoAlfinete(arrastando.tipo, largura: g.larguraVela)
-                                     - EnfeiteView.alturaDesenho(arrastando.tipo, largura: g.larguraVela) / 2)
+                                     + EnfeiteView.alturaDoAlfinete(arrastando.tipo, estilo: arrastando.estilo, largura: g.larguraVela)
+                                     - EnfeiteView.alturaDesenho(arrastando.tipo, estilo: arrastando.estilo, largura: g.larguraVela) / 2)
                         .allowsHitTesting(false)
                 }
             }
             .coordinateSpace(.named("atelie"))
-            .animation(.easeInOut(duration: 0.25), value: aba)
             // Smart Invert: o ateliê é arte de papel e madeira, não inverte
             .accessibilityIgnoresInvertColors()
             .accessibilityElement(children: .contain)
@@ -106,17 +110,8 @@ struct PersonalizacaoView: View {
         }
     }
 
-    // O tipo de enfeite da aba escolhida (nil na aba de duração)
-    private var tipoDaAba: TipoEnfeite? {
-        switch aba {
-        case .tempo: nil
-        case .alfinete: .alfinete
-        case .penduricalho: .penduricalho
-        }
-    }
-
     private var dicaDaVela: String {
-        switch tipoDaAba {
+        switch arrastando?.tipo {
         case .alfinete: "Use as ações para inserir alfinetes, e o rotor Enfeites para visitar cada um"
         case .penduricalho: "Use as ações para inserir penduricalhos, e o rotor Enfeites para visitar cada um"
         case nil: ""
@@ -126,11 +121,16 @@ struct PersonalizacaoView: View {
     // MARK: Partes da tela
 
     // Fundo: estou num ateliê (mesa de madeira)
+    // Fundo: a mesma cortina fechada (e o mesmo escuro) da tela da vela, porque a vela
+    // ainda não foi acesa. Antes era a mesa de madeira do ateliê.
     private var fundo: some View {
-        Arte("atelie") {
-            LinearGradient(colors: [Cores.madeira.opacity(0.85), Cores.madeira], startPoint: .top, endPoint: .bottom)
+        ZStack {
+            Cores.fundoEscuro.ignoresSafeArea()
+            CortinaLateralView(fechada: true)
+            Color.black.opacity(MedidasDoPalco.escuroComVelaApagada)
+                .ignoresSafeArea()
         }
-        .ignoresSafeArea()
+        .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
 
@@ -165,6 +165,7 @@ struct PersonalizacaoView: View {
         let alturaCheia = g.alturaCheia(rascunho.posicaoSlider)
         let espacoChama = VelaView.espacoChama(largura: g.larguraVela)
         let movendo = arrastando?.tiradoDe?.id
+        let tipo = arrastando?.tipo ?? .alfinete
 
         return ZStack {
             VelaView(alturaCheia: alturaCheia,
@@ -178,13 +179,11 @@ struct PersonalizacaoView: View {
                 // As ações seguem a aba: na Duração não tem nenhuma (a duração fica no ajustável);
                 // em Alfinetes e Penduricalhos, só as daquele tipo.
                 .accessibilityActions {
-                    if let tipo = tipoDaAba {
-                        ForEach(LugarNaVela.allCases, id: \.self) { lugar in
-                            Button("Inserir \(tipo.nome) \(lugar.texto)") { colocarPeloVoiceOver(tipo, lugar, g) }
-                        }
-                        if let ultimo = rascunho.enfeites.last(where: { $0.tipo == tipo }) {
-                            Button("Tirar o último \(tipo.nome)") { remover(ultimo) }
-                        }
+                    ForEach(LugarNaVela.allCases, id: \.self) { lugar in
+                        Button("Inserir \(tipo.nome) \(lugar.texto)") { colocarPeloVoiceOver(tipo, lugar, g) }
+                    }
+                    if let ultimo = rascunho.enfeites.last(where: { $0.tipo == tipo }) {
+                        Button("Tirar o último \(tipo.nome)") { remover(ultimo) }
                     }
                 }
                 .accessibilityFocused($focoNaVela)
@@ -200,8 +199,12 @@ struct PersonalizacaoView: View {
             // Elas ficam em cima do DESENHO (o penduricalho pendura para baixo, então
             // a área acompanha a estrelinha em vez de ficar só na linha do alfinete).
             ForEach(rascunho.enfeites) { enfeite in
-                let acima = EnfeiteView.acima(enfeite.tipo, largura: g.larguraVela)
-                let abaixo = EnfeiteView.abaixo(enfeite.tipo, largura: g.larguraVela)
+                let acima = EnfeiteView.acima(enfeite.tipo, estilo: enfeite.desenho, largura: g.larguraVela)
+                let abaixo = EnfeiteView.abaixo(enfeite.tipo, estilo: enfeite.desenho, largura: g.larguraVela)
+                // O enfeite fica espetado na borda da cera (que muda com a altura): a área de toque vai junto
+                let meio = VelaView.meioDoEnfeite(enfeite.tipo, estilo: enfeite.desenho, lado: enfeite.lado,
+                                                  altura: CGFloat(enfeite.altura) * alturaCheia,
+                                                  largura: g.larguraVela, alturaCera: alturaCheia)
                 // Quase transparente (e não .clear), para o VoiceOver enxergar o enfeite
                 Color.black.opacity(0.001)
                     .frame(width: 44, height: max(36, acima + abaixo))
@@ -212,7 +215,7 @@ struct PersonalizacaoView: View {
                     .accessibilityLabel(rotulo(enfeite))
                     .accessibilityAction(named: "Remover") { remover(enfeite) }
                     .accessibilityRotorEntry(id: enfeite.id, in: rotorEnfeites)
-                    .position(x: g.centroX + CGFloat(enfeite.lado) * g.larguraVela * 0.62,
+                    .position(x: g.centroX + meio.x,
                               y: g.baseY - CGFloat(enfeite.altura) * alturaCheia + (abaixo - acima) / 2)
             }
         }
@@ -291,11 +294,16 @@ struct PersonalizacaoView: View {
 
     // Caixinha com os enfeites que sobram (o limite é o que tem nela)
     private func caixinha(_ g: LayoutAtelie) -> some View {
-        let tipo: TipoEnfeite? = aba == .alfinete ? .alfinete : aba == .penduricalho ? .penduricalho : nil
+        let tipo: TipoEnfeite? = .alfinete
         let sobram = tipo.map { rascunho.sobram($0) } ?? 0
         let arrastandoDaCaixinha = arrastando != nil && arrastando?.tiradoDe == nil
 
         return ZStack {
+            if tipo == .alfinete && arteExiste("almofada1") {
+                almofadas(g)
+            } else if tipo == .penduricalho && arteExiste("bandejaPenduricalhos") {
+                bandeja(g, sobram: sobram)
+            } else {
             Arte("caixinha") {
                 RoundedRectangle(cornerRadius: 10)
                     .fill(Cores.papel)
@@ -307,7 +315,8 @@ struct PersonalizacaoView: View {
                 let pecas = pecasVisiveis(tipo, sobram: sobram)
                 HStack(spacing: 4) {
                     ForEach(pecas, id: \.self) { peca in
-                        EnfeiteView(tipo: tipo, lado: -1, largura: g.larguraVela * 0.7)
+                        EnfeiteView(tipo: tipo, lado: -1, largura: g.larguraVela * 0.7,
+                                    estilo: peca % Enfeite.quantosEstilos)
                             .rotationEffect(.degrees(tipo == .alfinete ? -60 : 0))
                             .frame(width: g.caixinha.width / 7, height: g.caixinha.height * 0.8)
                             .contentShape(Rectangle())
@@ -327,12 +336,13 @@ struct PersonalizacaoView: View {
                     .foregroundStyle(Cores.tinta.opacity(0.7))
                     .padding(.horizontal)
             }
+            }
         }
         .position(x: g.centroX, y: g.caixinhaY)
         // VoiceOver: a caixinha vira um item com as ações de inserir (o arraste não é obrigatório)
         .accessibilityElement(children: .ignore)
         .accessibilityHidden(tipo == nil)
-        .accessibilityLabel(tipo == .penduricalho ? "Caixinha de penduricalhos" : "Caixinha de alfinetes")
+        .accessibilityLabel(tipo == .penduricalho ? "Bandeja de penduricalhos" : "Almofadas de alfinetes")
         .accessibilityValue(textoDaCaixinha(sobram))
         .accessibilityActions {
             if let tipo {
@@ -343,33 +353,139 @@ struct PersonalizacaoView: View {
         }
     }
 
-    private func abas(_ g: LayoutAtelie) -> some View {
-        HStack(spacing: 28) {
-            botaoAba(.tempo, icone: "clock", rotulo: "Tempo", voz: ["Duração", "Tamanho"])
-            botaoAba(.alfinete, icone: "pin", rotulo: "Alfinetes", voz: ["Alfinete"])
-            botaoAba(.penduricalho, icone: "star", rotulo: "Penduricalhos", voz: ["Penduricalho"])
+    // AS ALMOFADAS DA GEORGIA: os alfinetes que sobram ficam espetados nelas.
+    // Os alfinetes são desenhados ATRÁS da almofada: a ponta da agulha some dentro dela.
+    private func almofadas(_ g: LayoutAtelie) -> some View {
+        let a = ArteAtelie.self
+        let larguraArte = a.almofada1.width + a.vaoEntreAlmofadas + a.almofada2.width
+        let alturaArte = a.almofada2.height + a.alturaDosAlfinetes
+        // Mesma escala do desenho da vela: os alfinetes da almofada ficam do tamanho dos que vão
+        // para a vela, e a almofada fica do tamanho que a Georgia desenhou perto da vela
+        // (antes elas eram esticadas para encher a caixinha e ficavam grandes demais).
+        // ⚙️ 1,4: um pouco maiores que na escala da vela (pedido do time), sem passar da largura da tela
+        let larguraComBandeja = arteExiste("bandejaPenduricalhos") ? max(larguraArte, a.bandeja.width) : larguraArte
+        let f = min(1.4 * ArteVela.k * g.larguraVela / ArteVela.largura, g.tamanho.width * 0.94 / larguraComBandeja)
+        let w = larguraArte * f, h = alturaArte * f
+        // As almofadas ficam apoiadas lá embaixo, longe do prato da vela
+        // (com a bandeja, a borda da frente dela é que fica no "apoio")
+        let sobraDaBandeja = arteExiste("bandejaPenduricalhos")
+            ? (a.bandeja.height - a.fundoDasAlmofadasNaBandeja) * f : 0
+        let apoio = g.apoioDasAlmofadas - sobraDaBandeja
+        let origem1 = CGPoint(x: 0, y: h - a.almofada1.height * f)
+        let origem2 = CGPoint(x: (a.almofada1.width + a.vaoEntreAlmofadas) * f, y: h - a.almofada2.height * f)
+        let naMao = arrastando?.tiradoDe == nil && arrastando?.tipo == .alfinete ? arrastando?.daCaixinha : nil
+
+        // A bandeja da Georgia fica atrás das almofadas (as almofadas apoiam dentro dela)
+        let usaBandeja = arteExiste("bandejaPenduricalhos")
+        let bandejaW = a.bandeja.width * f, bandejaH = a.bandeja.height * f
+        let bandejaX = (w - bandejaW) / 2                          // centrada nas almofadas
+        let bandejaY = h - (a.fundoDasAlmofadasNaBandeja * f)      // as almofadas "afundam" nela
+
+        return ZStack(alignment: .topLeading) {
+            // 0) A bandeja (atrás de tudo)
+            if usaBandeja {
+                Image("bandejaPenduricalhos").resizable()
+                    .frame(width: bandejaW, height: bandejaH)
+                    .offset(x: bandejaX, y: bandejaY)
+                    .allowsHitTesting(false)
+            }
+
+            // 1) Os alfinetes (atrás)
+            ForEach(a.vagas.indices, id: \.self) { i in
+                if !vagasUsadas.contains(i) {
+                    let vaga = a.vagas[i]
+                    let origem = vaga.almofada == 0 ? origem1 : origem2
+                    let desenho = EnfeiteView.desenhoDoAlfinete(vaga.estilo)
+                    let tamanho = CGSize(width: desenho.tamanho.width * f, height: desenho.tamanho.height * f)
+                    let ponta = CGPoint(x: desenho.ponta.x * f, y: desenho.ponta.y * f)
+                    Image("alfinete\(vaga.estilo + 1)")
+                        .resizable()
+                        .frame(width: tamanho.width, height: tamanho.height)
+                        // Deitado ele aponta para a direita; girando 90° fica de cabeça para cima
+                        .rotationEffect(.degrees(90 + vaga.giro),
+                                        anchor: UnitPoint(x: ponta.x / tamanho.width, y: ponta.y / tamanho.height))
+                        .offset(x: origem.x + vaga.ponto.x * f - ponta.x, y: origem.y + vaga.ponto.y * f - ponta.y)
+                        .opacity(naMao == i ? 0 : 1)
+                        .transition(.opacity)
+                }
+            }
+
+            // 2) As almofadas (na frente)
+            Image("almofada1").resizable()
+                .frame(width: a.almofada1.width * f, height: a.almofada1.height * f)
+                .offset(x: origem1.x, y: origem1.y)
+            Image("almofada2").resizable()
+                .frame(width: a.almofada2.width * f, height: a.almofada2.height * f)
+                .offset(x: origem2.x, y: origem2.y)
+
+            // 2b) A borda da frente da bandeja, por cima do pé das almofadas
+            if usaBandeja {
+                Image("bandejaFrente").resizable()
+                    .frame(width: a.bandejaFrente.width * f, height: a.bandejaFrente.height * f)
+                    .offset(x: bandejaX + a.frenteX * f, y: bandejaY + a.frenteY * f)
+                    .allowsHitTesting(false)
+            }
+
+            // 3) Onde tocar para pegar cada alfinete: na cabeça dele
+            ForEach(a.vagas.indices, id: \.self) { i in
+                if !vagasUsadas.contains(i) {
+                    let vaga = a.vagas[i]
+                    let origem = vaga.almofada == 0 ? origem1 : origem2
+                    let desenho = EnfeiteView.desenhoDoAlfinete(vaga.estilo)
+                    let comprimento = (desenho.ponta.x - a.meioDaCabeca) * f
+                    let angulo = (90 + vaga.giro) * .pi / 180
+                    let cabeca = CGPoint(x: origem.x + vaga.ponto.x * f - comprimento * cos(angulo),
+                                         y: origem.y + vaga.ponto.y * f - comprimento * sin(angulo))
+                    Color.black.opacity(0.001)
+                        .frame(width: 40, height: 40)
+                        .contentShape(Circle())
+                        .gesture(arrasto(tipo: .alfinete, tiradoDe: nil, daCaixinha: i, g))
+                        .offset(x: cabeca.x - 20, y: cabeca.y - 20)
+                }
+            }
         }
-        .position(x: g.centroX, y: g.abasY)
+        .frame(width: w, height: h, alignment: .topLeading)
+        // (Esta vista fica centrada em caixinhaY: desce até a base das almofadas ficar no "apoio")
+        .offset(y: apoio - g.caixinhaY - h / 2)
+        .animation(.easeInOut(duration: 0.25), value: vagasUsadas)
     }
 
-    private func botaoAba(_ qual: Aba, icone: String, rotulo: String, voz: [String]) -> some View {
-        Button {
-            aba = qual
-            haptics.tique()
-        } label: {
-            Image(systemName: icone)
-                .adaFont(.sectionTitle)
-                .foregroundStyle(Cores.tinta)
-                .frame(width: 56, height: 56)
-                .background(Circle().fill(aba == qual ? Cores.dourado : Cores.papel))
-                .overlay(Circle().stroke(Cores.tinta, lineWidth: aba == qual ? 3 : 2))
-                // A aba escolhida não depende só da cor: ela também fica maior
-                .scaleEffect(aba == qual ? 1.12 : 1)
+    // A BANDEJA DA GEORGIA com os penduricalhos que sobram. A parte da frente da bandeja
+    // é desenhada de novo por cima, para eles ficarem DENTRO dela.
+    private func bandeja(_ g: LayoutAtelie, sobram: Int) -> some View {
+        let a = ArteAtelie.self
+        let f = min(g.caixinha.width / a.bandeja.width, g.caixinha.height * 1.3 / a.bandeja.height)
+        let w = a.bandeja.width * f, h = a.bandeja.height * f
+        let pecas = pecasVisiveis(.penduricalho, sobram: sobram)
+        let larguraDaPeca = g.larguraVela * 0.7
+        let alturaDaPeca = EnfeiteView.alturaDesenho(.penduricalho, largura: larguraDaPeca)
+        let fundoDaPeca = (a.frenteY + 6) * f            // a estrelinha encosta atrás da borda da frente
+        let naMao = arrastando?.tiradoDe == nil && arrastando?.tipo == .penduricalho ? arrastando?.daCaixinha : nil
+
+        return ZStack(alignment: .topLeading) {
+            Image("bandejaPenduricalhos").resizable()
+                .frame(width: w, height: h)
+
+            HStack(spacing: 4) {
+                ForEach(pecas, id: \.self) { peca in
+                    EnfeiteView(tipo: .penduricalho, lado: -1, largura: larguraDaPeca)
+                        .frame(width: w * 0.8 / CGFloat(VelaConfig.limitePorTipo), height: alturaDaPeca)
+                        .contentShape(Rectangle())
+                        .opacity(naMao == peca ? 0 : 1)
+                        .gesture(arrasto(tipo: .penduricalho, tiradoDe: nil, daCaixinha: peca, g))
+                        .transition(.opacity)
+                }
+            }
+            .frame(width: w, height: alturaDaPeca)
+            .offset(y: fundoDaPeca - alturaDaPeca)
+
+            Image("bandejaFrente").resizable()
+                .frame(width: a.bandejaFrente.width * f, height: a.bandejaFrente.height * f)
+                .offset(x: a.frenteX * f, y: a.frenteY * f)
+                .allowsHitTesting(false)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(rotulo)
-        .accessibilityInputLabels([rotulo] + voz)
-        .accessibilityAddTraits(aba == qual ? .isSelected : [])
+        .frame(width: w, height: h, alignment: .topLeading)
+        .offset(y: (g.caixinha.height - h) / 2)
     }
 
     // MARK: Arrastar e soltar
@@ -388,7 +504,8 @@ struct PersonalizacaoView: View {
             .onChanged { valor in
                 let ponto = CGPoint(x: valor.location.x, y: valor.location.y - acimaDoDedo)
                 if arrastando == nil {
-                    arrastando = Arrastando(tipo: tipo, ponto: ponto, tiradoDe: tiradoDe, daCaixinha: daCaixinha)
+                    arrastando = Arrastando(tipo: tipo, ponto: ponto, tiradoDe: tiradoDe, daCaixinha: daCaixinha,
+                                            estilo: tiradoDe?.desenho ?? PersonalizacaoView.estiloDaPeca(tipo, daCaixinha))
                 } else if arrastando?.caindo == false {
                     arrastando?.ponto = ponto
                 }
@@ -415,7 +532,10 @@ struct PersonalizacaoView: View {
         // Se soltou em cima de outro enfeite, o app empurra um pouquinho para cima
         // ou para baixo. Só devolve nil quando não tem mesmo onde caber.
         let tamanho = TamanhoEnfeite.daVela(largura: g.larguraVela, alturaCheia: alturaCheia)
-        let lugar = encostou ? nova.acomodar(item.tipo, altura: altura, lado: lado, tamanho: tamanho) : nil
+        // Só empurra um pouquinho (mais ou menos o tamanho de duas cabeças de alfinete)
+        let empurraoMaximo = 2.5 * (tamanho.acima(item.tipo) + tamanho.abaixo(item.tipo))
+        let lugar = encostou ? nova.acomodar(item.tipo, altura: altura, lado: lado, tamanho: tamanho,
+                                             distanciaMaxima: empurraoMaximo) : nil
 
         if let lugar {
             // Se saiu do lugar de antes, fica o furinho na cera
@@ -423,9 +543,13 @@ struct PersonalizacaoView: View {
                abs(antigo.altura - lugar) > 0.02 || (antigo.lado < 0) != (lado < 0) {
                 nova.marcas.append(Marca(altura: antigo.altura, lado: antigo.lado))
             }
-            nova.enfeites.append(Enfeite(tipo: item.tipo, altura: lugar, lado: lado))
+            nova.enfeites.append(Enfeite(tipo: item.tipo, altura: lugar, lado: lado, estilo: item.estilo))
+            // O alfinete pego da almofada deixa a vaga dele vazia (os outros não saem do lugar)
+            if item.tipo == .alfinete, let vaga = item.daCaixinha {
+                vagasUsadas.insert(vaga)
+                rascunho = nova
+            } else if let peca = item.daCaixinha {
             // A peça pega sai da caixinha e as outras deslizam para o lugar dela
-            if let peca = item.daCaixinha {
                 let antes = pecasVisiveis(item.tipo, sobram: rascunho.sobram(item.tipo))
                 withAnimation(.spring(duration: 0.35)) {
                     pecasNaCaixinha[item.tipo] = antes.filter { $0 != peca }
@@ -444,12 +568,13 @@ struct PersonalizacaoView: View {
             // Não encostou (ou não cabe ali): cai no pote e volta para a caixinha
             if let antigo = item.tiradoDe {
                 nova.marcas.append(Marca(altura: antigo.altura, lado: antigo.lado))
+                if antigo.tipo == .alfinete { devolverAlfinete(antigo.desenho) }
             }
             rascunho = nova
             item.caindo = true
             arrastando = item
             withAnimation(.easeIn(duration: Haptics.tempoQueda)) {
-                arrastando?.ponto = CGPoint(x: g.centroX, y: g.caixinhaY)
+                arrastando?.ponto = CGPoint(x: g.centroX, y: g.apoioDasAlmofadas - 30)
             }
             haptics.caiuNoPote()
             anunciar("Objeto retornado à caixinha")
@@ -502,7 +627,13 @@ struct PersonalizacaoView: View {
             anunciar("Não cabe mais nenhum \(tipo.nome) na vela")
             return
         }
-        rascunho.enfeites.append(Enfeite(tipo: tipo, altura: escolhido.altura, lado: escolhido.lado))
+        // Alfinete: sai da primeira vaga livre das almofadas (e fica com o desenho dela)
+        var estilo = rascunho.quantos(tipo) % Enfeite.quantosEstilos
+        if tipo == .alfinete, let vaga = ArteAtelie.vagas.indices.first(where: { !vagasUsadas.contains($0) }) {
+            vagasUsadas.insert(vaga)
+            estilo = ArteAtelie.vagas[vaga].estilo
+        }
+        rascunho.enfeites.append(Enfeite(tipo: tipo, altura: escolhido.altura, lado: escolhido.lado, estilo: estilo))
         haptics.tique()
         let onde = "\(DescricaoDoEnfeite.altura(escolhido.altura)), \(DescricaoDoEnfeite.lado(escolhido.lado))"
         if abs(escolhido.altura - lugar.altura) > 0.03 {
@@ -515,6 +646,7 @@ struct PersonalizacaoView: View {
     // Tira o enfeite da vela (fica o furinho na cera) e ele volta para a caixinha
     private func remover(_ enfeite: Enfeite) {
         rascunho.enfeites.removeAll { $0.id == enfeite.id }
+        if enfeite.tipo == .alfinete { devolverAlfinete(enfeite.desenho) }
         rascunho.marcas.append(Marca(altura: enfeite.altura, lado: enfeite.lado))
         haptics.tique()
         anunciar("Objeto retornado à caixinha")
@@ -536,17 +668,72 @@ struct PersonalizacaoView: View {
     private func anunciar(_ texto: String) {
         AccessibilityNotification.Announcement(texto).post()
     }
+
+    // Qual desenho tem a peça pega da almofada (alfinete) ou da caixinha
+    private static func estiloDaPeca(_ tipo: TipoEnfeite, _ peca: Int?) -> Int {
+        guard let peca else { return 0 }
+        if tipo == .alfinete && arteExiste("almofada1") && ArteAtelie.vagas.indices.contains(peca) {
+            return ArteAtelie.vagas[peca].estilo
+        }
+        return peca % Enfeite.quantosEstilos
+    }
+
+    // Um alfinete voltou para as almofadas: volta para uma vaga do desenho dele
+    private func devolverAlfinete(_ estilo: Int) {
+        let usadas = vagasUsadas.sorted()
+        if let vaga = usadas.last(where: { ArteAtelie.vagas[$0].estilo == estilo }) ?? usadas.last {
+            vagasUsadas.remove(vaga)
+        }
+    }
+
+    // Ao abrir o ateliê: as vagas dos alfinetes que já estão na vela começam vazias
+    private static func vagasOcupadas(por config: VelaConfig) -> Set<Int> {
+        var usadas = Set<Int>()
+        for enfeite in config.enfeites where enfeite.tipo == .alfinete {
+            let livres = ArteAtelie.vagas.indices.filter { !usadas.contains($0) }
+            if let vaga = livres.first(where: { ArteAtelie.vagas[$0].estilo == enfeite.desenho }) ?? livres.first {
+                usadas.insert(vaga)
+            }
+        }
+        return usadas
+    }
+}
+
+// Medidas das almofadas e da bandeja da Georgia (em pixels dos recortes dela)
+private enum ArteAtelie {
+    static let almofada1 = CGSize(width: 267, height: 231)
+    static let almofada2 = CGSize(width: 408, height: 301)
+    static let vaoEntreAlmofadas: CGFloat = 40
+    static let alturaDosAlfinetes: CGFloat = 125     // quanto os alfinetes sobem acima das almofadas
+    static let meioDaCabeca: CGFloat = 22            // x do meio da cabeça nos desenhos dos alfinetes
+
+    // As 6 vagas (2 de cada desenho): estilo, almofada (0 ou 1), onde a ponta entra e o giro
+    static let vagas: [(estilo: Int, almofada: Int, ponto: CGPoint, giro: Double)] = [
+        (0, 0, CGPoint(x: 93, y: 40), -20),    // estrela
+        (0, 0, CGPoint(x: 174, y: 44), 22),    // estrela
+        (1, 1, CGPoint(x: 118, y: 92), -22),   // coração
+        (2, 1, CGPoint(x: 184, y: 86), -6),    // bolinha
+        (1, 1, CGPoint(x: 250, y: 86), 10),    // coração
+        (2, 1, CGPoint(x: 314, y: 92), 26),    // bolinha
+    ]
+
+    static let bandeja = CGSize(width: 925, height: 210)
+    static let bandejaFrente = CGSize(width: 920, height: 78)
+    static let frenteX: CGFloat = 3                  // onde a parte da frente fica, dentro da bandeja
+    static let frenteY: CGFloat = 132
+    // Onde o pé das almofadas fica dentro da bandeja (um pouco atrás da borda da frente)
+    static let fundoDasAlmofadasNaBandeja: CGFloat = 165
 }
 
 private struct LayoutAtelie {
     let tamanho: CGSize
     var centroX: CGFloat { tamanho.width / 2 }
-    var baseY: CGFloat { tamanho.height * 0.64 }
+    var baseY: CGFloat { tamanho.height * 0.68 }   // (era 0,64: a vela e o prato desceram um pouco)
     var alturaMaxima: CGFloat { larguraVela * ArteVela.alturaMaxima / ArteVela.largura }   // mesma proporção da arte
     var larguraVela: CGFloat { min(tamanho.width * 0.17, tamanho.height * 0.48 * ArteVela.largura / ArteVela.alturaMaxima) }
     var caixinha: CGSize { CGSize(width: min(tamanho.width * 0.9, 420), height: tamanho.height * 0.11) }
     var caixinhaY: CGFloat { tamanho.height * 0.78 }
-    var abasY: CGFloat { tamanho.height * 0.92 }
+    var apoioDasAlmofadas: CGFloat { tamanho.height - 24 }   // onde as almofadas apoiam (embaixo)
 
     func alturaCheia(_ posicao: Double) -> CGFloat {
         GeometriaVela.alturaCheia(posicao: posicao, alturaMaxima: alturaMaxima)

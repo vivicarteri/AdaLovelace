@@ -67,6 +67,8 @@ final class Sessao: ObservableObject {
     // ⚙️ Vibração da chama: com o aparelho parado por este tempo, a vibração "descansa"
     // (poupa bateria e esquenta menos). Ela volta no instante em que a pessoa mexe.
     static let descansoDaVibracao: TimeInterval = 15
+    // ⚙️ Depois de mexer rápido no celular, quanto tempo o microfone fica sem apagar a vela (segundos)
+    static let silencioDepoisDeMexer: TimeInterval = 0.8
 
     // ⚙️ Quanto a inclinação precisa mudar para valer a pena mandar um valor novo ao motor.
     static let mudancaMinimaDaChama: Double = 0.02
@@ -74,7 +76,7 @@ final class Sessao: ObservableObject {
     // MARK: Estado que as telas leem
 
     @Published var config = VelaConfig() { didSet { salvar() } }
-    @Published private(set) var estado: EstadoVela = .nova { didSet { atualizarSopro() } }
+    @Published private(set) var estado: EstadoVela = .nova { didSet { atualizarSopro(); manterTelaAcesa() } }
     @Published private(set) var progresso: Double = 0          // 0 = inteira, 1 = acabou
     @Published private(set) var caidos: Set<UUID> = []         // enfeites que já caíram
     @Published private(set) var apagouEm: Date?                // para desenhar a fumaça
@@ -264,8 +266,19 @@ final class Sessao: ObservableObject {
 
     // MARK: Ciclo do app (aberto, em segundo plano…)
 
+    // Com a vela ACESA a tela do aparelho não apaga sozinha (teste do Guilherme: o iPhone
+    // dormia no meio da vela). Apagou, acabou ou é vela nova: o aparelho volta ao normal.
+    // (Só com o app aberto na tela: quando a Sessao nasce, o app ainda está abrindo.)
+    private func manterTelaAcesa() {
+        #if canImport(UIKit)
+        guard cenaAtiva else { return }
+        UIApplication.shared.isIdleTimerDisabled = estado == .acesa
+        #endif
+    }
+
     func mudouFase(_ fase: ScenePhase) {
         cenaAtiva = fase == .active
+        manterTelaAcesa()
         defer { atualizarSopro() }
         switch fase {
         case .active:
@@ -316,7 +329,13 @@ final class Sessao: ObservableObject {
     func atualizarSopro() {
         let habilitado = UserDefaults.standard.object(forKey: Chaves.apagarSoprando) as? Bool ?? true
         if cenaAtiva && estado == .acesa && habilitado && !foraDaCaixa {
-            sopro.iniciar { [weak self] in self?.apagar(jeito: .sopro) }
+            sopro.iniciar { [weak self] in
+                guard let self else { return }
+                // Logo depois de mexer rápido no celular (pegar, apoiar, apertar botões) o barulho
+                // no microfone não conta como sopro.
+                guard Date().timeIntervalSince(self.movimento.sacudiuEm) > Sessao.silencioDepoisDeMexer else { return }
+                self.apagar(jeito: .sopro)
+            }
         } else {
             sopro.parar()
         }

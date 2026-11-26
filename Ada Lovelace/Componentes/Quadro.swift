@@ -68,6 +68,8 @@ enum ArteVela {
     static let corpoTopo: CGFloat = 1083     // topo do desenho, com a vela no tamanho máximo
     static let topoBaixo: CGFloat = corpoTopo + 312 * k     // até onde vão os escorridos (recorte "velaTopo")
     static let corpoBaixo: CGFloat = corpoTopo + 1744 * k   // fim do desenho "velaCorpo" no tamanho natural
+    static let ceraAltura: CGFloat = 760 * k                 // quadros "velaCera_N": 420 × 760 (o velaCorpo + 60 px de cada lado)
+    static let ceraLargura: CGFloat = 420 * k
     static let escondido: CGFloat = (2202 - bordaDoPrato) * k   // pé da vela que fica escondido dentro do prato
     static let baseY: CGFloat = 2542         // onde a vela "nasce" (borda de cima do prato)
     static let alturaMaxima: CGFloat = 1459  // da base até o topo do desenho, com a vela no tamanho máximo
@@ -193,7 +195,7 @@ struct CenaArte: View {
     var camadaDaSombra: CamadaDaSombra? = nil   // na floresta: só uma camada de sombras (nil = todas)
 
     // ⚙️ Quanto as sombras andam quando a chama deita (em pixels do Quadro) e quanto elas giram
-    static let andarDaSombra: CGFloat = 110
+    static let andarDaSombra: CGFloat = 60   // (era 110: as sombras andavam demais ao mexer o aparelho)
     static let giroDaSombra: Double = 0.05
 
     @Environment(\.accessibilityReduceMotion) private var reduzirMovimento

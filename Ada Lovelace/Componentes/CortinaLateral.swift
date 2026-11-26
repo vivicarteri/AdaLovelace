@@ -1,11 +1,3 @@
-//  CortinaLateral.swift
-//  A cortina do FIM da vela (arte da Georgia: "Cortina_Horizontal"): dois panos que FECHAM dos
-//  lados para o meio quando a vela acaba e REABREM para os lados quando a vela nova aparece.
-//
-//  A Georgia desenhou só o pano da esquerda; o da direita é o mesmo, espelhado.
-//  Os panos ocupam a altura toda da tela (as franjas ficam embaixo) e, fechados, se encontram
-//  no meio com uma pequena sobra (um passa um pouquinho por cima do outro), em qualquer tela.
-
 import SwiftUI
 #if canImport(UIKit)
 import UIKit
