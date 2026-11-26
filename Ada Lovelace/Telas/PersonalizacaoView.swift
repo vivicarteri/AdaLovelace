@@ -112,7 +112,7 @@ struct PersonalizacaoView: View {
 
     private var dicaDaVela: String {
         switch arrastando?.tipo {
-        case .alfinete: "Use as ações para inserir alfinetes, e o rotor Enfeites para visitar cada um"
+        case .alfinete: "Use as ações das almofadas para inserir alfinetes, e o rotor Enfeites para visitar cada um"
         case .penduricalho: "Use as ações para inserir penduricalhos, e o rotor Enfeites para visitar cada um"
         case nil: ""
         }
@@ -167,29 +167,37 @@ struct PersonalizacaoView: View {
         let movendo = arrastando?.tiradoDe?.id
         let tipo = arrastando?.tipo ?? .alfinete
 
+        // VoiceOver: a moldura vai do alto da vela até o fim do prato, com a largura de 2 velas
+        // (igual à home). Antes era a vista inteira da vela: 3 velas de largura mais o espaço da
+        // chama, e a moldura quase pegava os alfinetes das almofadas.
+        let altoDaVela = g.baseY - alturaCheia - 4
+        let fimDoPrato = g.baseY + SuporteView.desvioY(largura: g.larguraVela) + SuporteView.altura(largura: g.larguraVela) / 2
+
         return ZStack {
             VelaView(alturaCheia: alturaCheia,
                      largura: g.larguraVela,
                      enfeites: rascunho.enfeites.filter { $0.id != movendo },
                      marcas: rascunho.marcas)
-                .accessibilityElement(children: .ignore)
+                .accessibilityHidden(true)   // quem fala é o alvo "vela + prato" logo abaixo
+                // A vela muda de tamanho junto com o dedo (antes uma mola deixava a vela atrasada
+                // em relação à bolinha)
+                .position(x: g.centroX, y: g.baseY - (alturaCheia + espacoChama) / 2)
+
+            AlvoAcessivel()
+                .frame(width: g.larguraVela * 2, height: max(44, fimDoPrato - altoDaVela))
+                .position(x: g.centroX + SuporteView.desvioX(largura: g.larguraVela), y: (altoDaVela + fimDoPrato) / 2)
+                .allowsHitTesting(false)
+                .accessibilityElement()
                 .accessibilityLabel("Vela")
                 .accessibilityValue("\(DescricaoDaDuracao.texto(minutos: rascunho.minutos)). \(rascunho.quantos(.alfinete)) alfinetes e \(rascunho.quantos(.penduricalho)) penduricalhos")
                 .accessibilityHint(dicaDaVela)
-                // As ações seguem a aba: na Duração não tem nenhuma (a duração fica no ajustável);
-                // em Alfinetes e Penduricalhos, só as daquele tipo.
+                // Inserir fica nas almofadas (lá a pessoa escolhe o desenho); na vela, só tirar
                 .accessibilityActions {
-                    ForEach(LugarNaVela.allCases, id: \.self) { lugar in
-                        Button("Inserir \(tipo.nome) \(lugar.texto)") { colocarPeloVoiceOver(tipo, lugar, g) }
-                    }
                     if let ultimo = rascunho.enfeites.last(where: { $0.tipo == tipo }) {
                         Button("Tirar o último \(tipo.nome)") { remover(ultimo) }
                     }
                 }
                 .accessibilityFocused($focoNaVela)
-                // A vela muda de tamanho junto com o dedo (antes uma mola deixava a vela atrasada
-                // em relação à bolinha)
-                .position(x: g.centroX, y: g.baseY - (alturaCheia + espacoChama) / 2)
 
             SuporteView(largura: g.larguraVela)
                 .position(x: g.centroX + SuporteView.desvioX(largura: g.larguraVela),
@@ -298,10 +306,13 @@ struct PersonalizacaoView: View {
         let sobram = tipo.map { rascunho.sobram($0) } ?? 0
         let arrastandoDaCaixinha = arrastando != nil && arrastando?.tiradoDe == nil
 
-        return ZStack {
-            if tipo == .alfinete && arteExiste("almofada1") {
-                almofadas(g)
-            } else if tipo == .penduricalho && arteExiste("bandejaPenduricalhos") {
+        // AS ALMOFADAS DA GEORGIA: cada almofada é um item do VoiceOver, com as próprias ações
+        if tipo == .alfinete && arteExiste("almofada1") {
+            return AnyView(almofadas(g).position(x: g.centroX, y: g.caixinhaY))
+        }
+
+        return AnyView(ZStack {
+            if tipo == .penduricalho && arteExiste("bandejaPenduricalhos") {
                 bandeja(g, sobram: sobram)
             } else {
             Arte("caixinha") {
@@ -350,7 +361,7 @@ struct PersonalizacaoView: View {
                     Button("Inserir \(tipo.nome) \(lugar.texto)") { colocarPeloVoiceOver(tipo, lugar, g) }
                 }
             }
-        }
+        })
     }
 
     // AS ALMOFADAS DA GEORGIA: os alfinetes que sobram ficam espetados nelas.
@@ -442,6 +453,31 @@ struct PersonalizacaoView: View {
                         .gesture(arrasto(tipo: .alfinete, tiradoDe: nil, daCaixinha: i, g))
                         .offset(x: cabeca.x - 20, y: cabeca.y - 20)
                 }
+            }
+        }
+        // O desenho não fala: quem fala são as almofadas, logo abaixo
+        .accessibilityHidden(true)
+        // 4) VoiceOver: cada almofada é um item, do tamanho dela com os alfinetes espetados.
+        //    Sem "esquerda" e "direita": o que diferencia é o desenho dos alfinetes.
+        .overlay(alignment: .topLeading) {
+            ForEach([0, 1], id: \.self) { almofada in
+                let tamanho = almofada == 0 ? a.almofada1 : a.almofada2
+                let origem = almofada == 0 ? origem1 : origem2
+                AlvoAcessivel()
+                    .frame(width: tamanho.width * f, height: (tamanho.height + a.alturaDosAlfinetes) * f)
+                    .offset(x: origem.x, y: origem.y - a.alturaDosAlfinetes * f)
+                    .allowsHitTesting(false)
+                    .accessibilityElement()
+                    .accessibilityLabel(rotuloDaAlmofada(almofada))
+                    .accessibilityActions {
+                        ForEach(ArteAtelie.estilos(daAlmofada: almofada).filter { sobram(estilo: $0) > 0 }, id: \.self) { estilo in
+                            ForEach(LugarNaVela.allCases, id: \.self) { lugar in
+                                Button("Inserir alfinete de \(DescricaoDoEnfeite.desenho(estilo)) \(lugar.texto)") {
+                                    colocarPeloVoiceOver(.alfinete, lugar, g, estilo: estilo)
+                                }
+                            }
+                        }
+                    }
             }
         }
         .frame(width: w, height: h, alignment: .topLeading)
@@ -602,9 +638,14 @@ struct PersonalizacaoView: View {
 
     // VoiceOver e Controle por Voz: coloca o enfeite perto do lugar pedido (topo, metade ou base).
     // Tenta os dois lados da vela e fica com o lugar livre mais perto do pedido.
-    private func colocarPeloVoiceOver(_ tipo: TipoEnfeite, _ lugar: LugarNaVela, _ g: LayoutAtelie) {
+    // estilo: o desenho do alfinete pedido na almofada (nil = o da primeira vaga livre)
+    private func colocarPeloVoiceOver(_ tipo: TipoEnfeite, _ lugar: LugarNaVela, _ g: LayoutAtelie, estilo pedido: Int? = nil) {
         guard rascunho.sobram(tipo) > 0 else {
             anunciar("Não sobrou nenhum \(tipo.nome) na caixinha")
+            return
+        }
+        if let pedido, tipo == .alfinete, sobram(estilo: pedido) == 0 {
+            anunciar("Não sobrou nenhum alfinete de \(DescricaoDoEnfeite.desenho(pedido)) na almofada")
             return
         }
         let alturaCheia = g.alturaCheia(rascunho.posicaoSlider)
@@ -627,19 +668,22 @@ struct PersonalizacaoView: View {
             anunciar("Não cabe mais nenhum \(tipo.nome) na vela")
             return
         }
-        // Alfinete: sai da primeira vaga livre das almofadas (e fica com o desenho dela)
+        // Alfinete: sai da primeira vaga livre do desenho pedido (ou de qualquer desenho)
         var estilo = rascunho.quantos(tipo) % Enfeite.quantosEstilos
-        if tipo == .alfinete, let vaga = ArteAtelie.vagas.indices.first(where: { !vagasUsadas.contains($0) }) {
+        if tipo == .alfinete, let vaga = ArteAtelie.vagas.indices.first(where: {
+            !vagasUsadas.contains($0) && (pedido == nil || ArteAtelie.vagas[$0].estilo == pedido)
+        }) {
             vagasUsadas.insert(vaga)
             estilo = ArteAtelie.vagas[vaga].estilo
         }
         rascunho.enfeites.append(Enfeite(tipo: tipo, altura: escolhido.altura, lado: escolhido.lado, estilo: estilo))
         haptics.tique()
+        let nome = DescricaoDoEnfeite.nome(tipo, estilo: estilo)
         let onde = "\(DescricaoDoEnfeite.altura(escolhido.altura)), \(DescricaoDoEnfeite.lado(escolhido.lado))"
         if abs(escolhido.altura - lugar.altura) > 0.03 {
-            anunciar("Objeto reorganizado para evitar sobreposição. \(DescricaoDoEnfeite.nome(tipo)) \(onde)")
+            anunciar("Objeto reorganizado para evitar sobreposição. \(nome) \(onde)")
         } else {
-            anunciar("\(DescricaoDoEnfeite.nome(tipo)) colocado \(onde)")
+            anunciar("\(nome) colocado \(onde)")
         }
     }
 
@@ -652,9 +696,27 @@ struct PersonalizacaoView: View {
         anunciar("Objeto retornado à caixinha")
     }
 
-    // "Alfinete, lado esquerdo, perto do topo"
+    // "Alfinete de estrela, lado esquerdo, perto do topo"
     private func rotulo(_ enfeite: Enfeite) -> String {
-        "\(DescricaoDoEnfeite.nome(enfeite.tipo)), \(DescricaoDoEnfeite.lado(enfeite.lado)), \(DescricaoDoEnfeite.altura(enfeite.altura))"
+        "\(DescricaoDoEnfeite.nome(enfeite.tipo, estilo: enfeite.desenho)), \(DescricaoDoEnfeite.lado(enfeite.lado)), \(DescricaoDoEnfeite.altura(enfeite.altura))"
+    }
+
+    // Quantos alfinetes deste desenho ainda estão nas almofadas
+    private func sobram(estilo: Int) -> Int {
+        ArteAtelie.vagas.indices.filter { ArteAtelie.vagas[$0].estilo == estilo && !vagasUsadas.contains($0) }.count
+    }
+
+    // "Almofada com 2 alfinetes de estrela", "Almofada com 1 alfinete de coração e 2 de bolinha"
+    private func rotuloDaAlmofada(_ almofada: Int) -> String {
+        let partes = ArteAtelie.estilos(daAlmofada: almofada)
+            .map { (quantos: sobram(estilo: $0), desenho: DescricaoDoEnfeite.desenho($0)) }
+            .filter { $0.quantos > 0 }
+        guard let primeira = partes.first else { return "Almofada sem alfinetes" }
+        var texto = "Almofada com \(primeira.quantos) \(primeira.quantos == 1 ? "alfinete" : "alfinetes") de \(primeira.desenho)"
+        for parte in partes.dropFirst() {
+            texto += " e \(parte.quantos) de \(parte.desenho)"
+        }
+        return texto
     }
 
     private func textoDaCaixinha(_ sobram: Int) -> String {
@@ -716,6 +778,15 @@ private enum ArteAtelie {
         (1, 1, CGPoint(x: 250, y: 86), 10),    // coração
         (2, 1, CGPoint(x: 314, y: 92), 26),    // bolinha
     ]
+
+    // Os desenhos de cada almofada, na ordem em que aparecem (0: estrela; 1: coração e bolinha)
+    static func estilos(daAlmofada almofada: Int) -> [Int] {
+        var estilos: [Int] = []
+        for vaga in vagas where vaga.almofada == almofada && !estilos.contains(vaga.estilo) {
+            estilos.append(vaga.estilo)
+        }
+        return estilos
+    }
 
     static let bandeja = CGSize(width: 925, height: 210)
     static let bandejaFrente = CGSize(width: 920, height: 78)

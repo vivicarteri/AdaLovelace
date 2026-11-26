@@ -27,12 +27,14 @@ struct ConfiguracoesView: View {
             Form {
                 Section {
                     // Os nomes dizem exatamente o que muda na experiência
-                    Toggle("Tocar música enquanto a vela está acesa", isOn: $somAmbiente)
-                        .accessibilityInputLabels(["Música de fundo", "Música"])
+                    // Música de fundo e os passos do coelho
+                    Toggle("Tocar música e sons da floresta", isOn: $somAmbiente)
+                        .accessibilityInputLabels(["Música e sons da floresta", "Música de fundo", "Música", "Sons da floresta"])
                     Toggle("Sons dos alfinetes e penduricalhos caindo", isOn: $somObjetos)
                         .accessibilityInputLabels(["Sons dos objetos", "Sons"])
-                    Toggle("Sons do fósforo e da chama (riscar, acender e apagar)", isOn: $somFosforoEChama)
-                        .accessibilityInputLabels(["Sons do fósforo", "Sons da chama"])
+                    // Riscar, acender, apagar e o pavio queimando ao fundo
+                    Toggle("Sons do fósforo e da vela", isOn: $somFosforoEChama)
+                        .accessibilityInputLabels(["Sons do fósforo e da vela", "Sons do fósforo", "Sons da vela", "Sons da chama"])
                 } header: {
                     Text("Som")
                 } footer: {

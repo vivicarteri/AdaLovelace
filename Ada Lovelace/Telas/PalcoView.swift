@@ -53,6 +53,7 @@ struct PalcoView: View {
     private enum EtapaFosforo { case guardado, fora, aceso }
     @State private var etapa: EtapaFosforo = .guardado
     @State private var posFosforo: CGPoint = .zero   // onde está a cabeça do fósforo
+    @State private var fumacaDoFosforo = MotorDeFumaca()   // a fumaça que sai do fósforo aceso (Fumaca.swift)
     @State private var inicioArraste: CGPoint?
     @State private var toqueDoArraste: CGPoint?    // onde o dedo encostou (reconhece um gesto novo)
     // Risco do fósforo na lixa (a física está em riscarNaLixa)
@@ -69,6 +70,10 @@ struct PalcoView: View {
     // ⚙️ Quanto tempo o fósforo aceso dura antes de apagar sozinho (como um de verdade).
     // Depois disso ele volta para a caixa e a pessoa pega outro.
     private let duracaoDoFosforo: TimeInterval = 10
+    // ⚙️ Opacidade do fio de fumaça enquanto o fósforo queima (0 a 1)
+    private let forcaDoFioDoFosforo: Double = 0.3
+    // ⚙️ Volume do atrito quando o fósforo risca sozinho (0 a 1)
+    private let volumeDoRiscoSozinho: Float = 0.8
 
     // ⚙️ Risco do fósforo (valores para ir testando)
     // Quanto da largura da lixa é preciso riscar, num sentido só, para acender.
@@ -171,6 +176,16 @@ struct PalcoView: View {
         }
         .onChange(of: etapa != .guardado, initial: true) { _, aberta in
             DicaRiscarOFosforo.caixaAberta = aberta
+        }
+        // O fósforo pegou fogo: uma baforada e depois um fio fino enquanto ele queima.
+        // Apagou ou voltou para a caixa: para de soltar (o que já saiu some aos poucos).
+        .onChange(of: etapa) { antiga, nova in
+            if nova == .aceso {
+                fumacaDoFosforo.reduzirMovimento = reduzirMovimento
+                fumacaDoFosforo.baforada(fio: nil, forcaDoFio: forcaDoFioDoFosforo)
+            } else if antiga == .aceso {
+                fumacaDoFosforo.pararDeSoltar()
+            }
         }
         // O fósforo voltou para a caixa (por qualquer caminho): esquece o arraste que estava
         // no meio e fecha a gaveta. Se a vista do fósforo some no meio de um arraste (a vela
@@ -332,6 +347,11 @@ struct PalcoView: View {
 
             if !miniatura {
                 botoesInferiores(g)
+                    .opacity(mostrarBotoes ? 1 : 0)
+
+                // A fumaça do fósforo fica no palco (e não no fósforo): a que já saiu continua no ar
+                // quando o fósforo anda, e termina de subir depois que ele volta para a caixa
+                DesenhoDaFumaca(motor: fumacaDoFosforo)
                     .opacity(mostrarBotoes ? 1 : 0)
 
                 if etapa != .guardado {
@@ -590,9 +610,15 @@ struct PalcoView: View {
                     .onChanged { valor in arrastarFosforo(valor, g) }
                     .onEnded { valor in soltarFosforo(valor, g) }
             )
-            // posiciona a vista para a CABEÇA ficar em posFosforo
-            .position(x: posFosforo.x,
-                      y: posFosforo.y - FosforoView.posicaoCabeca(tamanho: tamanhoFosforo) + tamanhoFosforo / 2)
+            // posiciona a vista para a CABEÇA ficar em posFosforo; a cada quadro (também nas
+            // animações) a fumaça fica sabendo onde está a ponta da chama
+            .modifier(PosicaoAnimadaDoFosforo(
+                cabeca: posFosforo,
+                deslocamentoY: tamanhoFosforo / 2 - FosforoView.posicaoCabeca(tamanho: tamanhoFosforo),
+                aoMudar: { [fumacaDoFosforo, tamanhoFosforo, escala = g.larguraVela / 50] cabeca in
+                    fumacaDoFosforo.escala = escala
+                    fumacaDoFosforo.mover(para: FosforoView.pontaDaChama(cabeca: cabeca, tamanho: tamanhoFosforo))
+                }))
             .transition(.scale(scale: 0.3, anchor: .bottom).combined(with: .opacity))
             // O fósforo aceso queima até o fim e apaga sozinho (antes ele ficava aceso para sempre)
             .task(id: etapa) {
@@ -811,15 +837,21 @@ struct PalcoView: View {
                 let esquerda = CGPoint(x: lixa.minX + lixa.width * 0.15, y: lixa.midY)
                 let direita = CGPoint(x: lixa.maxX - lixa.width * 0.15, y: lixa.midY)
                 withAnimation(.easeInOut(duration: 0.3)) { posFosforo = esquerda }
+                sessao.haptics.prepararSomRiscoFosforo()
                 try? await Task.sleep(for: .seconds(0.3))
+                // Em cada passada o palito raspa na lixa: o som de atrito toca enquanto ele passa
+                // e para na virada (respeita o interruptor "Sons do fósforo e da vela")
                 for passada in 0..<3 {
                     sessao.haptics.raspar()
+                    sessao.haptics.tocarSomRiscoFosforo(volume: volumeDoRiscoSozinho)
                     withAnimation(.easeInOut(duration: 0.22)) {
                         posFosforo = passada.isMultiple(of: 2) ? direita : esquerda
                     }
-                    try? await Task.sleep(for: .seconds(0.22))
+                    try? await Task.sleep(for: .seconds(0.2))
+                    sessao.haptics.silenciarSomRiscoFosforo()
+                    try? await Task.sleep(for: .seconds(0.02))
                 }
-                // Sem o som de atrito: só a chama pegando (o padrão Acender, som + vibração)
+                // A chama pegando (o padrão Acender, som + vibração); o atrito é desligado aqui
                 etapa = .aceso
                 sessao.haptics.acenderFosforo()
                 try? await Task.sleep(for: .seconds(0.35))
@@ -834,6 +866,7 @@ struct PalcoView: View {
             // 4. A vela acende e o fósforo volta para a caixa
             withAnimation(.easeOut(duration: 0.3)) { etapa = .guardado }
             withAnimation(.easeInOut(duration: 0.4).delay(0.1)) { caixaAberta = CaixaFosforoView.emRepouso }
+            sessao.haptics.cancelarSomRiscoFosforo()   // desliga o motor do som de atrito
             sessao.acender()
             acendendoSozinho = false
             if peloToque { await DicaRiscarOFosforo.acendeuPeloToque.donate() }

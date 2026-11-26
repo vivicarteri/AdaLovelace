@@ -104,6 +104,20 @@ enum DescricaoDoEnfeite {
     static func nome(_ tipo: TipoEnfeite) -> String {
         tipo == .alfinete ? "Alfinete" : "Penduricalho"
     }
+
+    // O desenho da cabeça do alfinete (alfinete1, 2 e 3 da Georgia)
+    static func desenho(_ estilo: Int) -> String {
+        switch estilo {
+        case 0: "estrela"
+        case 1: "coração"
+        default: "bolinha"
+        }
+    }
+
+    // "Alfinete de estrela". O penduricalho continua só "Penduricalho".
+    static func nome(_ tipo: TipoEnfeite, estilo: Int) -> String {
+        tipo == .alfinete ? "Alfinete de \(desenho(estilo))" : nome(tipo)
+    }
 }
 
 // Os três lugares que o VoiceOver oferece para espetar um enfeite

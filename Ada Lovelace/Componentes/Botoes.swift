@@ -346,6 +346,14 @@ struct FosforoView: View {
         return CGSize(width: -comprimento * sin(a), height: comprimento * cos(a))
     }
 
+    // Onde fica a ponta da chama do fósforo aceso (de onde sai a fumaça), já com a inclinação.
+    // A chama fica uns 32% do tamanho acima da cabeça, girada junto com o palito.
+    static func pontaDaChama(cabeca: CGPoint, tamanho: CGFloat) -> CGPoint {
+        let d = tamanho * 0.32
+        let a = inclinacao.radians
+        return CGPoint(x: cabeca.x + d * sin(a), y: cabeca.y - d * cos(a))
+    }
+
     // Fósforo da Georgia (25/11): o desenho dela veio deitado (cabeça à esquerda) e foi
     // guardado EM PÉ, com a cabeça em cima ("fosforo", 58 × 324 px). Ele ocupa 95% da altura
     // da vista: assim a cabeça fica nos mesmos 10% de cima e o pé nos mesmos 95% de antes.

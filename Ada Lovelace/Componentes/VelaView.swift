@@ -1,5 +1,5 @@
 //  VelaView.swift
-//  A vela: corpo de cera, enfeites, pavio, chama e fumaça.
+//  A vela: corpo de cera, enfeites, pavio, chama e fumaça (a fumaça fica em Fumaca.swift).
 //  A vista fica "em pé" no chão: a base da vela é a parte de baixo da vista.
 
 import SwiftUI
@@ -84,7 +84,11 @@ struct VelaView: View {
                     .transition(.scale(scale: 0.2, anchor: .bottom).combined(with: .opacity))
                 }
                 if !acesa, let apagouEm {
-                    FumacaView(desde: apagouEm, largura: largura)
+                    // A fumaça sai da ponta do pavio (Fumaca.swift)
+                    FumacaDaVela(desde: apagouEm, largura: largura,
+                                 fonte: usaArte ? CGPoint(x: ArteVela.chamaDesvioX * escalaArte,
+                                                          y: -ArteVela.pavio * escalaArte)
+                                                : CGPoint(x: 0, y: -largura * 0.22))
                 }
             }
             .offset(y: -alturaCera)
@@ -524,55 +528,6 @@ struct ChamaView: View {
     }
 }
 
-// Fumaça subindo por alguns segundos depois de apagar.
-// Passados os 3 segundos a vista sai do ar: assim ela para de redesenhar 60 vezes
-// por segundo enquanto a vela fica apagada (isso estava gastando bateria à toa).
-struct FumacaView: View {
-    var desde: Date
-    var largura: CGFloat
-    private var duracao: TimeInterval { 3 }
-
-    @State private var acabou = false
-
-    var body: some View {
-        Group {
-            if acabou {
-                // Mesmo tamanho, sem desenhar nada: o resto da vela não se mexe do lugar
-                Color.clear
-                    .frame(width: largura, height: largura * 2.2)
-            } else {
-                TimelineView(.animation) { contexto in
-                    let passou = contexto.date.timeIntervalSince(desde)
-                    ZStack(alignment: .bottom) {
-                        ForEach(0..<5, id: \.self) { i in
-                            let t = (passou * 0.8 + Double(i) * 0.2).truncatingRemainder(dividingBy: 1)
-                            Circle()
-                                .fill(Color.gray.opacity(0.45 * (1 - t) * max(0, 1 - passou / duracao)))
-                                .frame(width: largura * CGFloat(0.15 + 0.35 * t),
-                                       height: largura * CGFloat(0.15 + 0.35 * t))
-                                .offset(x: CGFloat(sin(t * 6 + Double(i))) * largura * 0.15,
-                                        y: -CGFloat(t) * largura * 2)
-                        }
-                    }
-                    .frame(width: largura, height: largura * 2.2, alignment: .bottom)
-                }
-            }
-        }
-        // Recomeça sempre que a vela apaga de novo (a data muda)
-        .task(id: desde) {
-            acabou = false
-            let falta = duracao - Date().timeIntervalSince(desde)
-            if falta > 0 {
-                try? await Task.sleep(for: .seconds(falta))
-                guard !Task.isCancelled else { return }
-            }
-            acabou = true
-        }
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-    }
-}
-
 // Suporte (o prato da Georgia). Fica embaixo da vela e esconde a parte de baixo dela.
 // As alças sobem acima da borda do prato, então o MEIO do desenho não fica logo abaixo da base:
 // use desvioX/desvioY a partir do pé da vela (centroX, baseY).
@@ -723,18 +678,6 @@ extension TamanhoEnfeite {
     .background(Cores.fundoEscuro)
 }
 
-// A fumaça dura 3 segundos. O botão solta de novo.
-#Preview("FumacaView") {
-    @Previewable @State var desde = Date()
-    VStack(spacing: 30) {
-        FumacaView(desde: desde, largura: 60)
-        Button("Soltar fumaça de novo") { desde = .now }
-            .buttonStyle(.borderedProminent)
-            .tint(Cores.tinta)
-    }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .background(Cores.papel)
-}
 
 #Preview("SuporteView", traits: .sizeThatFitsLayout) {
     SuporteView(largura: 80)
