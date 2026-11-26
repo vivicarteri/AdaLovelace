@@ -1,12 +1,3 @@
-//  LuzDaVela.swift
-//  ILUMINAÇÃO DRAMÁTICA (teste pedido pela Georgia): a chama é a única luz do palco.
-//
-//  Perto da chama o cenário fica claro e quente; longe dela, vai escurecendo até as bordas.
-//  E muda ao longo da vela: no começo a luz alcança quase a tela toda; conforme a vela queima,
-//  o círculo de luz fica menor, as bordas mais escuras (a noite fecha) e a luz desce junto com
-//  a chama. A luz respira de leve, como uma chama de verdade.
-//  Pode ser desligada em Configurações → "Iluminação dramática", para comparar.
-
 import SwiftUI
 
 struct LuzDaVela: View {

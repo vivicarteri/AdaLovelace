@@ -16,7 +16,7 @@
 //  O ROTEIRO segue o animatic da Georgia (5 min no vídeo = 10 min no app, em loop).
 //  Ele só anda com a vela acesa. A lua vem da esquerda e o sol da direita, devagar, e eles
 //  se encontram no ECLIPSE (4:52 do app); depois se cruzam e saem pelos lados. O coração desce,
-//  abre as fitas e sobe (duas vezes), as nuvens e os passarinhos atravessam, o coelho pula
+//  abre as fitas e sobe (uma vez, depois do eclipse), as nuvens e os passarinhos atravessam, o coelho pula
 //  pelo chão e as estrelas vão aparecendo e depois somem. No fim só sobra a floresta.
 //  Os pontos de cada peça estão na seção "Roteiro" logo abaixo.
 //
@@ -161,6 +161,21 @@ enum Floresta {
     static func catmullRom(_ p0: CGFloat, _ p1: CGFloat, _ p2: CGFloat, _ p3: CGFloat, _ s: CGFloat) -> CGFloat {
         let s2 = s * s, s3 = s2 * s
         return 0.5 * (2 * p1 + (p2 - p0) * s + (2 * p0 - 5 * p1 + 4 * p2 - p3) * s2 + (3 * p1 - p0 - 3 * p2 + p3) * s3)
+    }
+
+    // SOL E LUA NO IPHONE: o iPhone só vê o terço do meio da floresta, e os astros só entravam
+    // nele lá pelos 3 minutos. O time quer a história COMEÇANDO com eles (o coração saiu do começo).
+    // Então, no iPhone, a parte de longe do caminho deles é encolhida: no começo eles já aparecem
+    // pelas beiradas da tela e vão vindo para o meio. Perto do meio (o eclipse) nada muda.
+    // No iPad (que mostra a floresta inteira) o caminho fica como no animatic.
+    static func caminhoDoAstro(_ dx: CGFloat, larguraVisivel: CGFloat) -> CGFloat {
+        guard larguraVisivel < largura * 0.9 else { return dx }   // iPad: floresta inteira
+        let perto = largura * 0.12            // daqui para dentro (eclipse) não muda
+        let longe = largura / 2               // a beirada da floresta (f = 0 ou 1)
+        let beirada = larguraVisivel / 2      // ali o meio do astro fica na beirada da tela
+        guard abs(dx) > perto, beirada > perto, longe > perto else { return dx }
+        let k = (beirada - perto) / (longe - perto)
+        return (dx < 0 ? -1 : 1) * (perto + (abs(dx) - perto) * k)
     }
 
     // NAS SOMBRAS a camada encolhe na parede (só o que está perto da tela visível importa). Perto do meio a sombra fica IGUAL ao cenário
@@ -335,8 +350,9 @@ enum Floresta {
     }
 
     // MARK: Coração
-    // O CORAÇÃO "The lovers": aparece duas vezes, nos momentos do animatic (0:03–1:25 e 3:22–4:58
-    // do vídeo). A ORDEM (pedido da Georgia): ele DESCE até parar → SÓ ENTÃO abre as fitas →
+    // O CORAÇÃO "The lovers": aparece UMA vez, depois do eclipse (3:22–4:58 do animatic = 6:44–9:56
+    // do app). No animatic ele também abria a história (0:03–1:25), mas o time preferiu começar com
+    // o sol e a lua: o coração é das poucas peças que descem de cima, e abrir com ele causava estranheza. A ORDEM (pedido da Georgia): ele DESCE até parar → SÓ ENTÃO abre as fitas →
     // fica parado → FECHA as fitas → SÓ ENTÃO sobe e sai pelo alto. Nunca anda com as fitas abertas.
     struct PassagemDoCoracao {
         let pontos: [(t: Double, y: CGFloat)]   // y = centro, pixels da Georgia (fora = acima da tela)
@@ -355,8 +371,8 @@ enum Floresta {
             // Entre dois pontos ele anda suave (começa e termina devagar) e fica parado quando dois
             // pontos seguidos têm o mesmo y. chega/sai: as fitas abrem logo depois de ele parar e
             // terminam de fechar antes de ele começar a subir.
-            [PassagemDoCoracao(pontos: [(6, fora), (30, 820), (113, 820), (150, fora)], chega: 30.3, sai: 112.5),
-             PassagemDoCoracao(pontos: [(404, fora), (432, 840), (563, 840), (596, fora)], chega: 432.3, sai: 562.5)]
+            // (A primeira passagem, que abria a história, saiu: [(6, fora), (30, 820), (113, 820), (150, fora)])
+            [PassagemDoCoracao(pontos: [(404, fora), (432, 840), (563, 840), (596, fora)], chega: 432.3, sai: 562.5)]
         }
     }
     static let coracao = Coracao()
@@ -734,7 +750,8 @@ struct FlorestaView: View {
     private func andante(_ a: Floresta.Andante, _ relogio: Double, _ larguraVisivel: CGFloat,
                          _ percurso: CGFloat) -> some View {
         if let p = Floresta.posicao(a.pontos, relogio, larguraVisivel: larguraVisivel, tamanho: a.largura) {
-            let dx = Floresta.esticar(p.dx, larguraVisivel: larguraVisivel,
+            let caminho = a.astro ? Floresta.caminhoDoAstro(p.dx, larguraVisivel: larguraVisivel) : p.dx
+            let dx = Floresta.esticar(caminho, larguraVisivel: larguraVisivel,
                                       percurso: sombra ? percurso : nil, tamanho: a.largura)
             let balanco = reduzirMovimento ? 0 : a.balanco * CGFloat(Floresta.onda(57, relogio, fase: a.fase * 4))
             let vista = comSombraDePapel(
@@ -945,16 +962,8 @@ enum CamadaDaSombra: CaseIterable {
     }
 }
 
-
-
-// A sombra das peças do céu na parede: escura, mas mostrando os detalhes do desenho (o rosto
-// do sol e da lua, as penas, as fitas do coração), como na referência da Georgia.
-// (As árvores, os arbustos e o coelho continuam como silhueta lisa.)
 struct TomDaSombraDoCeu: ViewModifier {
     var ativo: Bool
-    // ⚙️ Cor da parte clara do desenho na sombra (0 = preto; mais alto = detalhes mais visíveis)
-    // Preto: a sombra é só a SILHUETA, como uma sombra de verdade. Com 0,2 ainda dava para ver
-    // os detalhes de dentro do desenho (as fitas do coração, os riscos), e não devia.
     static let tom = Color.black
 
     func body(content: Content) -> some View {
