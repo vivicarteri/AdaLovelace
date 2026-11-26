@@ -13,6 +13,7 @@
 
 import SwiftUI
 import Foundation
+import TipKit
 
 struct PersonalizacaoView: View {
     var haptics: Haptics
@@ -34,6 +35,15 @@ struct PersonalizacaoView: View {
         var caindo = false
     }
     @State private var arrastando: Arrastando?
+
+    // O alfinete da almofada que está dando o pulinho (o número é a vaga)
+    @State private var alfinetePulando: Int?
+    // ⚙️ Quanto o alfinete sobe no pulinho (pontos)
+    private static let alturaDoPulinho: CGFloat = 8
+
+    // Dica "Coloque na vela", depois de alguns toques nas almofadas (Dicas.swift)
+    @State private var dicas = TipGroup(.firstAvailable) { DicaArrastarAlfinete() }
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverLigado
 
     // A ordem das peças na caixinha (cada peça tem um número que não muda). Assim, quando uma sai,
     // as outras andam para fechar o buraco, com animação, em vez de sumir sempre a última.
@@ -108,6 +118,8 @@ struct PersonalizacaoView: View {
             if !reduzirMovimento { try? await Task.sleep(for: .seconds(1.6)) }
             focoNaVela = true
         }
+        .onAppear { DicaArrastarAlfinete.voiceOverLigado = voiceOverLigado }
+        .onChange(of: voiceOverLigado) { _, ligado in DicaArrastarAlfinete.voiceOverLigado = ligado }
     }
 
     private var dicaDaVela: String {
@@ -409,13 +421,17 @@ struct PersonalizacaoView: View {
                     let desenho = EnfeiteView.desenhoDoAlfinete(vaga.estilo)
                     let tamanho = CGSize(width: desenho.tamanho.width * f, height: desenho.tamanho.height * f)
                     let ponta = CGPoint(x: desenho.ponta.x * f, y: desenho.ponta.y * f)
+                    // No pulinho ele sobe ao longo da própria haste, da ponta para a cabeça
+                    let angulo = (90 + vaga.giro) * .pi / 180
+                    let pulo = alfinetePulando == i ? (reduzirMovimento ? 0.5 : 1) * Self.alturaDoPulinho : 0
                     Image("alfinete\(vaga.estilo + 1)")
                         .resizable()
                         .frame(width: tamanho.width, height: tamanho.height)
                         // Deitado ele aponta para a direita; girando 90° fica de cabeça para cima
                         .rotationEffect(.degrees(90 + vaga.giro),
                                         anchor: UnitPoint(x: ponta.x / tamanho.width, y: ponta.y / tamanho.height))
-                        .offset(x: origem.x + vaga.ponto.x * f - ponta.x, y: origem.y + vaga.ponto.y * f - ponta.y)
+                        .offset(x: origem.x + vaga.ponto.x * f - ponta.x - pulo * cos(angulo),
+                                y: origem.y + vaga.ponto.y * f - ponta.y - pulo * sin(angulo))
                         .opacity(naMao == i ? 0 : 1)
                         .transition(.opacity)
                 }
@@ -437,6 +453,12 @@ struct PersonalizacaoView: View {
                     .allowsHitTesting(false)
             }
 
+            // 2c) Um toque no resto das almofadas também conta para a dica de arrastar
+            Color.black.opacity(0.001)
+                .frame(width: w, height: h)
+                .contentShape(Rectangle())
+                .onTapGesture { contarToqueNasAlmofadas() }
+
             // 3) Onde tocar para pegar cada alfinete: na cabeça dele
             ForEach(a.vagas.indices, id: \.self) { i in
                 if !vagasUsadas.contains(i) {
@@ -451,6 +473,8 @@ struct PersonalizacaoView: View {
                         .frame(width: 40, height: 40)
                         .contentShape(Circle())
                         .gesture(arrasto(tipo: .alfinete, tiradoDe: nil, daCaixinha: i, g))
+                        // Um toque (sem arrastar): o pulinho, para mostrar que dá para pegar
+                        .simultaneousGesture(TapGesture().onEnded { pularAlfinete(i) })
                         .offset(x: cabeca.x - 20, y: cabeca.y - 20)
                 }
             }
@@ -481,6 +505,16 @@ struct PersonalizacaoView: View {
             }
         }
         .frame(width: w, height: h, alignment: .topLeading)
+        // A dica de arrastar fica logo acima das almofadas, com a ponta para baixo
+        .overlay(alignment: .top) {
+            if let dica = dicas.currentTip as? DicaArrastarAlfinete, arrastando == nil, !voiceOverLigado {
+                let largura = min(g.tamanho.width - 32, 360)
+                BalaoDeDica(dica: dica, pontaX: largura / 2, pontaEmCima: false)
+                    .frame(width: largura)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .alignmentGuide(.top) { $0[.bottom] + 4 }
+            }
+        }
         // (Esta vista fica centrada em caixinhaY: desce até a base das almofadas ficar no "apoio")
         .offset(y: apoio - g.caixinhaY - h / 2)
         .animation(.easeInOut(duration: 0.25), value: vagasUsadas)
@@ -596,6 +630,8 @@ struct PersonalizacaoView: View {
             }
             arrastando = nil
             haptics.tique()
+            // Aprendeu a arrastar até a vela: a dica não aparece mais
+            if item.tipo == .alfinete { DicaArrastarAlfinete().invalidate(reason: .actionPerformed) }
             // O app empurrou o enfeite para não ficar em cima de outro
             if abs(lugar - altura) > 0.02 {
                 anunciar("Objeto reorganizado para evitar sobreposição")
@@ -619,6 +655,26 @@ struct PersonalizacaoView: View {
                 arrastando = nil
             }
         }
+    }
+
+    // MARK: Pulinho e dica de arrastar
+
+    // O alfinete sobe um pouquinho e volta (com Reduzir movimento, sem mola e mais baixo)
+    private func pularAlfinete(_ vaga: Int) {
+        contarToqueNasAlmofadas()
+        withAnimation(.easeOut(duration: 0.12)) { alfinetePulando = vaga }
+        Task {
+            try? await Task.sleep(for: .seconds(0.12))
+            guard alfinetePulando == vaga else { return }
+            withAnimation(reduzirMovimento ? .easeIn(duration: 0.12) : .spring(duration: 0.35, bounce: 0.5)) {
+                alfinetePulando = nil
+            }
+        }
+    }
+
+    // Cada toque nas almofadas ou nos alfinetes conta para a dica "Coloque na vela"
+    private func contarToqueNasAlmofadas() {
+        Task { await DicaArrastarAlfinete.tocouNasAlmofadas.donate() }
     }
 
     // MARK: Ajudantes

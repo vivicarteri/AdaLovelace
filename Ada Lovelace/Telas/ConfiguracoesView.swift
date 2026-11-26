@@ -28,8 +28,8 @@ struct ConfiguracoesView: View {
                 Section {
                     // Os nomes dizem exatamente o que muda na experiência
                     // Música de fundo
-                    Toggle("Tocar música", isOn: $somAmbiente)
-                        .accessibilityInputLabels(["Tocar música", "Música de fundo", "Música"])
+//                    Toggle("Tocar música", isOn: $somAmbiente)
+//                        .accessibilityInputLabels(["Tocar música", "Música de fundo", "Música"])
                     Toggle("Sons dos alfinetes e penduricalhos caindo", isOn: $somObjetos)
                         .accessibilityInputLabels(["Sons dos objetos", "Sons"])
                     // Riscar, acender, apagar e o pavio queimando ao fundo

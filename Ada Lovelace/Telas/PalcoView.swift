@@ -32,6 +32,7 @@ struct PalcoView: View {
     @State private var velaNovaVisivel = true  // a vela nova aparece devagar (na troca de vela)
     @State private var conjuntoEscondido = false   // prato + vela lá embaixo, fora da tela (a vela nova sobe do chão)
     @State private var fumacaDaTroca: Date?
+    @State private var fumacaDoFim: Date?     // a vela acabou: o fiozinho de fumaça (sem som de apagar)
 
     // Transições
     @State private var trocandoCena = false     // bloqueia toques durante as animações
@@ -208,6 +209,7 @@ struct PalcoView: View {
                 entrarNaCaixa()   // a vela acabou nas sombras: entra na caixa
             }
             if novo == .acabou {
+                fumacaDoFim = Date()
                 Task {
                     try? await Task.sleep(for: .seconds(1.5))
                     withAnimation(.easeInOut(duration: 1.6)) { cortinaFechada = true }
@@ -314,7 +316,8 @@ struct PalcoView: View {
                          progresso: sessao.progresso,
                          acesa: acesa,
                          destaque: acesa,
-                         apagouEm: fumacaDaTroca ?? sessao.apagouEm,
+                         apagouEm: fumacaDoFim ?? fumacaDaTroca ?? sessao.apagouEm,
+                         fumacaCurta: fumacaDoFim != nil,
                          movimento: sessao.movimento,
                          enfeites: sessao.config.enfeites,
                          caidos: sessao.caidos)
@@ -1022,6 +1025,7 @@ struct PalcoView: View {
                 // Com "Reduzir movimento" a vela nova só aparece devagar, sem subir
                 sessao.descartar()
                 fumacaDaTroca = nil
+                fumacaDoFim = nil
                 var semAnimacao = Transaction()
                 semAnimacao.disablesAnimations = true
                 withTransaction(semAnimacao) {
@@ -1038,6 +1042,7 @@ struct PalcoView: View {
                 try? await Task.sleep(for: .seconds(0.45))
                 sessao.descartar()
                 fumacaDaTroca = nil
+                fumacaDoFim = nil
                 var semAnimacao = Transaction()
                 semAnimacao.disablesAnimations = true
                 withTransaction(semAnimacao) { afundando = false }

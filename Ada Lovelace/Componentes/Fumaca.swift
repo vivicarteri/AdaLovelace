@@ -136,6 +136,29 @@ final class MotorDeFumaca {
         emCena = true
     }
 
+    // ⚙️ O FIOZINHO (a vela acabou): por quanto tempo ele sai e quanto vive cada pedaço (segundos)
+    static let duracaoDoFiozinho: Double = 0.8
+    static let vidaDoFiozinho: Double = 1.3
+
+    // Só um fio fino subindo, sem a baforada. Some em cerca de 2 s.
+    func fiozinho() {
+        let t = Self.relogio()
+        agora = max(agora, t)
+        fonteDaUltimaEmissao = nil
+        if reduzirMovimento {
+            // Sem subir nem ondular: aparece e some no lugar
+            fios.append(FioDeFumaca(semente: .random(in: 0...100), largura: 4, alargamento: 4,
+                                    subida: 3, turbulencia: 0, vida: 1.3, comeco: t, duracao: 0.4,
+                                    forcaInicial: 0.3, forcaFinal: 0))
+        } else {
+            fios.append(FioDeFumaca(semente: .random(in: 0...100), largura: 1.2, alargamento: 7,
+                                    subida: 40, turbulencia: 1, vida: Self.vidaDoFiozinho,
+                                    comeco: t, duracao: Self.duracaoDoFiozinho,
+                                    forcaInicial: 0.55, forcaFinal: 0))
+        }
+        emCena = true
+    }
+
     // A fonte apagou ou saiu de cena: para de soltar. O que já saiu termina de subir e some.
     func pararDeSoltar() {
         for fio in fios { fio.emitindo = false }
@@ -285,6 +308,7 @@ struct FumacaDaVela: View {
     var desde: Date
     var largura: CGFloat
     var fonte: CGPoint = .zero     // a ponta do pavio, a partir do meio da base desta vista
+    var curta = false              // true = a vela acabou: só o fiozinho, sem baforada
 
     @State private var motor = MotorDeFumaca()
     @Environment(\.accessibilityReduceMotion) private var reduzirMovimento
@@ -304,7 +328,11 @@ struct FumacaDaVela: View {
                 motor.escala = largura / 50
                 motor.reduzirMovimento = reduzirMovimento
                 motor.mover(para: CGPoint(x: w / 2 + fonte.x, y: h + fonte.y))
-                motor.baforada(fio: 3, forcaDoFio: 0.6, intensidade: 0.8)
+                if curta {
+                    motor.fiozinho()
+                } else {
+                    motor.baforada(fio: 3, forcaDoFio: 0.6, intensidade: 0.8)
+                }
             }
             .allowsHitTesting(false)
             .accessibilityHidden(true)

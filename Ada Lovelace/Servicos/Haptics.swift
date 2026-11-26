@@ -367,7 +367,10 @@ final class Haptics {
     // Quando chegar um som, ele deve usar volumeFosforoEChama.
     func acender() { tocar("Acender", volume: 0) }
 
-    func apagar() { tocar("Apagar", volume: volumeFosforoEChama) }
+    // ⚙️ Volume do som de apagar (0 a 1). A vibração não muda.
+    static let volumeDoApagar: Float = 0.5
+
+    func apagar() { tocar("Apagar", volume: volumeFosforoEChama * Self.volumeDoApagar) }
 
     func fim() { tocar("Fim") }
 

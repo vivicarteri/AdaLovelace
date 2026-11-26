@@ -1,6 +1,6 @@
 //  Dicas.swift
-//  Dicas do TipKit: ensinam a acender (pegar e riscar o fósforo), os gestos de pinça
-//  e os jeitos de apagar a vela.
+//  Dicas do TipKit: ensinam a acender (pegar e riscar o fósforo), os gestos de pinça,
+//  os jeitos de apagar a vela e como levar o alfinete até a vela (Personalização).
 //  As regras definem quando cada dica faz sentido. A PalcoView exibe uma por vez.
 
 import SwiftUI
@@ -94,6 +94,22 @@ struct DicaRiscarOFosforo: Tip {
     var rules: [Rule] {
         #Rule(Self.acendeuPeloToque) { $0.donations.count >= 2 }
         #Rule(Self.$caixaAberta) { $0 }
+        #Rule(Self.$voiceOverLigado) { !$0 }
+    }
+}
+
+// Personalização: quem toca algumas vezes nas almofadas ou nos alfinetes sem arrastar ganha a
+// dica de arrastar o alfinete até a vela. Some quando um alfinete é espetado arrastando.
+// Com o VoiceOver não aparece (as almofadas já têm as ações de inserir).
+struct DicaArrastarAlfinete: Tip {
+    static let tocouNasAlmofadas = Event(id: "tocouNasAlmofadas")
+    @Parameter static var voiceOverLigado: Bool = false
+
+    var title: Text { Text("Coloque na vela").font(ADAFont.font(for: .tipTitle)) }
+    var message: Text? { Text("Segure um alfinete e arraste até a vela para espetar.").font(ADAFont.font(for: .tipMessage)) }
+    var image: Image? { Image(systemName: "hand.draw") }
+    var rules: [Rule] {
+        #Rule(Self.tocouNasAlmofadas) { $0.donations.count >= 3 }
         #Rule(Self.$voiceOverLigado) { !$0 }
     }
 }

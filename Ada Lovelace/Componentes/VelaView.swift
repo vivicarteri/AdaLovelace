@@ -11,6 +11,7 @@ struct VelaView: View {
     var acesa = false
     var destaque = false              // vela acesa no palco: ganha um contorno escuro para aparecer mais no cenário
     var apagouEm: Date? = nil         // para a fumaça
+    var fumacaCurta = false           // a vela acabou: só um fiozinho de fumaça, sem baforada
     var movimento: Movimento? = nil   // para a chama ficar sempre para cima
     var enfeites: [Enfeite] = []
     var caidos: Set<UUID> = []
@@ -88,7 +89,8 @@ struct VelaView: View {
                     FumacaDaVela(desde: apagouEm, largura: largura,
                                  fonte: usaArte ? CGPoint(x: ArteVela.chamaDesvioX * escalaArte,
                                                           y: -ArteVela.pavio * escalaArte)
-                                                : CGPoint(x: 0, y: -largura * 0.22))
+                                                : CGPoint(x: 0, y: -largura * 0.22),
+                                 curta: fumacaCurta)
                 }
             }
             .offset(y: -alturaCera)
