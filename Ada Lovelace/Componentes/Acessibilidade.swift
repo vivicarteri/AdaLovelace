@@ -5,7 +5,7 @@
 //  - Rotor "Camadas de papel": a pessoa escolhe uma camada da cena e ouve a descrição
 //    daquela camada. Assim o VoiceOver não lê tudo de uma vez, mas tudo pode ser descoberto.
 //
-//  COMO ACRESCENTAR UMA CAMADA (ex.: os coelhos, quando a arte chegar):
+//  COMO ACRESCENTAR UMA CAMADA:
 //  escreva um CamadaDescrita novo em DescricaoDaCena.camadas(...) — título curto e descrição.
 //  A ordem da lista é a ordem do rotor, de cima para baixo na cena.
 
@@ -148,6 +148,37 @@ struct CamadaDescrita: Identifiable {
     let titulo: String      // o que o rotor mostra
     let descricao: String   // o que o VoiceOver lê ao chegar na camada
     let faixa: ClosedRange<CGFloat>   // onde a camada fica na tela (fração da altura), para o toque do VoiceOver
+
+    // A camada do coelho muda com o tempo: o alvo acompanha o coelho e a descrição diz o que ele faz agora
+    static let idDoCoelho = "coelho"
+}
+
+// O que o coelho está fazendo agora, com a mesma conta do desenho (Floresta.coelho).
+// x: onde ele está na tela (fração da largura). Fora da cena, fica na beira por onde ele saiu.
+@MainActor
+enum CoelhoAcessivel {
+    static func agora(_ data: Date, tela: CGSize, reduzirMovimento: Bool)
+        -> (frase: String, x: CGFloat) {
+        let relogio = reduzirMovimento ? Floresta.instanteDoEclipse
+                                       : Floresta.tempoDoCenario(RelogioDaHistoria.tempo(em: data))
+        let larguraVisivel = tela.width / max(Floresta.escala * Quadro(tela: tela).escala, 0.001)
+        let foraDaCena = reduzirMovimento ? "Agora ele não está na cena." : "Agora ele não está na cena, logo volta."
+        guard let c = Floresta.coelho(relogio, larguraVisivel: larguraVisivel) else {
+            // Sai pela direita no meio da história e pela esquerda no fim
+            return (foraDaCena, relogio < 300 ? 0.9 : 0.1)
+        }
+        let fracao = 0.5 + c.dx / max(larguraVisivel, 1)
+        guard fracao > 0, fracao < 1 else { return (foraDaCena, fracao < 0.5 ? 0.1 : 0.9) }
+        let frase: String
+        if reduzirMovimento {
+            frase = "Agora ele está sentado, parado."
+        } else if c.quadro.hasPrefix("florestaCoelhoPulo") {
+            frase = "Agora ele está pulando."
+        } else {
+            frase = "Agora ele está sentado."
+        }
+        return (frase, min(0.9, max(0.1, fracao)))
+    }
 }
 
 @MainActor
@@ -171,7 +202,10 @@ enum DescricaoDaCena {
                                faixa: 0.52...0.62),
                 CamadaDescrita(id: "arbustos", titulo: "Floresta: arbustos",
                                descricao: "Arbustos. Moitas arredondadas junto ao chão, coladas na chama. Viram uma massa escura e desfocada na base da parede.",
-                               faixa: 0.62...0.70)
+                               faixa: 0.62...0.70),
+                CamadaDescrita(id: CamadaDescrita.idDoCoelho, titulo: "Floresta: coelho",
+                               descricao: "Coelho. A sombra nítida de um coelho sentado, mexendo as orelhas. De vez em quando ele pula para outro lugar.",
+                               faixa: 0.58...0.68)
             ]
         }
         return [
@@ -185,8 +219,11 @@ enum DescricaoDaCena {
                            descricao: "Árvores da frente. Troncos cinza-claros, recortados em papel, com contorno marcado, na frente da fileira azul.",
                            faixa: 0.50...0.60),
             CamadaDescrita(id: "arbustos", titulo: "Floresta: arbustos",
-                           descricao: "Arbustos. Moitas arredondadas em azul e lilás, na beira do palco, em volta da vela.",
-                           faixa: 0.60...0.68)
+                           descricao: "Arbustos. Moitas arredondadas em tons de verde, na beira do palco, em volta da vela.",
+                           faixa: 0.60...0.68),
+            CamadaDescrita(id: CamadaDescrita.idDoCoelho, titulo: "Floresta: coelho",
+                           descricao: "Coelho. Um coelho de papel sentado na frente dos arbustos, mexendo as orelhas. De vez em quando ele pula para outro lugar.",
+                           faixa: 0.56...0.68)
         ]
     }
 
@@ -222,18 +259,34 @@ struct CamadasDaCenaAcessiveis: View {
     var estadoDaVela: String? = nil
     var rotor: Namespace.ID
 
+    @Environment(\.accessibilityReduceMotion) private var reduzirMovimento
+
     var body: some View {
         GeometryReader { geo in
             ZStack {
                 ForEach(camadas) { camada in
                     let alto = geo.size.height * camada.faixa.lowerBound
                     let baixo = geo.size.height * camada.faixa.upperBound
-                    AlvoAcessivel()
-                        .frame(width: geo.size.width * 0.7, height: max(1, baixo - alto))
-                        .position(x: geo.size.width / 2, y: (alto + baixo) / 2)
-                        .accessibilityElement()
-                        .accessibilityLabel(camada.descricao)
-                        .accessibilityRotorEntry(id: camada.id, in: rotor)
+                    if camada.id == CamadaDescrita.idDoCoelho {
+                        // Estreito e na frente dos arbustos: acompanha o coelho e diz o que ele faz agora
+                        TimelineView(.periodic(from: .now, by: 1)) { contexto in
+                            let coelho = CoelhoAcessivel.agora(contexto.date, tela: geo.size,
+                                                               reduzirMovimento: reduzirMovimento)
+                            AlvoAcessivel()
+                                .frame(width: geo.size.width * 0.16, height: max(1, baixo - alto))
+                                .position(x: geo.size.width * coelho.x, y: (alto + baixo) / 2)
+                                .accessibilityElement()
+                                .accessibilityLabel("\(camada.descricao) \(coelho.frase)")
+                                .accessibilityRotorEntry(id: camada.id, in: rotor)
+                        }
+                    } else {
+                        AlvoAcessivel()
+                            .frame(width: geo.size.width * 0.7, height: max(1, baixo - alto))
+                            .position(x: geo.size.width / 2, y: (alto + baixo) / 2)
+                            .accessibilityElement()
+                            .accessibilityLabel(camada.descricao)
+                            .accessibilityRotorEntry(id: camada.id, in: rotor)
+                    }
                 }
                 if let estadoDaVela {
                     // Um ponto pequeno, para não cobrir os botões no toque do VoiceOver

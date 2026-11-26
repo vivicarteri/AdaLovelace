@@ -1,5 +1,5 @@
 //  Fumaca.swift
-//  Fumaça de verdade (pedido da Sofia): em vez de bolinhas redondas, FIOS que sobem e ondulam.
+//  Fumaça em FIOS que sobem e ondulam (em vez de bolinhas redondas).
 //
 //  Como funciona:
 //  - A fonte (a cabeça do fósforo ou a ponta do pavio) solta pontinhos sem parar.

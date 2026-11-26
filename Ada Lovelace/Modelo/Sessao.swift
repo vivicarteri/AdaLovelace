@@ -251,7 +251,6 @@ final class Sessao: ObservableObject {
         movimento.soltarReferencia()
         desligarVibracaoDaChama()
         ambiente.pararTudo()
-        ultimoPassoAgendado = -1
         estado = .nova
         derretimentoAcelerado = false
         queimado = 0
@@ -349,7 +348,7 @@ final class Sessao: ObservableObject {
     }
 
     // SONS DE FUNDO (só com a vela acesa e o app na tela):
-    // - música e passos do coelho: interruptor "Tocar música e sons da floresta";
+    // - música: interruptor "Tocar música";
     // - pavio queimando: interruptor "Sons do fósforo e da vela", mais baixo no teatro de sombras.
     // Chamado ao acender, ao voltar para o app, ao afastar/aproximar a caixa e quando a pessoa
     // mexe nesses interruptores nas Configurações.
@@ -359,40 +358,11 @@ final class Sessao: ObservableObject {
             ambiente.tocarMusica()
         } else {
             ambiente.pararMusica()
-            ambiente.passos.cancelar()
         }
         if acesa && Chaves.ligado(Chaves.somFosforoEChama) {
             ambiente.pavio.tocar(longe: foraDaCaixa)
         } else {
             ambiente.pavio.parar()
-        }
-    }
-
-    // PASSOS DO COELHO: a cada tique, se o coelho vai pousar nos próximos instantes, o som é
-    // agendado para o momento exato (Floresta.instantesDosPassos, no relógio da história).
-    // Com "Reduzir movimento" o coelho fica parado no eclipse, então não tem passos.
-    private var ultimoPassoAgendado: Double = -1     // no relógio da história (sem dar a volta)
-    // ⚙️ Até quanto tempo antes o passo é agendado (segundos). Maior que o tique de 0,1 s.
-    private static let antecedenciaDosPassos: Double = 0.15
-
-    private func cuidarDosPassos() {
-        guard ativo, Chaves.ligado(Chaves.somAmbiente) else { return }
-        #if canImport(UIKit)
-        guard !UIAccessibility.isReduceMotionEnabled else { return }
-        #endif
-        let agora = RelogioDaHistoria.tempo(em: Date())
-        let velocidade = max(RelogioDaHistoria.velocidadeAtual, 0.01)
-        if agora < ultimoPassoAgendado - 1 { ultimoPassoAgendado = -1 }   // a história recomeçou
-        let ciclo = RelogioDaHistoria.ciclo
-        let volta = (agora / ciclo).rounded(.down) * ciclo
-        let ate = agora + Sessao.antecedenciaDosPassos * velocidade
-        for instante in Floresta.instantesDosPassos {
-            for inicio in [volta, volta + ciclo] {
-                let passo = inicio + instante
-                guard passo > agora, passo <= ate, passo > ultimoPassoAgendado + 0.001 else { continue }
-                ultimoPassoAgendado = passo
-                ambiente.passos.tocar(daquiA: (passo - agora) / velocidade)
-            }
         }
     }
 
@@ -417,7 +387,6 @@ final class Sessao: ObservableObject {
 
         if estado == .acesa {
             cuidarDaVibracaoDaChama(agora: agora)
-            cuidarDosPassos()
         }
         atualizarProgresso(comSom: true)
 

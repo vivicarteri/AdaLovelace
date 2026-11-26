@@ -474,28 +474,6 @@ enum Floresta {
         return poses
     }()
 
-    // PASSOS (som Footsteps): tocam quando aparece este quadro do pulo (quase o pouso).
-    static let quadroDoPasso = 17
-
-    // O instante, no relógio da história (0 a 600 s), em que cada pulo chega no quadroDoPasso.
-    // Mesma conta do coelho(): o pulo começa em comecaPulo e a pose aparece no instante dela no
-    // vídeo, dividido pela velocidade do pulo. Só os pulos com o coelho na tela: os que entram
-    // ou saem pela borda (foraEsquerda/foraDireita) ficam sem som.
-    static let instantesDosPassos: [Double] = {
-        guard let pose = posesDoPulo.first(where: { $0.quadro == quadroDoPasso }) else { return [] }
-        let depoisDoInicio = pose.instante / velocidadeDoPulo
-        func naTela(_ p: Parada) -> Bool { p.f > foraEsquerda && p.f < foraDireita }
-        var instantes: [Double] = []
-        for paradas in caminhosDoCoelho where paradas.count > 1 {
-            for k in 0..<(paradas.count - 1) {
-                let a = paradas[k], b = paradas[k + 1]
-                guard naTela(a), naTela(b) else { continue }
-                instantes.append(max(a.t, b.t - duracaoDoPulo) + depoisDoInicio)
-            }
-        }
-        return instantes.sorted()
-    }()
-
     // Onde o coelho está, o que desenhar e para que lado olha. nil = fora de cena.
     // quadro/proximo/mistura: no pulo, a pose de agora vai se MISTURANDO com a próxima
     // (mistura 0 → 1), para o movimento ficar contínuo entre um desenho e outro.
@@ -588,9 +566,6 @@ enum RelogioDaHistoria {
         acumulado = 0
         acesaDesde = nil
     }
-
-    // Quantos segundos de história passam em 1 segundo de verdade (só muda no teste do DEBUG)
-    static var velocidadeAtual: Double { velocidade }
 
     // Tempo acumulado de reprodução desde o início da história.
     static func tempo(em data: Date) -> Double {

@@ -1,7 +1,6 @@
 //  SomAmbiente.swift
 //  Os sons de fundo enquanto a vela está acesa:
-//  - MÚSICA (MusicaFundo.mp3), em loop. Interruptor "Tocar música e sons da floresta".
-//  - PASSOS do coelho (Footsteps.wav), no pouso de cada pulo. Mesmo interruptor da música.
+//  - MÚSICA (MusicaFundo.mp3), em loop. Interruptor "Tocar música".
 //  - PAVIO queimando (FirePlace.m4a), baixinho e em loop. Interruptor "Sons do fósforo e da vela".
 //  Quem decide quando cada um toca é a Sessao; aqui só fica o "como".
 
@@ -20,7 +19,6 @@ final class SomAmbiente {
     private var observadorInterrupcao: NSObjectProtocol?
 
     let pavio = SomDoPavio()
-    let passos = SomDosPassos()
 
     init() {
         #if os(iOS)
@@ -80,7 +78,6 @@ final class SomAmbiente {
     func pararTudo() {
         pararMusica()
         pavio.parar()
-        passos.cancelar()
     }
 }
 
@@ -215,45 +212,6 @@ final class SomDoPavio {
             }
             depois?()
         }
-    }
-}
-
-// MARK: - Passos do coelho
-
-/// O som dos passos, agendado para cair exatamente no pouso do coelho
-/// (a Sessao sabe, pelo relógio da história, quando ele vai pousar).
-final class SomDosPassos {
-    // ⚙️ Volume dos passos (0 a 1)
-    static let volume: Float = 0.7
-
-    private let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "AdaLovelace", category: "SomDosPassos")
-    private var player: AVAudioPlayer?
-
-    init() {
-        guard let url = Bundle.main.url(forResource: "Footsteps", withExtension: "wav") else {
-            log.warning("Não achei Footsteps.wav no bundle do app")
-            return
-        }
-        do {
-            let player = try AVAudioPlayer(contentsOf: url)
-            player.prepareToPlay()
-            self.player = player
-        } catch {
-            log.error("Erro ao carregar Footsteps.wav: \(error.localizedDescription)")
-        }
-    }
-
-    /// Toca daqui a "segundos" (pode ser 0).
-    func tocar(daquiA segundos: TimeInterval) {
-        guard let player else { return }
-        player.stop()
-        player.currentTime = 0
-        player.volume = Self.volume
-        player.play(atTime: player.deviceCurrentTime + max(0.005, segundos))
-    }
-
-    func cancelar() {
-        player?.stop()
     }
 }
 
