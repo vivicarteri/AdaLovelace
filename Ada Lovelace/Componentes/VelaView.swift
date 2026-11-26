@@ -208,9 +208,18 @@ struct VelaView: View {
         let alturaDesenho = liso > 0 ? corpo * inteiro / liso : 0
 
         return VStack(spacing: 0) {
-            Image("velaTopo")
-                .resizable()
-                .frame(width: larguraDesenho, height: topo)
+            if arteExiste(CeraView.quadros[0]) {
+                // Topo liso da própria vela; a cera animada vai por cima (overlay abaixo)
+                Image("velaCorpo")
+                    .resizable()
+                    .frame(width: larguraDesenho, height: inteiro)
+                    .frame(width: larguraDesenho, height: topo, alignment: .top)
+                    .clipped()
+            } else {
+                Image("velaTopo")
+                    .resizable()
+                    .frame(width: larguraDesenho, height: topo)
+            }
             if corpo > 0 {
                 Image("velaCorpo")
                     .resizable()
@@ -219,10 +228,20 @@ struct VelaView: View {
                     .clipped()
             }
         }
+        // Cera derretendo por cima do topo (os escorridos podem descer pelo corpo)
+        .overlay(alignment: .top) {
+            if arteExiste(CeraView.quadros[0]) {
+                CeraView(progresso: progresso, acesa: acesa, escala: ArteVela.k * s,
+                         fim: visivel / (ArteVela.k * s))
+                    .frame(width: ArteVela.ceraLargura * s, height: ArteVela.ceraAltura * s)
+                    .frame(width: larguraDesenho, height: 0, alignment: .top)
+            }
+        }
         // No fim da vela a cera fica mais baixa que os escorridos: aí eles vão sumindo
         // por baixo, derretendo dentro do suporte.
         .frame(width: larguraDesenho, height: visivel, alignment: .top)
-        .clipped()
+        // Corta só em cima/embaixo: a cera é mais larga que o corpo e não pode perder as beiradas
+        .mask { Rectangle().frame(width: larguraDesenho * 2) }
         .offset(y: escondido)
     }
 }
