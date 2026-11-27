@@ -220,6 +220,14 @@ struct CaixaFosforoView: View {
 
     static func altura(largura: CGFloat) -> CGFloat { largura * luvaArte.height / luvaArte.width }
 
+    // O desenho da luva vai da linha 9 à 315 dos 384 px: embaixo dele a imagem é transparente.
+    // Quanto o meio do DESENHO fica acima do meio da vista (em pontos), para alinhar o que aparece.
+    private static let desenhoDaLuva: ClosedRange<CGFloat> = 9...315
+    static func meioDoDesenhoAcima(largura: CGFloat) -> CGFloat {
+        let meio = (desenhoDaLuva.lowerBound + desenhoDaLuva.upperBound) / 2
+        return altura(largura: largura) * (0.5 - meio / luvaArte.height)
+    }
+
     // Quanto a gaveta anda para a esquerda quando abre
     static func corrida(largura: CGFloat) -> CGFloat { largura * corridaArte / luvaArte.width }
 

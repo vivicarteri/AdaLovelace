@@ -136,13 +136,22 @@ private nonisolated final class LoopDoRisco: @unchecked Sendable {
 final class Haptics {
     let suportado = CHHapticEngine.capabilitiesForHardware().supportsHaptics
 
-    // Tempo que o alfinete leva para cair. Tem que ser igual ao "Time": 0.45 do Prego.ahap.
+    // Onde a batida começa dentro do Prego.ahap ("Time": 0.45). Antes dela só tem o tique de soltar.
+    // Os penduricalhos ainda caem neste tempo (VelaView); os alfinetes usam QuedaDoEnfeite.
     static let tempoQueda: TimeInterval = 0.45
+
+    // ⚙️ O tique de soltar o alfinete: o mesmo primeiro evento do Prego.ahap (força e nitidez)
+    static let forcaDoTiqueDeSoltar: Float = 0.3
+    static let nitidezDoTiqueDeSoltar: Float = 0.7
 
     private let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "AdaLovelace", category: "Haptics")
     private var engine: CHHapticEngine?
     private var precisaLigar = true
     private var players: [String: CHHapticPatternPlayer] = [:]
+    // A batida do Prego.ahap sem o tique de soltar, já adiantada para começar em 0 s
+    private var batida: [String: Any]?
+    // Batidas agendadas: ficam guardadas até tocarem
+    private var batidasAgendadas: [CHHapticPatternPlayer] = []
     private var chama: CHHapticAdvancedPatternPlayer?
     private var chamaTocando = false   // para religar a chama se o sistema reiniciar o motor
     private var segurar: CHHapticAdvancedPatternPlayer?
@@ -229,14 +238,14 @@ final class Haptics {
         player.play()
     }
 
-    // O enfeite leva 0,45 s para cair. Agenda o WAV original para tocar ao atingir o pote.
-    private func tocarAudioDoPrego(forca: Float) {
+    // Agenda o WAV original para tocar no instante em que o enfeite encosta (depois de "atraso" segundos)
+    private func tocarAudioDoPrego(volume: Float, depois atraso: TimeInterval) {
         guard Chaves.ligado(Chaves.somObjetos), let player = audioPrego else { return }
         player.stop()
         player.currentTime = 0
-        player.volume = max(0, min(1, forca))
+        player.volume = max(0, min(1, volume))
         player.prepareToPlay()
-        player.play(atTime: player.deviceCurrentTime + Self.tempoQueda)
+        player.play(atTime: player.deviceCurrentTime + max(0, atraso))
     }
 
     private func ligarSePreciso() throws {
@@ -264,11 +273,14 @@ final class Haptics {
 
     private func carregarPadroes() {
         guard let engine else { return }
-        for nome in ["Acender", "Prego", "Apagar", "Fim"] {
+        for nome in ["Acender", "Apagar", "Fim"] {
             if let padrao = padrao(nome) {
                 players[nome] = try? engine.makePlayer(with: padrao)
             }
         }
+        // O Prego.ahap é tocado em duas partes: o tique quando o alfinete solta e a batida
+        // quando ele encosta, que muda conforme a altura de onde ele cai
+        batida = dicionarioDoPadrao("Prego", aPartirDe: Self.tempoQueda)
         if let padrao = padrao("Chama") {
             chama = try? engine.makeAdvancedPlayer(with: padrao)
             chama?.loopEnabled = true
@@ -280,6 +292,13 @@ final class Haptics {
     static let reforcoDaVibracao: [String: Double] = ["Acender": 1.8, "Apagar": 1.25]
 
     private func padrao(_ nome: String) -> CHHapticPattern? {
+        guard let dicionario = dicionarioDoPadrao(nome) else { return nil }
+        return criarPadrao(dicionario, nome: nome)
+    }
+
+    // Lê o .ahap como dicionário, já com o reforço da vibração.
+    // aPartirDe: o que vem antes deste tempo sai, e o resto é adiantado para começar em 0 s.
+    private func dicionarioDoPadrao(_ nome: String, aPartirDe inicio: TimeInterval = 0) -> [String: Any]? {
         guard let url = Bundle.main.url(forResource: nome, withExtension: "ahap") else {
             log.warning("Arquivo \(nome, privacy: .public).ahap não encontrado no bundle.")
             return nil
@@ -288,16 +307,41 @@ final class Haptics {
             let dados = try Data(contentsOf: url)
             let json = try JSONSerialization.jsonObject(with: dados)
             guard var dicionario = json as? [String: Any] else { return nil }
-            if let reforco = Haptics.reforcoDaVibracao[nome],
-               let partes = dicionario["Pattern"] as? [[String: Any]] {
-                dicionario["Pattern"] = partes.map { Haptics.reforcar($0, por: reforco) }
+            if var partes = dicionario["Pattern"] as? [[String: Any]] {
+                if let reforco = Haptics.reforcoDaVibracao[nome] {
+                    partes = partes.map { Haptics.reforcar($0, por: reforco) }
+                }
+                if inicio > 0 {
+                    partes = partes.compactMap { Haptics.adiantar($0, em: inicio) }
+                }
+                dicionario["Pattern"] = partes
             }
-            let comChaves = Dictionary(uniqueKeysWithValues: dicionario.map { (CHHapticPattern.Key(rawValue: $0.key), $0.value) })
-            return try CHHapticPattern(dictionary: comChaves)
+            return dicionario
         } catch {
             log.error("Erro ao ler \(nome, privacy: .public).ahap: \(error.localizedDescription)")
             return nil
         }
+    }
+
+    private func criarPadrao(_ dicionario: [String: Any], nome: String) -> CHHapticPattern? {
+        let comChaves = Dictionary(uniqueKeysWithValues: dicionario.map { (CHHapticPattern.Key(rawValue: $0.key), $0.value) })
+        do {
+            return try CHHapticPattern(dictionary: comChaves)
+        } catch {
+            log.error("Erro ao montar \(nome, privacy: .public).ahap: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    // Tira uma parte do .ahap que acontece antes de "inicio" (nil) ou adianta o tempo dela
+    private static func adiantar(_ parte: [String: Any], em inicio: TimeInterval) -> [String: Any]? {
+        guard let chave = parte.keys.first, var item = parte[chave] as? [String: Any],
+              let tempo = (item["Time"] as? NSNumber)?.doubleValue else { return parte }
+        guard tempo >= inicio - 0.0001 else { return nil }
+        item["Time"] = max(0, tempo - inicio)
+        var nova = parte
+        nova[chave] = item
+        return nova
     }
 
     // Multiplica a força ("HapticIntensity") de um evento de vibração do .ahap
@@ -338,6 +382,30 @@ final class Haptics {
         }
     }
 
+    // A batida do alfinete, agendada para o instante em que ele encosta.
+    // A força vai dentro do próprio padrão (vale desde o começo da batida), e cada queda
+    // ganha o seu tocador: duas quedas seguidas não cortam uma à outra.
+    private func tocarBatida(forca: Float, depois atraso: TimeInterval) {
+        guard suportado, let engine, var dicionario = batida else { return }
+        var partes = dicionario["Pattern"] as? [[String: Any]] ?? []
+        partes.insert(["Parameter": ["ParameterID": "HapticIntensityControl", "Time": 0.0,
+                                     "ParameterValue": Double(max(0, min(1, forca)))]], at: 0)
+        dicionario["Pattern"] = partes
+        guard let padrao = criarPadrao(dicionario, nome: "Prego") else { return }
+        do {
+            try ligarSePreciso()
+            let player = try engine.makePlayer(with: padrao)
+            try player.start(atTime: engine.currentTime + max(0, atraso))
+            batidasAgendadas.append(player)
+            Task { [weak self] in
+                try? await Task.sleep(for: .seconds(max(0, atraso) + 1))
+                self?.batidasAgendadas.removeAll { $0 === player }
+            }
+        } catch {
+            log.error("Erro ao tocar a batida do alfinete: \(error.localizedDescription)")
+        }
+    }
+
     // Vibração curtinha feita no código
     private func toque(forca: Float, nitidez: Float) {
         guard suportado, let engine else { return }
@@ -373,18 +441,24 @@ final class Haptics {
 
     func fim() { tocar("Fim") }
 
-    // forca: 0 a 1 (enfeite mais alto = cai de mais alto = batida mais forte e som mais alto)
-    func prego(forca: Float) {
+    // Enfeite caindo da vela. forca: 0 a 1 (enfeite mais alto = cai de mais alto = batida mais
+    // forte e som mais alto). depois: quantos segundos ele leva para encostar no prato.
+    func prego(forca: Float, depois atraso: TimeInterval) {
         let f = max(0, min(1, forca))
-        // Vibração mais forte que antes
-        tocar("Prego", forca: 0.7 + 0.3 * f, volume: 0)
-        tocarAudioDoPrego(forca: 0.4 + 0.6 * f)
+        queda(vibracao: 0.7 + 0.3 * f, volume: 0.4 + 0.6 * f, depois: atraso)
     }
 
-    // Enfeite que não encostou na vela e caiu no pote
-    func caiuNoPote() {
-        tocar("Prego", forca: 0.55, volume: 0)
-        tocarAudioDoPrego(forca: 0.25)
+    // Enfeite que não encostou na vela e caiu no pote.
+    // depois: quantos segundos ele leva para chegar à borda de baixo da tela.
+    func caiuNoPote(depois atraso: TimeInterval) {
+        queda(vibracao: 0.55, volume: 0.25, depois: atraso)
+    }
+
+    // O tique quando o enfeite solta; a batida e o som quando ele encosta
+    private func queda(vibracao: Float, volume: Float, depois atraso: TimeInterval) {
+        toque(forca: Self.forcaDoTiqueDeSoltar * vibracao, nitidez: Self.nitidezDoTiqueDeSoltar)
+        tocarBatida(forca: vibracao, depois: atraso)
+        tocarAudioDoPrego(volume: volume, depois: atraso)
     }
 
     // ⚙️ As batidas foram reforçadas (pedido da mentora: os haptics podiam ser mais intensos).
@@ -417,13 +491,13 @@ final class Haptics {
         tocar("Acender", volume: volumeFosforoEChama)
     }
 
-    // ⚙️ Vibração do fósforo raspando na lixa: bem perceptível enquanto risca.
+    // ⚙️ Vibração do fósforo raspando na lixa: forte enquanto risca.
     // lentidao: 0 = na velocidade de acender (ou mais rápido), 1 = bem devagar.
-    // Rápido = mais suave (força 0,65, um pouco mais nítida).
-    // Devagar = mais forte e arrastada (força até 0,9, nitidez zero = batida grossa).
+    // Rápido = força 0,85, um pouco mais nítida.
+    // Devagar = força 1 (o máximo do iPhone), nitidez zero = batida grossa e arrastada.
     func raspar(lentidao: Float = 0) {
         let l = max(0, min(1, lentidao))
-        toque(forca: 0.65 + 0.25 * l, nitidez: 0.2 * (1 - l))
+        toque(forca: 0.85 + 0.15 * l, nitidez: 0.2 * (1 - l))
     }
 
     // MARK: Segurar para descartar (vibração que vai crescendo durante 1 segundo)
@@ -502,8 +576,8 @@ final class Haptics {
     func acenderFosforo() {}
     func apagar() {}
     func fim() {}
-    func prego(forca: Float) {}
-    func caiuNoPote() {}
+    func prego(forca: Float, depois atraso: TimeInterval) {}
+    func caiuNoPote(depois atraso: TimeInterval) {}
     func tique() {}
     func raspar(lentidao: Float = 0) {}
     func iniciarSegurar(duracao: TimeInterval) {}

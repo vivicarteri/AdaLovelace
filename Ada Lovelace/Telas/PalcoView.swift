@@ -28,9 +28,10 @@ struct PalcoView: View {
     @AppStorage(Chaves.iluminacaoDramatica) private var iluminacaoDramatica = true
     @State private var cortinaFechada = false
     @State private var trocando = false        // animação de descartar
-    @State private var afundando = false       // vela descendo pelo alçapão
-    @State private var velaNovaVisivel = true  // a vela nova aparece devagar (na troca de vela)
-    @State private var conjuntoEscondido = false   // prato + vela lá embaixo, fora da tela (a vela nova sobe do chão)
+    @State private var afundando = false       // vela dentro do prato, pelo alçapão (a velha afunda, a nova sobe)
+    @State private var velaNovaVisivel = true  // o toco some e a vela nova aparece devagar (na troca de vela)
+    // ⚙️ Quanto tempo o toco leva para sumir quando a vela acaba (segundos)
+    private static let duracaoDoTocoSumindo: Double = 0.6
     @State private var fumacaDaTroca: Date?
     @State private var fumacaDoFim: Date?     // a vela acabou: o fiozinho de fumaça (sem som de apagar)
 
@@ -86,7 +87,7 @@ struct PalcoView: View {
     // Suavização da velocidade (segundos): tira os tremidos do toque.
     private let suavizacaoDaVelocidade: TimeInterval = 0.04
     // A cada este tanto de caminho na lixa, uma vibração áspera.
-    private let caminhoPorVibracao: CGFloat = 26
+    private let caminhoPorVibracao: CGFloat = 18
 
     var body: some View {
         GeometryReader { geo in
@@ -145,7 +146,7 @@ struct PalcoView: View {
                 sessao.chamaMudouDeLugar(altura)
             }
         }
-        // A caixa de fósforos fica lá embaixo, encostada na borda: riscando o fósforo, o dedo
+        // A caixa de fósforos fica lá embaixo, perto da borda: riscando o fósforo, o dedo
         // passava pela barrinha de baixo do iPhone e trocava de app sem querer.
         // Assim o primeiro deslize na borda de baixo fica com o app; para sair, desliza de novo.
         .defersSystemGestures(on: .bottom)
@@ -325,9 +326,10 @@ struct PalcoView: View {
                               y: g.baseY - (alturaCheia + espacoChama) / 2 + (afundando ? alturaCheia + espacoChama : 0))
             }
             .frame(width: g.tamanho.width, height: g.tamanho.height)
+            // Cortada na borda de cima do prato: o que está dentro dele (a vela afundando ou
+            // subindo, os alfinetes caindo) nunca aparece na frente nem abaixo do prato
             .mask(alignment: .top) { Rectangle().frame(height: g.baseY + 2) }
             .opacity(velaNovaVisivel ? 1 : 0)
-            .offset(y: conjuntoEscondido ? g.fundoDaTela : 0)
 
             // Tocar na chama apaga a vela.
             // É também o jeito de apagar SEM virar o aparelho: importante para quem não pode
@@ -341,11 +343,10 @@ struct PalcoView: View {
                     .accessibilityHidden(true)   // a ação fica na própria vela, para o VoiceOver
             }
 
-            // Suporte da vela
+            // Suporte da vela (fica sempre parado, também na troca de vela)
             SuporteView(largura: g.larguraVela)
                 .position(x: g.centroX + SuporteView.desvioX(largura: g.larguraVela),
                           y: g.baseY + SuporteView.desvioY(largura: g.larguraVela))
-                .offset(y: conjuntoEscondido ? g.fundoDaTela : 0)
 
             if !miniatura {
                 botoesInferiores(g)
@@ -989,12 +990,12 @@ struct PalcoView: View {
         sessao.apagar(jeito: .toque)
     }
 
-    // A chama apaga, a vela afunda pelo alçapão, a cortina desce e sobe uma vela nova
+    // A chama apaga, a vela afunda pelo alçapão, a cortina desce e sobe uma vela nova do prato
     private func descartar() {
         guard !trocando else { return }
         let estavaAcesa = sessao.estado == .acesa
-        // A vela já acabou: não tem o que afundar e a cortina já está fechada.
-        // Pula direto para a vela nova subindo (sem esperar à toa).
+        // A vela já acabou: a cortina já está fechada. Pula direto para o toco sumindo
+        // e a vela nova subindo (sem esperar à toa).
         let jaAcabou = sessao.estado == .acabou
         trocando = true
         etapa = .guardado
@@ -1020,39 +1021,32 @@ struct PalcoView: View {
                 try? await Task.sleep(for: .seconds(1.0))
             }
 
+            // O prato fica sempre parado. O toco (ou a vela velha, se ainda está à mostra) some devagar…
+            if !afundando {
+                withAnimation(.easeOut(duration: Self.duracaoDoTocoSumindo)) { velaNovaVisivel = false }
+                try? await Task.sleep(for: .seconds(Self.duracaoDoTocoSumindo))
+            }
+            // …e a vela nova é montada sem animação, já inteira (sem o topo e o corpo se ajeitando
+            // no caminho). Sem "Reduzir movimento" ela já nasce escondida dentro do prato, para subir.
+            var semAnimacao = Transaction()
+            semAnimacao.disablesAnimations = true
+            withTransaction(semAnimacao) {
+                sessao.descartar()
+                fumacaDaTroca = nil
+                fumacaDoFim = nil
+                afundando = !reduzirMovimento
+                velaNovaVisivel = !reduzirMovimento
+            }
             if reduzirMovimento {
-                // Com "Reduzir movimento" a vela nova só aparece devagar, sem subir.
-                // A vela nova é montada sem animação: já surge inteira, e não crescendo do toco.
-                var semAnimacao = Transaction()
-                semAnimacao.disablesAnimations = true
-                withTransaction(semAnimacao) {
-                    sessao.descartar()
-                    fumacaDaTroca = nil
-                    fumacaDoFim = nil
-                    velaNovaVisivel = false
-                    afundando = false
-                }
+                // Com "Reduzir movimento" a vela nova só aparece devagar no prato, sem subir
                 withAnimation(.easeOut(duration: 0.6)) { velaNovaVisivel = true }
                 try? await Task.sleep(for: .seconds(0.6))
             } else {
-                // A vela nova SOBE DO CHÃO já INTEIRA, em pé no prato: o prato vazio desce para
-                // baixo do palco e volta subindo com a vela nova. Antes ela saía de dentro do
-                // prato e, por um instante, parecia uma vela cortada "crescendo".
-                withAnimation(.easeIn(duration: 0.45)) { conjuntoEscondido = true }
-                try? await Task.sleep(for: .seconds(0.45))
-                // A vela nova é montada sem animação, lá embaixo: sobe já inteira (sem o topo
-                // e o corpo se ajeitando no caminho).
-                var semAnimacao = Transaction()
-                semAnimacao.disablesAnimations = true
-                withTransaction(semAnimacao) {
-                    sessao.descartar()
-                    fumacaDaTroca = nil
-                    fumacaDoFim = nil
-                    afundando = false
-                }
-                // Uma pausinha, para a vela nova ser desenhada lá embaixo antes de subir
+                // A vela nova SOBE DE DENTRO DO PRATO, atrás dele. Como a vela é cortada na borda
+                // de cima do prato, ela nunca aparece na frente nem abaixo dele.
+                // Uma pausinha, para a vela nova ser desenhada lá dentro antes de subir
                 try? await Task.sleep(for: .milliseconds(50))
-                withAnimation(.easeOut(duration: 1.1)) { conjuntoEscondido = false }
+                withAnimation(.easeOut(duration: 1.1)) { afundando = false }
                 try? await Task.sleep(for: .seconds(1.1))
             }
             trocando = false
@@ -1123,9 +1117,11 @@ private struct LayoutPalco {
     var larguraCaixa: CGFloat { min(tamanho.width * 0.34, 150) }
     var alturaCaixa: CGFloat { CaixaFosforoView.altura(largura: larguraCaixa) }
 
-    // Caixa de fósforos no canto de baixo à direita, meio para fora da tela
+    // Caixa de fósforos embaixo à direita, meio para fora da tela. O meio do desenho dela fica na
+    // mesma altura do meio do botão do outro lado (no iPhone os dois ficam acima das alças do prato).
     var caixa: CGPoint {
-        CGPoint(x: tamanho.width - larguraCaixa * 0.34, y: tamanho.height - alturaCaixa * 0.30)
+        CGPoint(x: tamanho.width - larguraCaixa * 0.34,
+                y: botaoBaixoY + CaixaFosforoView.meioDoDesenhoAcima(largura: larguraCaixa))
     }
 
     // Botão de baixo à esquerda (personalizar / acabar com a vela).

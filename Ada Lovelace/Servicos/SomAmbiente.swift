@@ -1,27 +1,20 @@
 //  SomAmbiente.swift
-//  Os sons de fundo enquanto a vela está acesa:
-//  - MÚSICA (MusicaFundo.mp3), em loop. Interruptor "Tocar música".
-//  - PAVIO queimando (FirePlace.m4a), baixinho e em loop. Interruptor "Sons do fósforo e da vela".
-//  Quem decide quando cada um toca é a Sessao; aqui só fica o "como".
+//  O som de fundo enquanto a vela está acesa: o PAVIO queimando (FirePlace.m4a), baixinho e em loop.
+//  Interruptor "Sons do fósforo e da vela".
+//  Quem decide quando ele toca é a Sessao; aqui só fica o "como".
 
 import Foundation
 import AVFoundation
 import OSLog
 
 final class SomAmbiente {
-    // ⚙️ Volume da música (0 a 1)
-    static let volumeDaMusica: Float = 0.5
-
-    private let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "AdaLovelace", category: "SomAmbiente")
-    private var player: AVAudioPlayer?
-    private var procurouArquivo = false
-    private var deveTocar = false
     private var observadorInterrupcao: NSObjectProtocol?
 
     let pavio = SomDoPavio()
 
     init() {
         #if os(iOS)
+        // Depois de uma ligação ou da Siri, o pavio volta a tocar
         observadorInterrupcao = NotificationCenter.default.addObserver(
             forName: AVAudioSession.interruptionNotification,
             object: AVAudioSession.sharedInstance(),
@@ -32,7 +25,6 @@ final class SomAmbiente {
                 guard let self, let tipoRaw,
                       let tipo = AVAudioSession.InterruptionType(rawValue: tipoRaw) else { return }
                 if tipo == .ended {
-                    if self.deveTocar { self.player?.play() }
                     self.pavio.religar()
                 }
             }
@@ -46,37 +38,8 @@ final class SomAmbiente {
         }
     }
 
-    // MARK: Música
-
-    func tocarMusica() {
-        deveTocar = true
-        if player == nil && !procurouArquivo {
-            procurouArquivo = true
-            if let url = Bundle.main.url(forResource: "MusicaFundo", withExtension: "mp3") {
-                do {
-                    let novoPlayer = try AVAudioPlayer(contentsOf: url)
-                    novoPlayer.numberOfLoops = -1   // repete para sempre
-                    novoPlayer.volume = Self.volumeDaMusica
-                    novoPlayer.prepareToPlay()
-                    player = novoPlayer
-                } catch {
-                    log.error("Erro ao carregar MusicaFundo.mp3: \(error.localizedDescription)")
-                }
-            } else {
-                log.warning("Não achei MusicaFundo.mp3 no bundle do app")
-            }
-        }
-        player?.play()
-    }
-
-    func pararMusica() {
-        deveTocar = false
-        player?.pause()
-    }
-
     // App em segundo plano, vela apagou, acabou ou foi descartada
     func pararTudo() {
-        pararMusica()
         pavio.parar()
     }
 }

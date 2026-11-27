@@ -20,7 +20,6 @@ enum EstadoVela: String, Codable {
 
 enum Chaves {
     static let viuOnboarding = "viuOnboarding"
-    static let somAmbiente = "somAmbiente"
     static let apagarSoprando = "apagarSoprando"
     static let acelerarTempo = "acelerarTempo"            // só para teste (Configurações, rodando pelo Xcode)
     static let velocidadeDoTempo = "velocidadeDoTempo"    // 2 a 20: quantas vezes mais rápido
@@ -347,18 +346,12 @@ final class Sessao: ObservableObject {
         sopro.alturaDaChama = altura
     }
 
-    // SONS DE FUNDO (só com a vela acesa e o app na tela):
-    // - música: interruptor "Tocar música";
-    // - pavio queimando: interruptor "Sons do fósforo e da vela", mais baixo no teatro de sombras.
+    // SOM DE FUNDO (só com a vela acesa e o app na tela): o pavio queimando, com o interruptor
+    // "Sons do fósforo e da vela", mais baixo no teatro de sombras.
     // Chamado ao acender, ao voltar para o app, ao afastar/aproximar a caixa e quando a pessoa
-    // mexe nesses interruptores nas Configurações.
+    // mexe nesse interruptor nas Configurações.
     func atualizarAmbiente() {
         let acesa = estado == .acesa && ativo
-        if acesa && Chaves.ligado(Chaves.somAmbiente) {
-            ambiente.tocarMusica()
-        } else {
-            ambiente.pararMusica()
-        }
         if acesa && Chaves.ligado(Chaves.somFosforoEChama) {
             ambiente.pavio.tocar(longe: foraDaCaixa)
         } else {
@@ -404,7 +397,11 @@ final class Sessao: ObservableObject {
             if comSom, let maisAlto = novos.map(\.altura).max() {
                 // Vela grande + enfeite alto = cai de mais alto = som e batida mais fortes
                 let forca = maisAlto * (0.5 + 0.5 * config.posicaoSlider)
-                haptics.prego(forca: Float(forca))
+                // A batida toca quando ele encosta no prato. A distância é medida em frações da
+                // vela mais alta, a mesma conta que a VelaView faz em pontos para desenhar a queda.
+                let distancia = CGFloat(maisAlto) * GeometriaVela.alturaCheia(posicao: config.posicaoSlider, alturaMaxima: 1)
+                haptics.prego(forca: Float(forca),
+                              depois: QuedaDoEnfeite.tempo(distancia: distancia, alturaMaxima: 1))
             }
         }
 

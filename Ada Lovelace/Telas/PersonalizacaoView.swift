@@ -90,7 +90,7 @@ struct PersonalizacaoView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let g = LayoutAtelie(tamanho: geo.size)
+            let g = LayoutAtelie(tamanho: geo.size, margemDeBaixo: geo.safeAreaInsets.bottom)
             ZStack {
                 fundo
 
@@ -713,20 +713,28 @@ struct PersonalizacaoView: View {
             item.caindo = true
             arrastando = item
             let duracao: Double
+            let ateABorda: Double   // quando a batida toca (segundos depois de soltar)
             if reduzirMovimento {
-                // Sem cair nem girar: só some no lugar
+                // Sem cair nem girar: só some no lugar, e a batida toca quando ele termina de sumir
                 duracao = 0.25
+                ateABorda = duracao
                 withAnimation(.easeOut(duration: duracao)) { arrastando?.visivel = false }
             } else {
                 // Cai acelerando, girando para o lado em que estava virado, até sumir lá embaixo
                 duracao = Self.duracaoDaQueda
                 let lado: Double = item.ponto.x < g.centroX ? -1 : 1
+                let fim = g.tamanho.height + Self.alemDaBorda
+                // A batida toca quando o meio do desenho chega à borda de baixo da tela
+                let meio = EnfeiteView.alturaDoAlfinete(item.tipo, estilo: item.estilo, largura: g.larguraVela)
+                    - EnfeiteView.alturaDesenho(item.tipo, estilo: item.estilo, largura: g.larguraVela) / 2
+                let caminho = Double((g.fundoDaTela - meio - item.ponto.y) / max(1, fim - item.ponto.y))
+                ateABorda = duracao * Self.tempoNaCurvaEaseIn(paraCaminho: caminho)
                 withAnimation(.easeIn(duration: duracao)) {
-                    arrastando?.ponto = CGPoint(x: item.ponto.x, y: g.tamanho.height + Self.alemDaBorda)
+                    arrastando?.ponto = CGPoint(x: item.ponto.x, y: fim)
                     arrastando?.giro = lado * Self.giroNaQueda
                 }
             }
-            haptics.caiuNoPote()
+            haptics.caiuNoPote(depois: ateABorda)
             anunciar("Objeto retornado à caixinha")
             Task {
                 try? await Task.sleep(for: .seconds(duracao))
@@ -740,6 +748,18 @@ struct PersonalizacaoView: View {
                 vagasVoltando[vaga] = nil   // já está no lugar: nada muda na tela
             }
         }
+    }
+
+    // Em que fração do tempo a curva do .easeIn chega a esta fração do caminho.
+    // UnitCurve.easeIn é a mesma curva do Animation.easeIn.
+    private static func tempoNaCurvaEaseIn(paraCaminho fracao: Double) -> Double {
+        let alvo = max(0, min(1, fracao))
+        var baixo = 0.0, alto = 1.0
+        for _ in 0..<30 {
+            let meio = (baixo + alto) / 2
+            if UnitCurve.easeIn.value(at: meio) < alvo { baixo = meio } else { alto = meio }
+        }
+        return (baixo + alto) / 2
     }
 
     // MARK: Pulinho e dica de arrastar
@@ -963,7 +983,10 @@ private enum ArteAtelie {
 
 private struct LayoutAtelie {
     let tamanho: CGSize
+    var margemDeBaixo: CGFloat = 0   // a área segura de baixo (a barrinha do iPhone)
     var centroX: CGFloat { tamanho.width / 2 }
+    // A borda de baixo do aparelho (passa da área segura)
+    var fundoDaTela: CGFloat { tamanho.height + margemDeBaixo }
     var baseY: CGFloat { tamanho.height * 0.68 }   // (era 0,64: a vela e o prato desceram um pouco)
     var alturaMaxima: CGFloat { larguraVela * ArteVela.alturaMaxima / ArteVela.largura }   // mesma proporção da arte
     var larguraVela: CGFloat { min(tamanho.width * 0.17, tamanho.height * 0.48 * ArteVela.largura / ArteVela.alturaMaxima) }

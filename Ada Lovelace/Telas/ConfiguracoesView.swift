@@ -1,13 +1,12 @@
 //  ConfiguracoesView.swift
 //  Abre de qualquer tela pela engrenagem (também com a vela acesa).
 //
-//  Regras de negócio (Configurações): ligar/desligar sons dos objetos, sons do fósforo e da chama, música de fundo,
+//  Regras de negócio (Configurações): ligar/desligar sons dos objetos, sons do fósforo e da chama,
 //  apagar com sopro e sensores de movimento (Core Motion).
 
 import SwiftUI
 
 struct ConfiguracoesView: View {
-    @AppStorage(Chaves.somAmbiente) private var somAmbiente = true
     @AppStorage(Chaves.somObjetos) private var somObjetos = true
     @AppStorage(Chaves.somFosforoEChama) private var somFosforoEChama = true
     @AppStorage(Chaves.apagarSoprando) private var apagarSoprando = true
@@ -27,9 +26,6 @@ struct ConfiguracoesView: View {
             Form {
                 Section {
                     // Os nomes dizem exatamente o que muda na experiência
-                    // Música de fundo
-//                    Toggle("Tocar música", isOn: $somAmbiente)
-//                        .accessibilityInputLabels(["Tocar música", "Música de fundo", "Música"])
                     Toggle("Sons dos alfinetes e penduricalhos caindo", isOn: $somObjetos)
                         .accessibilityInputLabels(["Sons dos objetos", "Sons"])
                     // Riscar, acender, apagar e o pavio queimando ao fundo

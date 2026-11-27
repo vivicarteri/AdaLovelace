@@ -107,6 +107,11 @@ struct VelaView: View {
 
     // ⚙️ Quanto o alfinete anda para fora da vela enquanto cai (em larguras de vela)
     private static let afastamentoNaQueda: CGFloat = 0.4
+    // ⚙️ Quanto o alfinete gira até entrar no prato (graus), o mesmo giro da personalização
+    private static let giroNaQueda: Double = 120
+
+    // A altura da vela mais alta, na escala desta vela (a queda é medida por ela, em QuedaDoEnfeite)
+    private var alturaMaxima: CGFloat { largura * ArteVela.alturaMaxima / ArteVela.largura }
 
     // Alfinetes que ainda não caíram, desenhados atrás da cera. Cada um tem o desenho da Georgia
     // e, atrás dele, um fio da cor da agulha que continua da ponta até o meio da vela.
@@ -127,31 +132,55 @@ struct VelaView: View {
                                                         : tamanho.width / 2 - ponta.x)
                 // A linha da agulha fica na altura onde ele espeta
                 let linha = alturaTotal - h
-                ZStack {
+                let centro = CGPoint(x: meioX + meio.x, y: linha + meio.y)
+                // O fio e o desenho saem cada um com a sua transição: na queda o fio some na hora
+                // (girando, ele apareceria para fora da vela) e só o desenho cai.
+                Group {
                     // O fio sobrepõe um pouco a ponta do desenho, para não aparecer emenda
                     Capsule()
                         .fill(EnfeiteView.corDaAgulha)
                         .frame(width: abs(pontaX) + espessura * 2, height: espessura)
                         .position(x: meioX + pontaX / 2, y: linha)
+                        .transition(.asymmetric(insertion: .opacity,
+                                                removal: .opacity.animation(.easeOut(duration: 0.1))))
                     EnfeiteView(tipo: .alfinete, lado: enfeite.lado, largura: largura, estilo: enfeite.desenho)
-                        .position(x: meioX + meio.x, y: linha + meio.y)
+                        .position(centro)
+                        .transition(.asymmetric(insertion: .opacity,
+                                                removal: quedaDoAlfinete(lado: enfeite.lado, altura: h, centro: centro,
+                                                                         tamanho: tamanho,
+                                                                         vista: CGSize(width: larguraTotal, height: alturaTotal))))
                 }
-                .transition(.asymmetric(insertion: .opacity, removal: quedaDoAlfinete(lado: enfeite.lado)))
             }
         }
         .frame(width: larguraTotal, height: alturaTotal)
         // A queda anima só os enfeites. Na vista inteira ela animava também a cera, que troca de
         // desenho no mesmo instante (a cera "piscava"), e a vela nova surgindo desde o toco.
+        // A duração de verdade de cada alfinete vem na transição dele (quedaDoAlfinete).
         .animation(.easeIn(duration: Haptics.tempoQueda), value: caidos)
         .accessibilityHidden(true)
     }
 
-    // Caindo, o alfinete sai para fora da vela enquanto desce, como se soltasse da cera.
-    // Com Reduzir movimento ele só some.
-    private func quedaDoAlfinete(lado: Double) -> AnyTransition {
-        guard !reduzirMovimento else { return .opacity }
-        let paraFora = (lado < 0 ? -1 : 1) * largura * Self.afastamentoNaQueda
-        return .offset(x: paraFora, y: alturaCheia).combined(with: .opacity)
+    // Caindo, o alfinete sai para fora da vela, desce acelerando como uma queda livre e gira para
+    // o lado dele, até entrar inteiro no prato (a vela é cortada na borda do prato, na PalcoView).
+    // A linha da agulha encosta no prato no instante em que a Sessao toca a batida: as duas
+    // contas usam QuedaDoEnfeite. Com Reduzir movimento ele só some, no mesmo tempo.
+    // altura: da linha do alfinete até o prato. centro: o meio do desenho, dentro da vista.
+    private func quedaDoAlfinete(lado: Double, altura: CGFloat, centro: CGPoint,
+                                 tamanho: CGSize, vista: CGSize) -> AnyTransition {
+        let ateOPrato = QuedaDoEnfeite.tempo(distancia: altura, alturaMaxima: alturaMaxima)
+        guard !reduzirMovimento else { return .opacity.animation(.easeIn(duration: ateOPrato)) }
+        let sinal: CGFloat = lado < 0 ? -1 : 1
+        // Passa da borda do prato o bastante para o desenho sumir inteiro, mesmo girado
+        let distancia = altura + max(tamanho.width, tamanho.height)
+        let caindo = QuedaDoAlfinete(deslocamento: CGSize(width: sinal * largura * Self.afastamentoNaQueda,
+                                                          height: distancia),
+                                     giro: Double(sinal) * Self.giroNaQueda,
+                                     ancora: UnitPoint(x: centro.x / max(1, vista.width),
+                                                       y: centro.y / max(1, vista.height)))
+        // Esta curva é exatamente a da queda livre: a distância cresce com o tempo ao quadrado
+        let duracao = QuedaDoEnfeite.tempo(distancia: distancia, alturaMaxima: alturaMaxima)
+        return .modifier(active: caindo, identity: caindo.parado)
+            .animation(.timingCurve(1.0 / 3, 0, 2.0 / 3, 1.0 / 3, duration: duracao))
     }
 
     private var furinhosEPenduricalhos: some View {
@@ -319,6 +348,25 @@ private struct Escorridos: View {
         }
         .frame(maxHeight: .infinity, alignment: .top)
         .clipped()
+    }
+}
+
+// O alfinete caindo da vela (transição de saída): anda até "deslocamento" e gira em volta
+// do meio do desenho ("ancora", dentro da vista inteira da vela).
+private struct QuedaDoAlfinete: ViewModifier {
+    var deslocamento: CGSize
+    var giro: Double
+    var ancora: UnitPoint
+
+    // Ainda espetado: sem deslocamento e sem giro
+    var parado: QuedaDoAlfinete {
+        QuedaDoAlfinete(deslocamento: .zero, giro: 0, ancora: ancora)
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .rotationEffect(.degrees(giro), anchor: ancora)
+            .offset(deslocamento)
     }
 }
 

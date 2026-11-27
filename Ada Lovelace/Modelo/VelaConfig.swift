@@ -156,3 +156,17 @@ enum GeometriaVela {
         alturaMaxima * (0.35 + 0.65 * CGFloat(max(0, min(1, posicao))))
     }
 }
+
+// A queda de um enfeite da vela até o prato, como uma queda livre: a distância cresce com o
+// tempo ao quadrado (cair do dobro da altura não leva o dobro do tempo).
+// A mesma conta serve para o desenho (VelaView) e para a batida no prato (Sessao → Haptics).
+enum QuedaDoEnfeite {
+    // ⚙️ Segundos de uma queda do topo da vela mais alta até o prato
+    static let tempoDoAlto: Double = 0.6
+
+    // distancia e alturaMaxima na mesma medida (pontos, ou frações da altura máxima)
+    static func tempo(distancia: CGFloat, alturaMaxima: CGFloat) -> Double {
+        guard alturaMaxima > 0 else { return 0 }
+        return tempoDoAlto * Double(max(0, distancia) / alturaMaxima).squareRoot()
+    }
+}
