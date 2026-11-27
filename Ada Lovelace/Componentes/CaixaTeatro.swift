@@ -1,19 +1,8 @@
-//  CaixaTeatro.swift
-//  A caixa do teatro vista de fora e a "câmera" que entra e sai dela.
-//
-//  A abertura da caixa tem o mesmo formato da tela. Dentro dela aparece o palco de verdade, em miniatura.
-//  ZOOM OUT: a câmera sai do teatro → o palco vai ficando pequeno dentro da caixa → a cortina da caixa fecha.
-//  ZOOM IN:  a cortina da caixa abre → a câmera entra até o palco ocupar a tela toda.
-
 import SwiftUI
 import Foundation
 
 struct MedidasCaixa {
-    let tela: CGSize                 // tamanho da área da tela onde tudo é desenhado
-    // As margens da área segura (Dynamic Island, barrinha de baixo). O palco de verdade desenha
-    // também nelas (o fundo e a cortina vão até a borda do aparelho), então o palco em miniatura
-    // e o zoom contam com a TELA INTEIRA. Antes contavam só a área segura e, no fim do zoom in,
-    // aparecia um pedaço da placa em cima e a imagem pulava.
+    let tela: CGSize
     var margens = EdgeInsets()
 
     var telaCheia: CGSize {
@@ -21,13 +10,8 @@ struct MedidasCaixa {
                height: tela.height + margens.top + margens.bottom)
     }
 
-    // TEATRO DA GEORGIA ("caixaTeatro", recorte de Teatro_Com_Placa_2, 724 × 728 pixels).
-    // A abertura dela é mais larga que alta (a tela do iPhone é comprida em pé). O desenho fica
-    // igual ao dela: o palco em miniatura aparece no meio da abertura, no tamanho que ele vai ter
-    // quando a câmera chegar, e a cortininha da caixa cobre o resto dos lados.
     private static let arteTamanho = CGSize(width: 724, height: 728)
-    // Para onde a câmera vai: a abertura abaixo da placa "candle tales" (que desce até y 253)
-    // e dos arabescos dos cantos. Assim, no fim do zoom, nada do desenho fica na frente do palco.
+    
     private static let arteAbertura = CGRect(x: 76, y: 256, width: 565, height: 381)
     // Onde o palco e a cortininha são desenhados, ATRÁS da moldura (um pouco maior que a abertura)
     private static let arteFundo = CGRect(x: 70, y: 140, width: 578, height: 500)
