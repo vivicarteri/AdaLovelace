@@ -16,6 +16,7 @@ struct VelaView: View {
     var enfeites: [Enfeite] = []
     var caidos: Set<UUID> = []
     var marcas: [Marca] = []
+    @Environment(\.accessibilityReduceMotion) private var reduzirMovimento
 
     static func espacoChama(largura: CGFloat) -> CGFloat { largura * 1.8 }
 
@@ -42,6 +43,11 @@ struct VelaView: View {
         ZStack(alignment: .bottom) {
             Color.clear
 
+            // Alfinetes ATRÁS da cera: a agulha vai até o meio da vela e a própria vela esconde
+            // o que está dentro. Mesmo com a borda da cera mudando enquanto ela derrete, o
+            // alfinete continua parecendo espetado (não flutua nem escorrega de lado).
+            alfinetesAtras
+
             if usaArte {
                 corpoComArte
                     // Destaque da vela acesa: uma sombra escura bem rente, que separa a cera
@@ -59,10 +65,9 @@ struct VelaView: View {
                 .frame(width: largura, height: alturaCera)
             }
 
-            // Furinhos e enfeites, ESPETADOS na borda de verdade da cera (teste da Sofia: antes eles
-            // ficavam numa distância fixa do meio e, na vela nova, que é meio torta, alguns
-            // flutuavam do lado sem encostar). A agulha some dentro da cera, como um alfinete de verdade.
-            furinhosEEnfeites
+            // Furinhos e penduricalhos, na FRENTE da cera, espetados na borda de verdade dela
+            // (a vela é meio torta: uma distância fixa do meio deixaria alguns flutuando).
+            furinhosEPenduricalhos
 
             // Pavio (o da arte já vem desenhado), chama e fumaça
             ZStack(alignment: .bottom) {
@@ -96,12 +101,60 @@ struct VelaView: View {
             .offset(y: -alturaCera)
         }
         .frame(width: largura * 3, height: alturaCheia + espacoChama, alignment: .bottom)
-        .animation(.easeIn(duration: Haptics.tempoQueda), value: caidos)
         // Acender tem que parecer instantâneo (~100 ms); apagar pode continuar macio (a fumaça cobre).
         .animation(.easeOut(duration: acesa ? 0.1 : 0.4), value: acesa)
     }
 
-    private var furinhosEEnfeites: some View {
+    // ⚙️ Quanto o alfinete anda para fora da vela enquanto cai (em larguras de vela)
+    private static let afastamentoNaQueda: CGFloat = 0.4
+
+    // Alfinetes que ainda não caíram, desenhados atrás da cera. Cada um tem o desenho da Georgia
+    // e, atrás dele, um fio da cor da agulha que continua da ponta até o meio da vela.
+    private var alfinetesAtras: some View {
+        let larguraTotal = largura * 3
+        let alturaTotal = alturaCheia + espacoChama
+        let meioX = larguraTotal / 2
+        let espessura = EnfeiteView.espessuraDaAgulha(largura: largura)
+        return ZStack {
+            ForEach(enfeites.filter { $0.tipo == .alfinete && !caidos.contains($0.id) }) { enfeite in
+                let h = CGFloat(enfeite.altura) * alturaCheia
+                let meio = VelaView.meioDoEnfeite(.alfinete, estilo: enfeite.desenho, lado: enfeite.lado,
+                                                  altura: h, largura: largura, alturaCera: alturaCheia)
+                let tamanho = EnfeiteView.tamanho(.alfinete, estilo: enfeite.desenho, largura: largura)
+                let ponta = EnfeiteView.ponta(.alfinete, estilo: enfeite.desenho, largura: largura)
+                // Onde fica a ponta do desenho, a partir do meio da vela (do lado direito é espelhado)
+                let pontaX = meio.x + (enfeite.lado < 0 ? ponta.x - tamanho.width / 2
+                                                        : tamanho.width / 2 - ponta.x)
+                // A linha da agulha fica na altura onde ele espeta
+                let linha = alturaTotal - h
+                ZStack {
+                    // O fio sobrepõe um pouco a ponta do desenho, para não aparecer emenda
+                    Capsule()
+                        .fill(EnfeiteView.corDaAgulha)
+                        .frame(width: abs(pontaX) + espessura * 2, height: espessura)
+                        .position(x: meioX + pontaX / 2, y: linha)
+                    EnfeiteView(tipo: .alfinete, lado: enfeite.lado, largura: largura, estilo: enfeite.desenho)
+                        .position(x: meioX + meio.x, y: linha + meio.y)
+                }
+                .transition(.asymmetric(insertion: .opacity, removal: quedaDoAlfinete(lado: enfeite.lado)))
+            }
+        }
+        .frame(width: larguraTotal, height: alturaTotal)
+        // A queda anima só os enfeites. Na vista inteira ela animava também a cera, que troca de
+        // desenho no mesmo instante (a cera "piscava"), e a vela nova surgindo desde o toco.
+        .animation(.easeIn(duration: Haptics.tempoQueda), value: caidos)
+        .accessibilityHidden(true)
+    }
+
+    // Caindo, o alfinete sai para fora da vela enquanto desce, como se soltasse da cera.
+    // Com Reduzir movimento ele só some.
+    private func quedaDoAlfinete(lado: Double) -> AnyTransition {
+        guard !reduzirMovimento else { return .opacity }
+        let paraFora = (lado < 0 ? -1 : 1) * largura * Self.afastamentoNaQueda
+        return .offset(x: paraFora, y: alturaCheia).combined(with: .opacity)
+    }
+
+    private var furinhosEPenduricalhos: some View {
         let larguraTotal = largura * 3
         let alturaTotal = alturaCheia + espacoChama
         let meioX = larguraTotal / 2
@@ -116,8 +169,8 @@ struct VelaView: View {
                     .position(x: meioX + borda + (marca.lado < 0 ? 4 : -4), y: alturaTotal - h)
             }
 
-            // Enfeites que ainda não caíram
-            ForEach(enfeites.filter { !caidos.contains($0.id) }) { enfeite in
+            // Penduricalhos que ainda não caíram (os alfinetes ficam atrás da cera, em alfinetesAtras)
+            ForEach(enfeites.filter { $0.tipo != .alfinete && !caidos.contains($0.id) }) { enfeite in
                 let h = CGFloat(enfeite.altura) * alturaCheia
                 let borda = meioX + bordaDaCera(lado: enfeite.lado, altura: h)
                 let meio = VelaView.meioDoEnfeite(enfeite.tipo, estilo: enfeite.desenho, lado: enfeite.lado,
@@ -133,6 +186,7 @@ struct VelaView: View {
             }
         }
         .frame(width: larguraTotal, height: alturaTotal)
+        .animation(.easeIn(duration: Haptics.tempoQueda), value: caidos)
     }
 
     // A borda é medida na vela INTEIRA (como na hora de espetar). Antes ela era medida na vela
@@ -293,6 +347,13 @@ struct EnfeiteView: View {
         return (m.tamanho, m.ponta)
     }
     private static func escala(_ largura: CGFloat) -> CGFloat { largura / ArteVela.largura * ArteVela.k }
+
+    // Cor e grossura da agulha dos desenhos (lidas dos próprios alfinete1/2/3: um cinza quase
+    // preto, com uns 4 pixels de grossura). Usadas no fio que continua a agulha dentro da vela.
+    static let corDaAgulha = Color(red: 25 / 255, green: 28 / 255, blue: 29 / 255)
+    static func espessuraDaAgulha(largura: CGFloat) -> CGFloat {
+        usaArte ? 4 * escala(largura) : 2
+    }
     private static func medidas(_ estilo: Int) -> (tamanho: CGSize, ponta: CGPoint, cabeca: ClosedRange<CGFloat>) {
         alfinetes[((estilo % alfinetes.count) + alfinetes.count) % alfinetes.count]
     }

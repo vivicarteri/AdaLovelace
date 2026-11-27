@@ -1022,13 +1022,14 @@ struct PalcoView: View {
             }
 
             if reduzirMovimento {
-                // Com "Reduzir movimento" a vela nova só aparece devagar, sem subir
-                sessao.descartar()
-                fumacaDaTroca = nil
-                fumacaDoFim = nil
+                // Com "Reduzir movimento" a vela nova só aparece devagar, sem subir.
+                // A vela nova é montada sem animação: já surge inteira, e não crescendo do toco.
                 var semAnimacao = Transaction()
                 semAnimacao.disablesAnimations = true
                 withTransaction(semAnimacao) {
+                    sessao.descartar()
+                    fumacaDaTroca = nil
+                    fumacaDoFim = nil
                     velaNovaVisivel = false
                     afundando = false
                 }
@@ -1040,12 +1041,16 @@ struct PalcoView: View {
                 // prato e, por um instante, parecia uma vela cortada "crescendo".
                 withAnimation(.easeIn(duration: 0.45)) { conjuntoEscondido = true }
                 try? await Task.sleep(for: .seconds(0.45))
-                sessao.descartar()
-                fumacaDaTroca = nil
-                fumacaDoFim = nil
+                // A vela nova é montada sem animação, lá embaixo: sobe já inteira (sem o topo
+                // e o corpo se ajeitando no caminho).
                 var semAnimacao = Transaction()
                 semAnimacao.disablesAnimations = true
-                withTransaction(semAnimacao) { afundando = false }
+                withTransaction(semAnimacao) {
+                    sessao.descartar()
+                    fumacaDaTroca = nil
+                    fumacaDoFim = nil
+                    afundando = false
+                }
                 // Uma pausinha, para a vela nova ser desenhada lá embaixo antes de subir
                 try? await Task.sleep(for: .milliseconds(50))
                 withAnimation(.easeOut(duration: 1.1)) { conjuntoEscondido = false }

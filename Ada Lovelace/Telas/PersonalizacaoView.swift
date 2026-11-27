@@ -225,6 +225,8 @@ struct PersonalizacaoView: View {
                 let meio = VelaView.meioDoEnfeite(enfeite.tipo, estilo: enfeite.desenho, lado: enfeite.lado,
                                                   altura: CGFloat(enfeite.altura) * alturaCheia,
                                                   largura: g.larguraVela, alturaCera: alturaCheia)
+                let xDoToque = Self.meioDaParteVisivel(enfeite, meio: meio, alturaCheia: alturaCheia,
+                                                      largura: g.larguraVela)
                 // Quase transparente (e não .clear), para o VoiceOver enxergar o enfeite
                 Color.black.opacity(0.001)
                     .frame(width: 44, height: max(36, acima + abaixo))
@@ -235,10 +237,23 @@ struct PersonalizacaoView: View {
                     .accessibilityLabel(rotulo(enfeite))
                     .accessibilityAction(named: "Remover") { remover(enfeite) }
                     .accessibilityRotorEntry(id: enfeite.id, in: rotorEnfeites)
-                    .position(x: g.centroX + meio.x,
+                    .position(x: g.centroX + xDoToque,
                               y: g.baseY - CGFloat(enfeite.altura) * alturaCheia + (abaixo - acima) / 2)
             }
         }
+    }
+
+    // O alfinete fica atrás da vela: a área de toque (e a moldura do VoiceOver) fica no meio
+    // da parte que aparece, entre a ponta de fora do desenho e a borda da cera. O penduricalho
+    // fica na frente, então a área continua no meio do desenho.
+    private static func meioDaParteVisivel(_ enfeite: Enfeite, meio: CGPoint, alturaCheia: CGFloat,
+                                           largura: CGFloat) -> CGFloat {
+        guard enfeite.tipo == .alfinete else { return meio.x }
+        let tamanho = EnfeiteView.tamanho(.alfinete, estilo: enfeite.desenho, largura: largura)
+        let borda = VelaView.bordaDaCera(lado: enfeite.lado, altura: CGFloat(enfeite.altura) * alturaCheia,
+                                         largura: largura, alturaCera: alturaCheia)
+        let pontaDeFora = enfeite.lado < 0 ? meio.x - tamanho.width / 2 : meio.x + tamanho.width / 2
+        return (pontaDeFora + borda) / 2
     }
 
     // Slider vertical ao lado da vela. A bolinha fica na altura do topo da CERA

@@ -60,7 +60,7 @@ struct BotaoDescartar: View {
             Circle().stroke(Cores.tinta, lineWidth: 2)
             Circle()
                 .trim(from: 0, to: modoDerreter ? CGFloat(anel ?? 0) : (segurando ? 1 : 0))
-                .stroke(Cores.cortina, style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                .stroke(Color.cortinaDark, style: StrokeStyle(lineWidth: 5, lineCap: .round))
                 .rotationEffect(.degrees(-90))
                 .padding(3)
             Arte("iconeDescartar") {

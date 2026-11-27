@@ -18,7 +18,7 @@ enum Cores {
     static let tinta = Color(red: 0.13, green: 0.11, blue: 0.09)
     static let fundoEscuro = Color(red: 0.13, green: 0.12, blue: 0.10)
     static let fundoClaro = Color(red: 0.60, green: 0.53, blue: 0.40)
-    static let cortina = Color(red: 0.42, green: 0.11, blue: 0.11)
+    static let cortina = Color(.cortina)
     static let dourado = Color(red: 0.98, green: 0.82, blue: 0.40)
     static let cera = Color(red: 0.96, green: 0.91, blue: 0.80)
     static let madeira = Color(red: 0.36, green: 0.25, blue: 0.17)
