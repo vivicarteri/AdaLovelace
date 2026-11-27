@@ -276,8 +276,7 @@ final class Haptics {
     }
 
     // ⚙️ Vibrações mais fortes (pedido da mentora): a força de cada batida do .ahap é multiplicada
-    // por este número (no máximo 1, que é o mais forte que o iPhone faz). Os arquivos da Sofia
-    // continuam iguais: o reforço é feito aqui, na hora de carregar.
+    // por este número (no máximo 1, que é o mais forte que o iPhone faz). O reforço é feito aqui, na hora de carregar.
     static let reforcoDaVibracao: [String: Double] = ["Acender": 1.8, "Apagar": 1.25]
 
     private func padrao(_ nome: String) -> CHHapticPattern? {
@@ -377,7 +376,7 @@ final class Haptics {
     // forca: 0 a 1 (enfeite mais alto = cai de mais alto = batida mais forte e som mais alto)
     func prego(forca: Float) {
         let f = max(0, min(1, forca))
-        // Vibração mais forte que antes (pedido da mentora); o som vem do Prego.wav (Sofia)
+        // Vibração mais forte que antes
         tocar("Prego", forca: 0.7 + 0.3 * f, volume: 0)
         tocarAudioDoPrego(forca: 0.4 + 0.6 * f)
     }

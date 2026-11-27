@@ -4,7 +4,7 @@
 //  Regras:
 //  - Fechar: perde tudo o que mudou. Confirmar: salva e o modal desce para a home.
 //  - Até 6 alfinetes (o limite é o que tem nas almofadas), para qualquer tamanho de vela.
-//  - Sem abas (ideia da Sofia, mais "dentro da cena"): o slider do tamanho fica sempre ao lado
+//  - Sem abas: o slider do tamanho fica sempre ao lado
 //    da vela e as almofadas com os alfinetes ficam sempre à mostra, embaixo.
 //    Os penduricalhos saíram da tela, mas o código deles continua (VelaView/VelaConfig).
 //  - Arrastar da caixinha até a vela. Se não encostar na vela, cai no pote, faz barulho e volta para a caixinha.
@@ -33,6 +33,8 @@ struct PersonalizacaoView: View {
         var daCaixinha: Int? = nil  // qual peça da caixinha está na mão (a que a pessoa pegou)
         var estilo = 0              // qual desenho de alfinete (estrela, coração ou bolinha)
         var caindo = false
+        var giro: Double = 0        // gira enquanto cai no chão (graus)
+        var visivel = true          // com Reduzir movimento ele some no lugar em vez de cair
     }
     @State private var arrastando: Arrastando?
 
@@ -40,6 +42,23 @@ struct PersonalizacaoView: View {
     @State private var alfinetePulando: Int?
     // ⚙️ Quanto o alfinete sobe no pulinho (pontos)
     private static let alturaDoPulinho: CGFloat = 8
+    // A almofada que está dando o pulinho (0 ou 1): ela sobe metade e os alfinetes dela pulam junto
+    @State private var almofadaPulando: Int?
+    // ⚙️ Quanto a almofada sobe no pulinho (pontos)
+    private static let alturaDoPulinhoDaAlmofada: CGFloat = alturaDoPulinho / 2
+
+    // Alfinetes voltando para a almofada depois de cair no chão (o número é a vaga).
+    // false = ainda escondido, afastado acima da vaga; true = deslizando para dentro.
+    @State private var vagasVoltando: [Int: Bool] = [:]
+    // ⚙️ De quanto acima da vaga o alfinete começa a entrar, ao longo da haste (pontos)
+    private static let distanciaDaEntrada: CGFloat = 30
+    // ⚙️ Quanto tempo ele leva para entrar (segundos)
+    private static let duracaoDaEntrada: Double = 0.35
+
+    // ⚙️ A queda no chão: quanto tempo leva, quanto passa da borda de baixo e quanto gira
+    private static let duracaoDaQueda: Double = 0.55
+    private static let alemDaBorda: CGFloat = 80
+    private static let giroNaQueda: Double = 120
 
     // Dica "Coloque na vela", depois de alguns toques nas almofadas (Dicas.swift)
     @State private var dicas = TipGroup(.firstAvailable) { DicaArrastarAlfinete() }
@@ -91,6 +110,8 @@ struct PersonalizacaoView: View {
                                 lado: arrastando.ponto.x < g.centroX ? -1 : 1,
                                 largura: g.larguraVela,
                                 estilo: arrastando.estilo)
+                        .rotationEffect(.degrees(arrastando.giro))
+                        .opacity(arrastando.visivel ? 1 : 0)
                         // A linha do alfinete fica EXATAMENTE onde ele vai espetar (igual na vela).
                         // Antes a conta estava invertida: no penduricalho, o que ficava no ponto era a
                         // estrelinha, e ao soltar ele subia (não ficava onde a pessoa escolheu).
@@ -436,9 +457,14 @@ struct PersonalizacaoView: View {
                     let desenho = EnfeiteView.desenhoDoAlfinete(vaga.estilo)
                     let tamanho = CGSize(width: desenho.tamanho.width * f, height: desenho.tamanho.height * f)
                     let ponta = CGPoint(x: desenho.ponta.x * f, y: desenho.ponta.y * f)
-                    // No pulinho ele sobe ao longo da própria haste, da ponta para a cabeça
+                    // No pulinho ele sobe ao longo da própria haste, da ponta para a cabeça.
+                    // Pula quando é tocado ou quando a almofada dele é tocada.
                     let angulo = (90 + vaga.giro) * .pi / 180
-                    let pulo = alfinetePulando == i ? (reduzirMovimento ? 0.5 : 1) * Self.alturaDoPulinho : 0
+                    let pulando = alfinetePulando == i || almofadaPulando == vaga.almofada
+                    // Voltando do chão: começa escondido, afastado acima da vaga, e desliza para dentro
+                    let escondido = vagasVoltando[i] == false
+                    let pulo = (pulando ? fatorDoPulinho * Self.alturaDoPulinho : 0)
+                        + (escondido && !reduzirMovimento ? Self.distanciaDaEntrada : 0)
                     Image("alfinete\(vaga.estilo + 1)")
                         .resizable()
                         .frame(width: tamanho.width, height: tamanho.height)
@@ -447,18 +473,18 @@ struct PersonalizacaoView: View {
                                         anchor: UnitPoint(x: ponta.x / tamanho.width, y: ponta.y / tamanho.height))
                         .offset(x: origem.x + vaga.ponto.x * f - ponta.x - pulo * cos(angulo),
                                 y: origem.y + vaga.ponto.y * f - ponta.y - pulo * sin(angulo))
-                        .opacity(naMao == i ? 0 : 1)
+                        .opacity(naMao == i || escondido ? 0 : 1)
                         .transition(.opacity)
                 }
             }
 
-            // 2) As almofadas (na frente)
+            // 2) As almofadas (na frente). A almofada tocada sobe um pouquinho.
             Image("almofada1").resizable()
                 .frame(width: a.almofada1.width * f, height: a.almofada1.height * f)
-                .offset(x: origem1.x, y: origem1.y)
+                .offset(x: origem1.x, y: origem1.y - puloDaAlmofada(0))
             Image("almofada2").resizable()
                 .frame(width: a.almofada2.width * f, height: a.almofada2.height * f)
-                .offset(x: origem2.x, y: origem2.y)
+                .offset(x: origem2.x, y: origem2.y - puloDaAlmofada(1))
 
             // 2b) A borda da frente da bandeja, por cima do pé das almofadas
             if usaBandeja {
@@ -473,6 +499,18 @@ struct PersonalizacaoView: View {
                 .frame(width: w, height: h)
                 .contentShape(Rectangle())
                 .onTapGesture { contarToqueNasAlmofadas() }
+
+            // 2d) Tocar numa almofada: ela e os alfinetes dela dão um pulinho.
+            //     As áreas das cabeças (3) ficam por cima: tocar num alfinete pula só ele.
+            ForEach([0, 1], id: \.self) { almofada in
+                let tamanho = almofada == 0 ? a.almofada1 : a.almofada2
+                let origem = almofada == 0 ? origem1 : origem2
+                Color.black.opacity(0.001)
+                    .frame(width: tamanho.width * f, height: tamanho.height * f)
+                    .contentShape(Rectangle())
+                    .onTapGesture { pularAlmofada(almofada) }
+                    .offset(x: origem.x, y: origem.y)
+            }
 
             // 3) Onde tocar para pegar cada alfinete: na cabeça dele
             ForEach(a.vagas.indices, id: \.self) { i in
@@ -652,38 +690,89 @@ struct PersonalizacaoView: View {
                 anunciar("Objeto reorganizado para evitar sobreposição")
             }
         } else {
-            // Não encostou (ou não cabe ali): cai no pote e volta para a caixinha
-            if let antigo = item.tiradoDe {
-                nova.marcas.append(Marca(altura: antigo.altura, lado: antigo.lado))
-                if antigo.tipo == .alfinete { devolverAlfinete(antigo.desenho) }
+            // Não encostou (ou não cabe ali): cai no chão, passa da borda de baixo da tela
+            // e depois entra de volta na almofada, em pé.
+            var semAnimacao = Transaction()
+            semAnimacao.disablesAnimations = true
+            var vagaDeVolta: Int?
+            // A vaga fica escondida desde já, para o alfinete não aparecer na almofada antes da hora
+            withTransaction(semAnimacao) {
+                if let antigo = item.tiradoDe {
+                    nova.marcas.append(Marca(altura: antigo.altura, lado: antigo.lado))
+                    if antigo.tipo == .alfinete, let vaga = vagaQueVaiVoltar(antigo.desenho) {
+                        vagaDeVolta = vaga
+                        vagasVoltando[vaga] = false
+                        vagasUsadas.remove(vaga)
+                    }
+                } else if item.tipo == .alfinete, let vaga = item.daCaixinha, arteExiste("almofada1") {
+                    vagaDeVolta = vaga
+                    vagasVoltando[vaga] = false
+                }
             }
             rascunho = nova
             item.caindo = true
             arrastando = item
-            withAnimation(.easeIn(duration: Haptics.tempoQueda)) {
-                arrastando?.ponto = CGPoint(x: g.centroX, y: g.apoioDasAlmofadas - 30)
+            let duracao: Double
+            if reduzirMovimento {
+                // Sem cair nem girar: só some no lugar
+                duracao = 0.25
+                withAnimation(.easeOut(duration: duracao)) { arrastando?.visivel = false }
+            } else {
+                // Cai acelerando, girando para o lado em que estava virado, até sumir lá embaixo
+                duracao = Self.duracaoDaQueda
+                let lado: Double = item.ponto.x < g.centroX ? -1 : 1
+                withAnimation(.easeIn(duration: duracao)) {
+                    arrastando?.ponto = CGPoint(x: item.ponto.x, y: g.tamanho.height + Self.alemDaBorda)
+                    arrastando?.giro = lado * Self.giroNaQueda
+                }
             }
             haptics.caiuNoPote()
             anunciar("Objeto retornado à caixinha")
             Task {
-                try? await Task.sleep(for: .seconds(Haptics.tempoQueda))
+                try? await Task.sleep(for: .seconds(duracao))
                 arrastando = nil
+                guard let vaga = vagaDeVolta else { return }
+                try? await Task.sleep(for: .seconds(0.1))
+                // Aparece acima da vaga e desliza para dentro da almofada, no ângulo dela
+                withAnimation(.easeOut(duration: Self.duracaoDaEntrada)) { vagasVoltando[vaga] = true }
+                try? await Task.sleep(for: .seconds(Self.duracaoDaEntrada))
+                haptics.tique()
+                vagasVoltando[vaga] = nil   // já está no lugar: nada muda na tela
             }
         }
     }
 
     // MARK: Pulinho e dica de arrastar
 
-    // O alfinete sobe um pouquinho e volta (com Reduzir movimento, sem mola e mais baixo)
+    // Com Reduzir movimento os pulinhos ficam com metade da altura (e voltam sem mola)
+    private var fatorDoPulinho: CGFloat { reduzirMovimento ? 0.5 : 1 }
+    private var voltaDoPulinho: Animation {
+        reduzirMovimento ? .easeIn(duration: 0.12) : .spring(duration: 0.35, bounce: 0.5)
+    }
+
+    private func puloDaAlmofada(_ almofada: Int) -> CGFloat {
+        almofadaPulando == almofada ? fatorDoPulinho * Self.alturaDoPulinhoDaAlmofada : 0
+    }
+
+    // O alfinete sobe um pouquinho e volta
     private func pularAlfinete(_ vaga: Int) {
         contarToqueNasAlmofadas()
         withAnimation(.easeOut(duration: 0.12)) { alfinetePulando = vaga }
         Task {
             try? await Task.sleep(for: .seconds(0.12))
             guard alfinetePulando == vaga else { return }
-            withAnimation(reduzirMovimento ? .easeIn(duration: 0.12) : .spring(duration: 0.35, bounce: 0.5)) {
-                alfinetePulando = nil
-            }
+            withAnimation(voltaDoPulinho) { alfinetePulando = nil }
+        }
+    }
+
+    // A almofada sobe um pouquinho (metade do alfinete) e os alfinetes dela pulam junto
+    private func pularAlmofada(_ almofada: Int) {
+        contarToqueNasAlmofadas()
+        withAnimation(.easeOut(duration: 0.12)) { almofadaPulando = almofada }
+        Task {
+            try? await Task.sleep(for: .seconds(0.12))
+            guard almofadaPulando == almofada else { return }
+            withAnimation(voltaDoPulinho) { almofadaPulando = nil }
         }
     }
 
@@ -813,10 +902,15 @@ struct PersonalizacaoView: View {
 
     // Um alfinete voltou para as almofadas: volta para uma vaga do desenho dele
     private func devolverAlfinete(_ estilo: Int) {
-        let usadas = vagasUsadas.sorted()
-        if let vaga = usadas.last(where: { ArteAtelie.vagas[$0].estilo == estilo }) ?? usadas.last {
+        if let vaga = vagaQueVaiVoltar(estilo) {
             vagasUsadas.remove(vaga)
         }
+    }
+
+    // A vaga para onde volta um alfinete deste desenho (uma vazia do mesmo desenho, ou qualquer vazia)
+    private func vagaQueVaiVoltar(_ estilo: Int) -> Int? {
+        let usadas = vagasUsadas.sorted()
+        return usadas.last(where: { ArteAtelie.vagas[$0].estilo == estilo }) ?? usadas.last
     }
 
     // Ao abrir o ateliê: as vagas dos alfinetes que já estão na vela começam vazias

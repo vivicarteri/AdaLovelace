@@ -146,7 +146,7 @@ struct PalcoView: View {
             }
         }
         // A caixa de fósforos fica lá embaixo, encostada na borda: riscando o fósforo, o dedo
-        // passava pela barrinha de baixo do iPhone e trocava de app sem querer (teste da Sofia).
+        // passava pela barrinha de baixo do iPhone e trocava de app sem querer.
         // Assim o primeiro deslize na borda de baixo fica com o app; para sair, desliza de novo.
         .defersSystemGestures(on: .bottom)
         .onAppear {
@@ -213,8 +213,7 @@ struct PalcoView: View {
                 Task {
                     try? await Task.sleep(for: .seconds(1.5))
                     withAnimation(.easeInOut(duration: 1.6)) { cortinaFechada = true }
-                    // Não tem mais tela de "Fim" (teste da Sofia: ficava anticlimático e era um
-                    // toque a mais): com a cortina fechada, a vela nova já sobe sozinha do prato.
+                    // Não tem mais tela de "Fim", com a cortina fechada, a vela nova já sobe sozinha do prato.
                     try? await Task.sleep(for: .seconds(1.8))
                     if sessao.estado == .acabou { descartar() }
                 }
@@ -639,7 +638,7 @@ struct PalcoView: View {
     private func esquecerArraste() {
         inicioArraste = nil
         toqueDoArraste = nil
-        zerarRisco()   // o risco na lixa (física da Sofia) também recomeça do zero
+        zerarRisco()   // o risco na lixa também recomeça do zero
     }
 
     private func arrastarFosforo(_ valor: DragGesture.Value, _ g: LayoutPalco) {

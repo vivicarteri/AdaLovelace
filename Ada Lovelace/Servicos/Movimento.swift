@@ -53,7 +53,7 @@ final class Movimento: ObservableObject {
     #if os(iOS)
     // Em pé é 0° e de lado é 90°. A projeção da gravidade no topo vale -cos(ângulo).
     // ⚙️ Só apaga quando o celular fica BEM de cabeça para baixo (135°). Antes era 100°:
-    // deitar o celular de lado (90°) e passar um pouquinho já apagava a vela (teste da Sofia).
+    // deitar o celular de lado (90°) e passar um pouquinho já apagava a vela.
     private static let gravidadeMinimaParaApagar = -cos(135 * Double.pi / 180)
     private let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "AdaLovelace", category: "Movimento")
     // Onde era o "para cima" da tela quando a vela foi acesa. O "virar para apagar" é medido
