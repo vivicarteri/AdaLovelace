@@ -30,7 +30,7 @@ enum Chaves {
     #endif
     static let sessaoSalva = "sessaoSalva"
     static let somObjetos = "somObjetos"          // sons dos alfinetes e penduricalhos caindo
-    static let somFosforoEChama = "somFosforoEChama"   // riscar, fósforo acendendo, chama aparecendo e apagando
+    static let somFosforoEChama = "somFosforoEChama"   // "Sons do fósforo e da vela": riscar, acender, apagar e o pavio queimando
     static let movimento = "movimentoLigado"      // Core Motion: inclinar e virar o aparelho
     static let resetarDicas = "resetarDicas"      // mostra as dicas de novo na próxima abertura
     static let iluminacaoDramatica = "iluminacaoDramatica"   // a chama como única luz do palco (teste)
@@ -82,7 +82,7 @@ final class Sessao: ObservableObject {
     @Published private(set) var apagouEm: Date?                // para desenhar a fumaça
     // true = teatro de sombras (zoom out). Fora da caixa a vela nem está na tela:
     // o microfone desliga junto para um sopro não apagar uma vela que a pessoa não vê.
-    @Published var foraDaCaixa = false { didSet { atualizarSopro() } }
+    @Published var foraDaCaixa = false { didSet { atualizarSopro(); atualizarAmbiente() } }
     @Published private(set) var derretendoRapido = false       // a pessoa está segurando o Descartar
     // Acessibilidade: o mesmo que inclinar o aparelho ao máximo, para quem não pode
     // (ou não quer) virar o celular. Liga e desliga pelas ações do VoiceOver na vela.
@@ -153,7 +153,7 @@ final class Sessao: ObservableObject {
         RelogioDaHistoria.acender()          // a história do cenário anda com a vela acesa
         movimento.fixarReferencia()
         ligarVibracaoDaChama()
-        if somAmbienteLigado { ambiente.tocar() }
+        atualizarAmbiente()
         AvisoDeFim.pedirPermissao()          // para avisar quando ela acabar com o app fechado
         anunciar("Vela acesa")
         atualizarRelogio()
@@ -174,7 +174,7 @@ final class Sessao: ObservableObject {
         movimento.soltarReferencia()
         desligarVibracaoDaChama()
         haptics.apagar()
-        ambiente.parar()
+        ambiente.pararTudo()
         anunciar("Vela apagada. Para continuar, acenda de novo.")
         atualizarRelogio()
         salvar()
@@ -250,7 +250,7 @@ final class Sessao: ObservableObject {
         RelogioDaHistoria.zerar()            // vela nova = história do começo
         movimento.soltarReferencia()
         desligarVibracaoDaChama()
-        ambiente.parar()
+        ambiente.pararTudo()
         estado = .nova
         derretimentoAcelerado = false
         queimado = 0
@@ -292,7 +292,7 @@ final class Sessao: ObservableObject {
                 RelogioDaHistoria.acender()      // app abriu com a vela acesa
                 movimento.fixarReferencia()
                 ligarVibracaoDaChama()
-                if somAmbienteLigado { ambiente.tocar() }
+                atualizarAmbiente()
             }
             atualizarRelogio()
         case .background:
@@ -306,7 +306,7 @@ final class Sessao: ObservableObject {
                 AvisoDeFim.agendar(daquiA: max(0, config.duracao - queimado) / max(Sessao.velocidade, 0.01))
             }
             movimento.parar()
-            ambiente.parar()
+            ambiente.pararTudo()
             desligarVibracaoDaChama()
             haptics.desligarMotor()
         default:
@@ -347,13 +347,23 @@ final class Sessao: ObservableObject {
         sopro.alturaDaChama = altura
     }
 
-    // Chamado quando a pessoa liga ou desliga o som ambiente nas Configurações
+    // SONS DE FUNDO (só com a vela acesa e o app na tela):
+    // - música: interruptor "Tocar música";
+    // - pavio queimando: interruptor "Sons do fósforo e da vela", mais baixo no teatro de sombras.
+    // Chamado ao acender, ao voltar para o app, ao afastar/aproximar a caixa e quando a pessoa
+    // mexe nesses interruptores nas Configurações.
     func atualizarAmbiente() {
-        if estado == .acesa && somAmbienteLigado { ambiente.tocar() } else { ambiente.parar() }
-    }
-
-    private var somAmbienteLigado: Bool {
-        UserDefaults.standard.object(forKey: Chaves.somAmbiente) as? Bool ?? true
+        let acesa = estado == .acesa && ativo
+        if acesa && Chaves.ligado(Chaves.somAmbiente) {
+            ambiente.tocarMusica()
+        } else {
+            ambiente.pararMusica()
+        }
+        if acesa && Chaves.ligado(Chaves.somFosforoEChama) {
+            ambiente.pavio.tocar(longe: foraDaCaixa)
+        } else {
+            ambiente.pavio.parar()
+        }
     }
 
     // MARK: Relógio
@@ -375,7 +385,9 @@ final class Sessao: ObservableObject {
         }
         ultimoTique = agora
 
-        if estado == .acesa { cuidarDaVibracaoDaChama(agora: agora) }
+        if estado == .acesa {
+            cuidarDaVibracaoDaChama(agora: agora)
+        }
         atualizarProgresso(comSom: true)
 
         if agora.timeIntervalSince(ultimoSalvo) > 2 { salvar() }
@@ -413,10 +425,10 @@ final class Sessao: ObservableObject {
         // Se estava nas sombras, a tela (PalcoView) entra na caixa com a animação da cortina
         movimento.soltarReferencia()
         desligarVibracaoDaChama()
-        ambiente.parar()
+        ambiente.pararTudo()
         if comSom {
             haptics.fim()
-            anunciar("A vela acabou")
+            // Sem anúncio: quando a cortina fecha, a PalcoView leva o foco do VoiceOver para o "Fim"
         }
         salvar()
     }

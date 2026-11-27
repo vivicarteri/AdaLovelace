@@ -9,6 +9,10 @@ import SwiftUI
 struct ADAFont {
     static let familyName = "IM_FELL_English_Roman"
 
+    // ⚙️ A IM Fell é mais baixinha que a fonte do sistema: todos os tamanhos de texto ficam
+    // este tanto maiores. O Dynamic Type continua escalando a partir deles (relativeTo).
+    static let aumento: CGFloat = 1.1
+
     enum Role {
         case screenTitle, sectionTitle, body, footnote, smallNote, caption, microCaption
         case tipTitle, tipMessage
@@ -52,7 +56,7 @@ struct ADAFont {
         }
 
         if isSymbol { return .system(size: size) }
-        return .custom(familyName, size: size, relativeTo: textStyle)
+        return .custom(familyName, size: size * aumento, relativeTo: textStyle)
     }
 }
 

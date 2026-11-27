@@ -85,7 +85,7 @@ struct VelaConfig: Codable, Equatable {
     // distanciaMaxima: o quanto o app pode empurrar (fração da altura da vela). Soltando com o
     // dedo, ele só empurra um pouquinho; se ali perto não couber, o enfeite volta para a caixinha.
     // Antes ele ia parar em qualquer lugar livre: um alfinete solto lá embaixo foi parar no topo
-    // (teste da Sofia). Sem limite (nil) é para o VoiceOver, que procura um lugar livre na vela.
+    // Sem limite (nil) é para o VoiceOver, que procura um lugar livre na vela.
     //
     // Cada lado da vela (esquerda e direita) é contado separado: um alfinete na esquerda
     // não atrapalha um penduricalho na direita.
@@ -131,7 +131,7 @@ struct VelaConfig: Codable, Equatable {
 // Quanto cada enfeite ocupa na vela, para cima e para baixo da linha onde ele espeta.
 // Conta só a CABEÇA (o que fica espetado na cera). O fio e a estrelinha do penduricalho
 // ficam pendurados e podem passar na frente de outro enfeite: a vela é redonda, então
-// dá para pôr um penduricalho logo ao lado do outro (pedido da Sofia).
+// dá para pôr um penduricalho logo ao lado do outro.
 // Os números saem do tamanho do desenho (em pontos) e chegam aqui já em fração da
 // altura da vela — assim a regra funciona igual para vela pequena e vela grande.
 // Quem monta isso é a tela: veja TamanhoEnfeite.daVela(...) na VelaView.

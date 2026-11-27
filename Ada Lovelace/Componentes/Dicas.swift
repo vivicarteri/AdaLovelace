@@ -1,6 +1,6 @@
 //  Dicas.swift
-//  Dicas do TipKit: ensinam a acender (pegar e riscar o fósforo), os gestos de pinça
-//  e os jeitos de apagar a vela.
+//  Dicas do TipKit: ensinam a acender (pegar e riscar o fósforo), os gestos de pinça,
+//  os jeitos de apagar a vela e como levar o alfinete até a vela (Personalização).
 //  As regras definem quando cada dica faz sentido. A PalcoView exibe uma por vez.
 
 import SwiftUI
@@ -32,22 +32,31 @@ struct DicaRiscarFosforo: Tip {
 struct DicaSairDaCaixa: Tip {
     // Ligado pela PalcoView: só dá para sair da caixa com a vela acesa ou apagada.
     @Parameter static var podeSair: Bool = false
+    // Com o VoiceOver não dá para fazer pinça: a dica não aparece (o botão já se explica).
+    @Parameter static var voiceOverLigado: Bool = false
 
     var title: Text { Text("Veja o teatro de sombras").font(ADAFont.font(for: .tipTitle)) }
     var message: Text? { Text("Toque no botão no canto de cima ou junte dois dedos na tela, como uma pinça, para ver o teatro de sombras.").font(ADAFont.font(for: .tipMessage)) }
     var image: Image? { Image(systemName: "hand.pinch") }
-    var rules: [Rule] { #Rule(Self.$podeSair) { $0 } }
+    var rules: [Rule] {
+        #Rule(Self.$podeSair) { $0 }
+        #Rule(Self.$voiceOverLigado) { !$0 }
+    }
 }
 
 // Teatro de sombras → dentro da caixa
 struct DicaEntrarNaCaixa: Tip {
     // Ligado pela PalcoView: só vale enquanto a pessoa está fora da caixa.
     @Parameter static var estaForaDaCaixa: Bool = false
+    @Parameter static var voiceOverLigado: Bool = false
 
     var title: Text { Text("Volte para a vela").font(ADAFont.font(for: .tipTitle)) }
     var message: Text? { Text("Toque no botão no canto de cima ou afaste dois dedos na tela, como uma pinça, para voltar para a vela.").font(ADAFont.font(for: .tipMessage)) }
     var image: Image? { Image(systemName: "hand.pinch") }
-    var rules: [Rule] { #Rule(Self.$estaForaDaCaixa) { $0 } }
+    var rules: [Rule] {
+        #Rule(Self.$estaForaDaCaixa) { $0 }
+        #Rule(Self.$voiceOverLigado) { !$0 }
+    }
 }
 
 // Quem apaga a vela do MESMO jeito 3 vezes seguidas ganha a dica de um jeito diferente
@@ -68,6 +77,99 @@ struct DicaOutroJeitoDeApagar: Tip {
     var rules: [Rule] {
         #Rule(Self.$sugestao) { $0 != 0 }
         #Rule(Self.$velaAcesa) { $0 }
+    }
+}
+
+// Quem acendeu a vela 2 vezes só tocando no fósforo (ele risca sozinho) ganha a dica de
+// riscar à mão. Aparece na próxima vez que a caixa abrir, apontando o fósforo.
+// Some quando a pessoa risca à mão. Com o VoiceOver não aparece (lá a caixa acende direto).
+struct DicaRiscarOFosforo: Tip {
+    static let acendeuPeloToque = Event(id: "acendeuPeloToque")
+    @Parameter static var caixaAberta: Bool = false
+    @Parameter static var voiceOverLigado: Bool = false
+
+    var title: Text { Text("Outro jeito de acender").font(ADAFont.font(for: .tipTitle)) }
+    var message: Text? { Text("Você também pode acender a vela riscando o palito na caixa e arrastando até o pavio.").font(ADAFont.font(for: .tipMessage)) }
+    var image: Image? { Image(systemName: "hand.draw") }
+    var rules: [Rule] {
+        #Rule(Self.acendeuPeloToque) { $0.donations.count >= 2 }
+        #Rule(Self.$caixaAberta) { $0 }
+        #Rule(Self.$voiceOverLigado) { !$0 }
+    }
+}
+
+// Personalização: quem toca algumas vezes nas almofadas ou nos alfinetes sem arrastar ganha a
+// dica de arrastar o alfinete até a vela. Some quando um alfinete é espetado arrastando.
+// Com o VoiceOver não aparece (as almofadas já têm as ações de inserir).
+struct DicaArrastarAlfinete: Tip {
+    static let tocouNasAlmofadas = Event(id: "tocouNasAlmofadas")
+    @Parameter static var voiceOverLigado: Bool = false
+
+    var title: Text { Text("Coloque na vela").font(ADAFont.font(for: .tipTitle)) }
+    var message: Text? { Text("Segure um alfinete e arraste até a vela para espetar.").font(ADAFont.font(for: .tipMessage)) }
+    var image: Image? { Image(systemName: "hand.draw") }
+    var rules: [Rule] {
+        #Rule(Self.tocouNasAlmofadas) { $0.donations.count >= 3 }
+        #Rule(Self.$voiceOverLigado) { !$0 }
+    }
+}
+
+// MARK: - Balão
+
+// Balão de dica com a ponta saindo do botão de onde a dica vem (e não do meio do balão,
+// como a seta do TipView faz). O fundo do TipView fica transparente e o balão desenha
+// o próprio fundo, com a ponta, numa forma só.
+struct BalaoDeDica: View {
+    var dica: (any Tip)?
+    var pontaX: CGFloat? = nil       // onde fica a ponta, a partir da borda esquerda do balão (nil = sem ponta)
+    var pontaEmCima = true           // true = o botão está acima do balão; false = abaixo
+
+    static let alturaDaPonta: CGFloat = 10
+
+    var body: some View {
+        TipView(dica)
+            .tipBackground(Color.clear)
+            .padding(pontaEmCima ? .top : .bottom, pontaX == nil ? 0 : Self.alturaDaPonta)
+            .background(
+                FormaDoBalao(pontaX: pontaX, pontaEmCima: pontaEmCima, alturaDaPonta: Self.alturaDaPonta)
+                    .fill(.regularMaterial)
+                    .shadow(color: .black.opacity(0.18), radius: 6, y: 2)
+            )
+    }
+}
+
+private struct FormaDoBalao: Shape {
+    var pontaX: CGFloat?
+    var pontaEmCima: Bool
+    var alturaDaPonta: CGFloat
+    var raio: CGFloat = 13
+    var larguraDaPonta: CGFloat = 22
+
+    func path(in rect: CGRect) -> Path {
+        var corpo = rect
+        if pontaX != nil {
+            corpo = pontaEmCima
+                ? CGRect(x: rect.minX, y: rect.minY + alturaDaPonta, width: rect.width, height: rect.height - alturaDaPonta)
+                : CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: rect.height - alturaDaPonta)
+        }
+        var caminho = Path(roundedRect: corpo, cornerRadius: raio, style: .continuous)
+        guard let pontaX else { return caminho }
+        // A ponta não passa das curvas dos cantos
+        let meio = larguraDaPonta / 2
+        let x = min(max(rect.minX + pontaX, corpo.minX + raio + meio), corpo.maxX - raio - meio)
+        var ponta = Path()
+        if pontaEmCima {
+            ponta.move(to: CGPoint(x: x - meio, y: corpo.minY + 1))
+            ponta.addLine(to: CGPoint(x: x, y: rect.minY))
+            ponta.addLine(to: CGPoint(x: x + meio, y: corpo.minY + 1))
+        } else {
+            ponta.move(to: CGPoint(x: x - meio, y: corpo.maxY - 1))
+            ponta.addLine(to: CGPoint(x: x, y: rect.maxY))
+            ponta.addLine(to: CGPoint(x: x + meio, y: corpo.maxY - 1))
+        }
+        ponta.closeSubpath()
+        caminho.addPath(ponta)
+        return caminho
     }
 }
 

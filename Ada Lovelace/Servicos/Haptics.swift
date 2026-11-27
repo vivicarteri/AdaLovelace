@@ -33,9 +33,9 @@ private final class SomRiscoFosforo {
         do {
             let arquivo = try AVAudioFile(forReading: url)
             let taxa = arquivo.processingFormat.sampleRate
-            guard let mono = Self.lerEmMono(arquivo) else { return }
+            guard let mono = PreparoDeAudio.lerEmMono(arquivo) else { return }
             duracao = Double(mono.count) / taxa
-            let amostras = Self.fazerLoop(Self.normalizar(mono), emenda: Int(Self.duracaoDaEmenda * taxa))
+            let amostras = PreparoDeAudio.fazerLoop(Self.normalizar(mono), emenda: Int(Self.duracaoDaEmenda * taxa))
             let loop = LoopDoRisco(amostras: amostras, passoDoFade: Float(1 / (Self.duracaoDoFade * taxa)))
             guard let formato = AVAudioFormat(standardFormatWithSampleRate: taxa, channels: 1) else { return }
             let fonte = Self.criarFonte(loop)
@@ -79,43 +79,11 @@ private final class SomRiscoFosforo {
 
     // MARK: Preparar o áudio
 
-    private static func lerEmMono(_ arquivo: AVAudioFile) -> [Float]? {
-        let quadros = AVAudioFrameCount(arquivo.length)
-        guard quadros > 0,
-              let buffer = AVAudioPCMBuffer(pcmFormat: arquivo.processingFormat, frameCapacity: quadros),
-              (try? arquivo.read(into: buffer)) != nil,
-              let canais = buffer.floatChannelData else { return nil }
-        let n = Int(buffer.frameLength)
-        let numeroDeCanais = Int(buffer.format.channelCount)
-        var mono = [Float](repeating: 0, count: n)
-        for canal in 0..<numeroDeCanais {
-            let dados = canais[canal]
-            for i in 0..<n { mono[i] += dados[i] / Float(numeroDeCanais) }
-        }
-        return mono
-    }
-
     private static func normalizar(_ amostras: [Float]) -> [Float] {
         let pico = amostras.reduce(0) { max($0, abs($1)) }
         guard pico > 0 else { return amostras }
         let ganho = picoDesejado / pico
         return amostras.map { $0 * ganho }
-    }
-
-    // O fim do áudio entra no começo com um cruzamento suave (mesma potência),
-    // assim o loop não tem estalo nem buraco na emenda.
-    private static func fazerLoop(_ amostras: [Float], emenda: Int) -> [Float] {
-        let n = amostras.count
-        let x = min(emenda, n / 4)
-        guard x > 0 else { return amostras }
-        var saida = Array(amostras[0..<(n - x)])
-        for i in 0..<x {
-            let t = Float(i) / Float(x)
-            let entra = sin(t * .pi / 2)
-            let sai = cos(t * .pi / 2)
-            saida[i] = amostras[i] * entra + amostras[n - x + i] * sai
-        }
-        return saida
     }
 
     // Fora do ator principal: este bloco roda na thread de áudio.
@@ -308,8 +276,7 @@ final class Haptics {
     }
 
     // ⚙️ Vibrações mais fortes (pedido da mentora): a força de cada batida do .ahap é multiplicada
-    // por este número (no máximo 1, que é o mais forte que o iPhone faz). Os arquivos da Sofia
-    // continuam iguais: o reforço é feito aqui, na hora de carregar.
+    // por este número (no máximo 1, que é o mais forte que o iPhone faz). O reforço é feito aqui, na hora de carregar.
     static let reforcoDaVibracao: [String: Double] = ["Acender": 1.8, "Apagar": 1.25]
 
     private func padrao(_ nome: String) -> CHHapticPattern? {
@@ -389,7 +356,7 @@ final class Haptics {
 
     // MARK: Momentos da vela
 
-    // Interruptor "Sons do fósforo e da chama": riscar, o fósforo acendendo,
+    // Interruptor "Sons do fósforo e da vela": riscar, o fósforo acendendo,
     // a chama da vela aparecendo e a chama apagando. As vibrações continuam sempre.
     private var volumeFosforoEChama: Float {
         Chaves.ligado(Chaves.somFosforoEChama) ? 1 : 0
@@ -399,14 +366,17 @@ final class Haptics {
     // Quando chegar um som, ele deve usar volumeFosforoEChama.
     func acender() { tocar("Acender", volume: 0) }
 
-    func apagar() { tocar("Apagar", volume: volumeFosforoEChama) }
+    // ⚙️ Volume do som de apagar (0 a 1). A vibração não muda.
+    static let volumeDoApagar: Float = 0.5
+
+    func apagar() { tocar("Apagar", volume: volumeFosforoEChama * Self.volumeDoApagar) }
 
     func fim() { tocar("Fim") }
 
     // forca: 0 a 1 (enfeite mais alto = cai de mais alto = batida mais forte e som mais alto)
     func prego(forca: Float) {
         let f = max(0, min(1, forca))
-        // Vibração mais forte que antes (pedido da mentora); o som vem do Prego.wav (Sofia)
+        // Vibração mais forte que antes
         tocar("Prego", forca: 0.7 + 0.3 * f, volume: 0)
         tocarAudioDoPrego(forca: 0.4 + 0.6 * f)
     }

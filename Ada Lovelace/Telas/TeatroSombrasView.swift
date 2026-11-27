@@ -9,6 +9,11 @@ import UIKit
 
 struct TeatroSombrasView: View {
     @EnvironmentObject private var sessao: Sessao
+    @Namespace private var rotorDaCena
+
+    private var camadasDoRotor: [CamadaDescrita] {
+        sessao.estado == .acesa ? DescricaoDaCena.camadas(sombra: true) : []
+    }
     var entrar: () -> Void
     var aberturaCaixa: CGFloat = 0        // cortina da caixa: 0 = fechada (normal), 1 = aberta (só na animação)
     var conteudoDaCaixa: AnyView? = nil   // palco em miniatura (só na animação de entrar e sair)
@@ -100,22 +105,22 @@ struct TeatroSombrasView: View {
                     CaixaTeatroView(medidas: caixa, acesa: acesa,
                                     aberturaCortina: aberturaCaixa, conteudo: conteudoDaCaixa)
                 }
-                // Sem o "apagadinho" do toque: a caixa é feita de várias camadas de desenho e, ficando
-                // meio transparente, uma aparecia através da outra (teste da Sofia).
                 .buttonStyle(SemEfeitoAoTocar())
-                .accessibilityLabel("Entrar na caixa")
-                .accessibilityHint("Volta para a vela")
-                .accessibilityInputLabels(["Entrar na caixa", "Voltar para a vela", "Caixa de teatro"])
+                .accessibilityLabel("Aproximar a caixa")
+                .accessibilityHint("Volta para a vela dentro da caixa")
+                .accessibilityInputLabels(["Aproximar a caixa", "Entrar na caixa", "Voltar para a vela", "Caixa de teatro"])
                 .position(caixa.centro)
 
                 // Rotor "Camadas de papel": céu, floresta e estado da vela, uma de cada vez
                 if mostrarCamadas {
-                    CamadasDaCenaAcessiveis(camadas: acesa ? DescricaoDaCena.camadas(sombra: true) : [],
-                                            estadoDaVela: sessao.descricaoDaVela)
+                    CamadasDaCenaAcessiveis(camadas: camadasDoRotor,
+                                            estadoDaVela: sessao.descricaoDaVela,
+                                            rotor: rotorDaCena)
                 }
             }
         }
         .accessibilityElement(children: .contain)
+        .rotorCamadasDePapel(mostrarCamadas ? camadasDoRotor : [], in: rotorDaCena)
         .accessibilityLabel(acesa ? "Teatro de sombras. As sombras da cena de papel aparecem na parede"
                                   : "Teatro de sombras, no escuro. A vela está apagada")
     }
