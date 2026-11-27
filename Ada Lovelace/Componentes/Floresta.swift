@@ -708,6 +708,9 @@ struct FlorestaView: View {
             .compositingGroup()
             .shadow(color: .black.opacity(sombra || !ativa ? 0 : s.opacidade),
                     radius: raio * escala, x: passo * s.x * escala, y: passo * s.y * escala)
+            // E a peça com a sombra viram uma folha só: quando a floresta some (a vela apagou),
+            // cada peça fica transparente inteira, sem a sombra aparecer através dela.
+            .compositingGroup()
     }
 
     // Cada par de painéis fecha uma volta. O espelho une bordas idênticas.

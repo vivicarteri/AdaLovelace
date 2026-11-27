@@ -148,37 +148,9 @@ struct CamadaDescrita: Identifiable {
     let titulo: String      // o que o rotor mostra
     let descricao: String   // o que o VoiceOver lê ao chegar na camada
     let faixa: ClosedRange<CGFloat>   // onde a camada fica na tela (fração da altura), para o toque do VoiceOver
-
-    // A camada do coelho muda com o tempo: o alvo acompanha o coelho e a descrição diz o que ele faz agora
-    static let idDoCoelho = "coelho"
-}
-
-// O que o coelho está fazendo agora, com a mesma conta do desenho (Floresta.coelho).
-// x: onde ele está na tela (fração da largura). Fora da cena, fica na beira por onde ele saiu.
-@MainActor
-enum CoelhoAcessivel {
-    static func agora(_ data: Date, tela: CGSize, reduzirMovimento: Bool)
-        -> (frase: String, x: CGFloat) {
-        let relogio = reduzirMovimento ? Floresta.instanteDoEclipse
-                                       : Floresta.tempoDoCenario(RelogioDaHistoria.tempo(em: data))
-        let larguraVisivel = tela.width / max(Floresta.escala * Quadro(tela: tela).escala, 0.001)
-        let foraDaCena = reduzirMovimento ? "Agora ele não está na cena." : "Agora ele não está na cena, logo volta."
-        guard let c = Floresta.coelho(relogio, larguraVisivel: larguraVisivel) else {
-            // Sai pela direita no meio da história e pela esquerda no fim
-            return (foraDaCena, relogio < 300 ? 0.9 : 0.1)
-        }
-        let fracao = 0.5 + c.dx / max(larguraVisivel, 1)
-        guard fracao > 0, fracao < 1 else { return (foraDaCena, fracao < 0.5 ? 0.1 : 0.9) }
-        let frase: String
-        if reduzirMovimento {
-            frase = "Agora ele está sentado, parado."
-        } else if c.quadro.hasPrefix("florestaCoelhoPulo") {
-            frase = "Agora ele está pulando."
-        } else {
-            frase = "Agora ele está sentado."
-        }
-        return (frase, min(0.9, max(0.1, fracao)))
-    }
+    // Camadas que mudam com o tempo (céu, coelho): o alvo acompanha o elemento e a descrição
+    // termina com o que ele está fazendo agora (CenaAoVivo.swift)
+    var aoVivo: ParteDaCena? = nil
 }
 
 @MainActor
@@ -189,13 +161,35 @@ enum DescricaoDaCena {
     }
 
     private static func floresta(sombra: Bool) -> [CamadaDescrita] {
+        // O céu: uma entrada por elemento. A descrição é curta e o VoiceOver completa com o que
+        // está acontecendo agora (quantas estrelas, onde estão o sol e a lua etc.)
+        let ceu: ClosedRange<CGFloat> = sombra ? 0.16...0.40 : 0.10...0.38
+        let elementosDoCeu: [CamadaDescrita] = [
+            CamadaDescrita(id: "estrelas", titulo: "Céu: estrelas",
+                           descricao: sombra ? "Estrelas. Sombras nítidas de estrelas que balançam devagar no alto da parede."
+                                             : "Estrelas. Estrelas de papel que balançam devagar.",
+                           faixa: ceu, aoVivo: .estrelas),
+            CamadaDescrita(id: "solELua", titulo: "Céu: sol e lua",
+                           descricao: sombra ? "Sol e lua. As sombras do sol, com as hélices girando atrás do rosto, e sombras lua."
+                                             : "Sol e lua. O sol tem hélices que giram atrás do rosto,o sol e a lua tem olhos que piscam suavemente.",
+                           faixa: ceu, aoVivo: .solELua),
+            CamadaDescrita(id: "nuvens", titulo: "Céu: nuvens",
+                           descricao: sombra ? "Nuvens. Sombras de nuvens bem lentas."
+                                             : "Nuvens. Nuvens brancas de papel, bem lentas.",
+                           faixa: ceu, aoVivo: .nuvens),
+            CamadaDescrita(id: "passarinhos", titulo: "Céu: passarinhos",
+                           descricao: sombra ? "Passarinhos. Sombras de passarinhos."
+                                             : "Passarinhos. Passarinhos de papel com olhos que piscam suavemente.",
+                           faixa: ceu, aoVivo: .passarinhos),
+            CamadaDescrita(id: "coracao", titulo: "Céu: coração",
+                           descricao: sombra ? "Coração. A sombra de um coração com fitas, que aparece uma vez depois do eclipse."
+                                             : "Coração. Um coração de papel com fitas, que aparece uma vez depois do eclipse.",
+                           faixa: ceu, aoVivo: .coracao)
+        ]
         if sombra {
-            return [
-                CamadaDescrita(id: "ceu", titulo: "Céu: sol e lua",
-                               descricao: "Céu. Bem perto da parede, as sombras ficam nítidas. O sol, com hélices girando atrás do rosto, e a lua atravessam o alto da parede em sentidos contrários e se encontram num eclipse. Estrelas pulsam devagar, nuvens passam e passarinhos cruzam voando.",
-                               faixa: 0.16...0.40),
+            return elementosDoCeu + [
                 CamadaDescrita(id: "arvoresDeTras", titulo: "Floresta: árvores do fundo",
-                               descricao: "Árvores do fundo. Uma fileira de árvores altas e finas, longe da chama. A sombra delas é clara e macia.",
+                               descricao: "Árvores do fundo. Uma fileira de árvores altas e finas, longe da chama. A sombra delas é clara.",
                                faixa: 0.40...0.52),
                 CamadaDescrita(id: "arvoresDaFrente", titulo: "Floresta: árvores da frente",
                                descricao: "Árvores da frente. Troncos maiores, recortados em papel, mais perto da chama. A sombra fica maior, mais escura e borrada.",
@@ -203,27 +197,24 @@ enum DescricaoDaCena {
                 CamadaDescrita(id: "arbustos", titulo: "Floresta: arbustos",
                                descricao: "Arbustos. Moitas arredondadas junto ao chão, coladas na chama. Viram uma massa escura e desfocada na base da parede.",
                                faixa: 0.62...0.70),
-                CamadaDescrita(id: CamadaDescrita.idDoCoelho, titulo: "Floresta: coelho",
+                CamadaDescrita(id: "coelho", titulo: "Floresta: coelho",
                                descricao: "Coelho. A sombra nítida de um coelho sentado, mexendo as orelhas. De vez em quando ele pula para outro lugar.",
-                               faixa: 0.58...0.68)
+                               faixa: 0.58...0.68, aoVivo: .coelho)
             ]
         }
-        return [
-            CamadaDescrita(id: "ceu", titulo: "Céu: sol e lua",
-                           descricao: "Céu de papel azul-noite. O sol, com rosto e hélices que giram, e a lua, com olhos que piscam, atravessam o céu em sentidos contrários até se encontrarem num eclipse. Estrelas pulsam, nuvens brancas passam e passarinhos cruzam voando.",
-                           faixa: 0.10...0.38),
+        return elementosDoCeu + [
             CamadaDescrita(id: "arvoresDeTras", titulo: "Floresta: árvores do fundo",
-                           descricao: "Árvores do fundo. Uma fileira de árvores azul-escuras, finas e altas, quase sumindo na noite.",
+                           descricao: "Árvores do fundo. Uma fileira de árvores marrom-escuro, finas e altas, quase sumindo na noite.",
                            faixa: 0.38...0.50),
             CamadaDescrita(id: "arvoresDaFrente", titulo: "Floresta: árvores da frente",
-                           descricao: "Árvores da frente. Troncos cinza-claros, recortados em papel, com contorno marcado, na frente da fileira azul.",
+                           descricao: "Árvores da frente. Troncos marrom-claro, recortados em papel, com contorno marcado, na frente da fileira marrom-escuro.",
                            faixa: 0.50...0.60),
             CamadaDescrita(id: "arbustos", titulo: "Floresta: arbustos",
                            descricao: "Arbustos. Moitas arredondadas em tons de verde, na beira do palco, em volta da vela.",
                            faixa: 0.60...0.68),
-            CamadaDescrita(id: CamadaDescrita.idDoCoelho, titulo: "Floresta: coelho",
+            CamadaDescrita(id: "coelho", titulo: "Floresta: coelho",
                            descricao: "Coelho. Um coelho de papel sentado na frente dos arbustos, mexendo as orelhas. De vez em quando ele pula para outro lugar.",
-                           faixa: 0.56...0.68)
+                           faixa: 0.56...0.68, aoVivo: .coelho)
         ]
     }
 
@@ -267,16 +258,16 @@ struct CamadasDaCenaAcessiveis: View {
                 ForEach(camadas) { camada in
                     let alto = geo.size.height * camada.faixa.lowerBound
                     let baixo = geo.size.height * camada.faixa.upperBound
-                    if camada.id == CamadaDescrita.idDoCoelho {
-                        // Estreito e na frente dos arbustos: acompanha o coelho e diz o que ele faz agora
+                    if let parte = camada.aoVivo {
+                        // Acompanha o elemento e diz o que ele está fazendo agora (atualiza a cada segundo)
                         TimelineView(.periodic(from: .now, by: 1)) { contexto in
-                            let coelho = CoelhoAcessivel.agora(contexto.date, tela: geo.size,
-                                                               reduzirMovimento: reduzirMovimento)
+                            let agora = CenaAoVivo.agora(parte, contexto.date, tela: geo.size,
+                                                         reduzirMovimento: reduzirMovimento)
                             AlvoAcessivel()
-                                .frame(width: geo.size.width * 0.16, height: max(1, baixo - alto))
-                                .position(x: geo.size.width * coelho.x, y: (alto + baixo) / 2)
+                                .frame(width: geo.size.width * agora.largura, height: max(1, baixo - alto))
+                                .position(x: geo.size.width * agora.x, y: (alto + baixo) / 2)
                                 .accessibilityElement()
-                                .accessibilityLabel("\(camada.descricao) \(coelho.frase)")
+                                .accessibilityLabel("\(camada.descricao) \(agora.frase)")
                                 .accessibilityRotorEntry(id: camada.id, in: rotor)
                         }
                     } else {
