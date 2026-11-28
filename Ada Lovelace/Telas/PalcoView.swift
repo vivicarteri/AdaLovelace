@@ -354,6 +354,11 @@ struct PalcoView: View {
                 .position(x: g.centroX + SuporteView.desvioX(largura: g.larguraVela),
                           y: g.baseY + SuporteView.desvioY(largura: g.larguraVela))
 
+            // VoiceOver: a vela e o prato como um item só (o estado dela é lido aqui, não na caixa)
+            if !miniatura {
+                velaAcessivel(g, topoCera: topoCera, espacoChama: espacoChama)
+            }
+
             if !miniatura {
                 botoesInferiores(g)
                     .opacity(mostrarBotoes ? 1 : 0)
@@ -405,7 +410,7 @@ struct PalcoView: View {
             .allowsHitTesting(false)
             .accessibilityElement()
             .accessibilityLabel("Vela")
-            .accessibilityValue(sessao.descricaoDaVela)
+            .accessibilityValue(sessao.estadoDaVela)
             .accessibilityHint(trocando ? "" : hint)
             .accessibilityAction { acaoPrincipalDaVela(g) }
             .accessibilityActions { atalhos(g) }
@@ -558,7 +563,6 @@ struct PalcoView: View {
                     .onTapGesture { tocarNaCaixa(g) }
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel("Acender vela")
-                    .accessibilityValue(estado == .nova ? "Vela nova, apagada" : "Vela apagada")
                     .accessibilityHint("Abre a caixa de fósforos, risca um fósforo e acende o pavio")
                     .accessibilityInputLabels(["Acender vela", "Acender fósforo", "Caixa de fósforos", "Acender"])
                     .accessibilityAddTraits(.isButton)

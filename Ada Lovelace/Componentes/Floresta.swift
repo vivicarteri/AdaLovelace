@@ -16,10 +16,11 @@
 //  O ROTEIRO conta a história em CICLOS e só anda com a vela acesa:
 //    1. A lua vem da esquerda e o sol da direita, devagar, e se encontram no ECLIPSE (5:08 do app);
 //       depois se cruzam e saem inteiros pelos lados.
-//    2. Durante essa passagem entram, um depois do outro: nuvem, coelho, nuvem, pássaro, coelho e
-//       pássaro (a AGENDA, que nunca deixa dois deles se encostarem). As estrelas têm o tempo delas.
+//    2. Durante essa passagem entram, um depois do outro: nuvem baixa, pássaro, coelho e a nuvem
+//       alta voltando (a AGENDA). As estrelas têm o tempo delas.
 //    3. Quando o sol e a lua saem, o coração desce, abre as fitas, fecha e sobe ("The lovers").
-//    4. Quando o coração sai, começa um novo eclipse.
+//       Com ele descem estrelas nas beiradas, e o coelho e o pássaro voltam.
+//    4. Quando o coração e a última peça saem, começa um novo eclipse.
 //  O caminho e o ritmo de cada peça são os do animatic (seção "Roteiro" logo abaixo);
 //  a agenda só escolhe QUANDO cada uma começa.
 //
@@ -209,7 +210,30 @@ enum Floresta {
         let pontos: [Ponto]
     }
 
-    static let estrelas: [Estrela] = [
+    static let estrelas: [Estrela] = estrelasDoRoteiro + estrelasDoCoracao
+
+    // ESTRELAS DO CORAÇÃO: descem nas beiradas dele (nunca pelo meio da tela) quando ele para,
+    // e sobem antes de ele subir. As de 0,36 e 0,64 aparecem no iPhone e no iPad; as de 0,15 e
+    // 0,85 ficam fora da tela do iPhone e só aparecem no iPad.
+    // ⚙️ Onde cada uma fica (f, altura do centro em pixels da arte)
+    static let lugaresDasEstrelasDoCoracao: [(f: CGFloat, y: CGFloat, nome: String, altura: CGFloat)] = [
+        (0.36, 470, "florestaEstrela2", 96), (0.64, 430, "florestaEstrela1", 100),
+        (0.15, 520, "florestaEstrela1", 92), (0.85, 480, "florestaEstrela2", 96)
+    ]
+    private static var estrelasDoCoracao: [Estrela] {
+        let parou = agenda.coracao + descidaDoCoracao
+        let vaiSubir = parou + coracaoParado
+        // Descem nos 20 s depois que ele para e terminam de subir uns segundos antes dele
+        let chegam = parou + descidaDaEstrela, saem = vaiSubir - 5 - descidaDaEstrela
+        return lugaresDasEstrelasDoCoracao.enumerated().map { i, l in
+            let atraso = Double(i % 2) * 6   // uma de cada lado chega um pouco depois da outra
+            return Estrela(nome: l.nome, altura: l.altura, fase: 0.8 + Double(i) * 1.3, pontos: [
+                Ponto(chegam + atraso, l.f, l.y), Ponto((chegam + saem) / 2, l.f, l.y + 30),
+                Ponto(saem - atraso, l.f, l.y)])
+        }
+    }
+
+    private static let estrelasDoRoteiro: [Estrela] = [
         // A estrela grande: perto do coração no começo…
         Estrela(nome: "florestaEstrela1", altura: 150, fase: 0, pontos: [
             Ponto(30, 0.42, 140), Ponto(40, 0.42, 250), Ponto(60, 0.42, 456), Ponto(90, 0.42, 328),
@@ -270,6 +294,15 @@ enum Floresta {
             guard let primeiro = pontos.first else { return self }
             var copia = self
             copia.pontos = pontos.map { Ponto($0.t + inicio - primeiro.t, $0.f, $0.y) }
+            return copia
+        }
+
+        // O mesmo caminho, subindo e descendo só "fator" do que subia e descia (a altura em que
+        // ela entra não muda)
+        func achatado(_ fator: CGFloat) -> Andante {
+            guard let primeiro = pontos.first else { return self }
+            var copia = self
+            copia.pontos = pontos.map { Ponto($0.t, $0.f, primeiro.y + ($0.y - primeiro.y) * fator) }
             return copia
         }
     }
@@ -355,51 +388,63 @@ enum Floresta {
     // QUANDO cada peça começa o caminho dela, em segundos desde acender (nesse instante ela ainda
     // está fora da tela). O caminho e o ritmo continuam os do animatic: só o começo muda.
     // Mudar um número em X segundos muda em X segundos a hora em que a peça aparece na tela.
-    // A ordem: nuvem, coelho, nuvem, pássaro, coelho, pássaro, todos durante a passagem do sol e
-    // da lua, e nenhum encostando no outro. Depois que o sol e a lua saem, o coração.
+    //
+    // A história tem duas partes. Cada personagem VAI na primeira e VOLTA na segunda:
+    //   1. Eclipse (o sol e a lua passando): nuvem baixa (esq → dir), pássaro (dir → esq),
+    //      coelho (esq → dir) e a nuvem alta voltando (dir → esq).
+    //   2. O coração desce e fica parado; o coelho volta (dir → esq) e o pássaro volta (esq → dir).
+    // Peças do mesmo tipo nunca se encostam (nuvem com nuvem, pássaro com pássaro, coelho com
+    // coelho); de tipos diferentes podem se cruzar.
     // O iPhone vê só o meio da floresta e cada peça passa rápido por ele. O iPad vê a floresta
-    // inteira e cada peça fica 2 a 3 vezes mais tempo na tela: por isso ele tem a agenda dele,
-    // com as peças dividindo a tela (em alturas diferentes) sem se encostar.
+    // inteira e cada peça fica 2 a 3 vezes mais tempo na tela: por isso ele tem a agenda dele.
     struct Agenda {
-        let nuvemBaixa: Double, coelhoIda: Double, nuvemAlta: Double
-        let passaro1: Double, coelhoVolta: Double, passaro2: Double
+        let nuvemBaixa: Double, passaroIda: Double, coelhoIda: Double, nuvemAlta: Double
         let coracao: Double     // o coração começa a descer (o sol e a lua já saíram da tela)
-        // O fim da história: o coração terminou de subir. Logo depois começa um novo eclipse.
-        var fim: Double { coracao + Floresta.duracaoDoCoracao + 1 }
+        let coelhoVolta: Double, passaroVolta: Double
+        // O fim da história: o coração já subiu e a última peça já saiu da tela.
+        // Logo depois começa um novo eclipse. Ao mudar a agenda, confira que ninguém sai depois dele.
+        let fim: Double
     }
 
     // ⚙️ AGENDA DO IPHONE. Ao lado: quando a peça aparece e some na tela do iPhone.
     static let agendaIPhone = Agenda(
         nuvemBaixa: -30,    // 0:20 – 1:11 (no iPhone ela leva um tempo até chegar na tela:
                             //              o caminho já começou quando a vela acende)
-        coelhoIda: 102,     // 2:00 – 3:59
-        nuvemAlta: 117,     // 2:47 – 3:50
-        passaro1: 211,      // 4:25 – 5:56
-        coelhoVolta: 236,   // 5:14 – 6:48
-        passaro2: 410,      // 7:40 – 9:02
-        coracao: 545)       // 9:05 – 12:17 (o sol e a lua saem da tela em 9:04). Novo eclipse em 12:18.
+        passaroIda: 55,     // 1:45 – 3:07
+        coelhoIda: 192,     // 3:31 – 5:29 (passando na hora do eclipse, 5:08)
+        nuvemAlta: 370,     // 7:00 – 8:03
+        coracao: 545,       // 9:05 – 12:17 (o sol e a lua saem da tela em 9:04; ele para em 9:33)
+        coelhoVolta: 515,   // 9:43 – 10:43
+        passaroVolta: 581,  // 10:35 – 12:06
+        fim: 738)           // novo eclipse em 12:18
 
     // ⚙️ AGENDA DO IPAD. Ao lado: quando a peça aparece e some no iPad DEITADO (em pé ele mostra
     // só o meio da floresta: cada peça aparece um pouco depois e some um pouco antes).
     static let agendaIPad = Agenda(
-        nuvemBaixa: 28,     // 0:30 – 3:09
-        coelhoIda: 73,      // 1:20 – 4:21
-        nuvemAlta: 128,     // 2:10 – 4:56
-        passaro1: 178,      // 3:00 – 6:09
-        coelhoVolta: 292,   // 5:00 – 8:11
-        passaro2: 368,      // 6:10 – 9:08
-        coracao: 554)       // 9:14 – 12:26 (o sol e a lua saem da tela em 9:13). Novo eclipse em 12:27.
+        nuvemBaixa: 28,     // 0:30 – 3:08
+        passaroIda: 88,     // 1:30 – 4:28
+        coelhoIda: 203,     // 3:31 – 6:32
+        nuvemAlta: 328,     // 5:30 – 8:15
+        coracao: 554,       // 9:14 – 12:26 (o sol e a lua saem da tela em 9:13; ele para em 9:42)
+        coelhoVolta: 575,   // 9:43 – 12:54
+        passaroVolta: 612,  // 10:14 – 13:23
+        fim: 804)           // novo eclipse em 13:24
 
     static let agenda: Agenda = noIPhone ? agendaIPhone : agendaIPad
 
+    // ⚙️ Quanto os pássaros e as nuvens sobem e descem pelo caminho, comparado com o animatic
+    // (1 = igual; 0,4 = só 40% da subida/descida, contada a partir da altura em que entram).
+    static let descidaDoCeu: CGFloat = 0.4
+
     // As nuvens e os passarinhos da história, cada um começando na hora da agenda
     static let nuvens: [Andante] = [
-        nuvensDoAnimatic[0].comecando(em: agenda.nuvemBaixa),
-        nuvensDoAnimatic[1].comecando(em: agenda.nuvemAlta)
+        nuvensDoAnimatic[0].comecando(em: agenda.nuvemBaixa).achatado(descidaDoCeu),
+        nuvensDoAnimatic[1].comecando(em: agenda.nuvemAlta).achatado(descidaDoCeu)
     ]
+    // A ida usa o pássaro que vem da direita; a volta, o que vem da esquerda
     static let passarinhos: [Andante] = [
-        passarinhosDoAnimatic[0].comecando(em: agenda.passaro1),
-        passarinhosDoAnimatic[1].comecando(em: agenda.passaro2)
+        passarinhosDoAnimatic[1].comecando(em: agenda.passaroIda).achatado(descidaDoCeu),
+        passarinhosDoAnimatic[0].comecando(em: agenda.passaroVolta).achatado(descidaDoCeu)
     ]
 
     // ⚙️ Base dos movimentos que se repetem (balanços, estrelas pulsando, o chão do iPhone):
@@ -553,22 +598,45 @@ enum Floresta {
     static let subidaDaSombraDoCoelho: CGFloat = 260
     static let pesNoQuadro: CGFloat = 863 / 910   // onde os pés ficam dentro do quadro (fração)
 
-    // Qual quadro mostrar sentado (s = segundos desde que pousou, r = segundos até o próximo pulo).
-    // Igual ao vídeo, que se repete: ele mexe a orelha e a cabeça (0–5 s), respira e se prepara
-    // (5–6,9 s) e pula. Quando ele fica sentado mais tempo, a animação INTEIRA se repete (as orelhas
-    // continuam mexendo), e a última repetição termina exatamente na hora do pulo, no mesmo quadro
-    // em que o pulo começa no vídeo. O que sobra de tempo vai logo depois do pouso, respirando.
+    // VIRADAS DE CABEÇA: a "virada" é o trecho de 0–5 s do vídeo (a orelha mexe e a cabeça vira).
+    // Fora dela o coelho fica parado respirando (41, 42…) e, logo antes do pulo, se prepara (43).
+    static let duracaoDaVirada = Double(inicioDaRespiracao) / 12
+    static let duracaoDaPreparacao = Double(ritmoDoCoelhoSentado.count - fimDaRespiracao) / 12
+    // ⚙️ No mínimo quantos segundos ele fica parado depois de uma virada automática (antes da
+    // próxima ou do pulo) e quantas viradas automáticas cabem numa parada
+    static let paradoDepoisDaVirada: Double = 5
+    static let viradasPorParada = 4
+
+    // Em que segundos (desde que pousou) começam as viradas automáticas de uma parada em que ele
+    // fica "sentado" segundos: a primeira logo ao pousar, e as outras espalhadas por igual.
+    static func viradasAutomaticas(sentado: Double) -> [Double] {
+        guard sentado >= duracaoDaVirada + duracaoDaPreparacao else { return [] }
+        let n = max(1, min(viradasPorParada, Int(sentado / (duracaoDaVirada + paradoDepoisDaVirada))))
+        let folga = (sentado - Double(n) * duracaoDaVirada) / Double(n)
+        return (0..<n).map { Double($0) * (duracaoDaVirada + folga) }
+    }
+
+    // A virada que está acontecendo agora (segundos desde que pousou em que ela começou), ou nil
+    static func viradaAgora(desde s: Double, sentado: Double) -> Double? {
+        viradasAutomaticas(sentado: sentado).last { s >= $0 && s < $0 + duracaoDaVirada }
+    }
+
+    // Qual quadro mostrar sentado (s = segundos desde que pousou, r = segundos até o próximo pulo)
     static func quadroSentado(desde s: Double, faltam r: Double) -> Int {
-        let n = ritmoDoCoelhoSentado.count                    // 83 quadros = 6,9 s
-        let total = max(0, Int(((s + r) * 12).rounded()))     // quadros sentado nesta parada
-        let i = min(max(0, Int(s * 12)), max(total - 1, 0))
-        let sobra = total % n
-        if i < sobra {
-            // respirando (41, 42…), a mesma pose parada do vídeo
-            let ciclo = fimDaRespiracao - inicioDaRespiracao
-            return ritmoDoCoelhoSentado[inicioDaRespiracao + i % ciclo]
+        if r <= duracaoDaPreparacao {
+            let i = min(ritmoDoCoelhoSentado.count - 1, fimDaRespiracao + Int((duracaoDaPreparacao - r) * 12))
+            return ritmoDoCoelhoSentado[max(fimDaRespiracao, i)]
         }
-        return ritmoDoCoelhoSentado[(i - sobra) % n]
+        if let inicio = viradaAgora(desde: s, sentado: s + r) {
+            return ritmoDoCoelhoSentado[min(inicioDaRespiracao - 1, max(0, Int((s - inicio) * 12)))]
+        }
+        let ciclo = fimDaRespiracao - inicioDaRespiracao
+        return ritmoDoCoelhoSentado[inicioDaRespiracao + max(0, Int(s * 12)) % ciclo]
+    }
+
+    // Quando o coelho pula para sair da parada k (fim do tempo sentado)
+    static func inicioDoPulo(_ paradas: [Parada], _ k: Int) -> Double {
+        k + 1 < paradas.count ? max(paradas[k].t, paradas[k + 1].t - duracaoDoPulo) : paradas[k].t
     }
 
     // Velocidade do chão no iPhone (pixels da arte por segundo; no iPad o chão é parado)
@@ -589,6 +657,9 @@ enum Floresta {
     // Onde o coelho está, o que desenhar e para que lado olha. nil = fora de cena.
     // quadro/proximo/mistura: no pulo, a pose de agora vai se MISTURANDO com a próxima
     // (mistura 0 → 1), para o movimento ficar contínuo entre um desenho e outro.
+    // ⚙️ O menor pulo do coelho no iPhone, em pixels da arte (veja "desvio" abaixo)
+    static let puloMinimo: CGFloat = 250
+
     static func coelho(_ t: Double, larguraVisivel: CGFloat)
         -> (dx: CGFloat, quadro: String, proximo: String?, mistura: CGFloat, paraDireita: Bool)? {
         let tamanho = coelhoW * 0.5
@@ -597,15 +668,31 @@ enum Floresta {
                   t >= primeira.t, t < ultima.t else { continue }
             let v = velocidadeDoChao
             func lugar(_ p: Parada) -> CGFloat { distanciaDoMeio(p.f, larguraVisivel: larguraVisivel, tamanho: tamanho) }
-            // Quando o coelho pula para sair da parada k (fim do tempo sentado)
-            func comecaPulo(_ k: Int) -> Double {
-                k + 1 < paradas.count ? max(paradas[k].t, paradas[k + 1].t - duracaoDoPulo) : paradas[k].t
-            }
-            // Onde ele está sentado na parada k, no instante t (anda com o chão)
-            func sentado(_ k: Int, _ t: Double) -> CGFloat {
+            func comecaPulo(_ k: Int) -> Double { inicioDoPulo(paradas, k) }
+            // Onde ele estaria sentado na parada k, no instante t (anda com o chão), sem o desvio
+            func noRoteiro(_ k: Int, _ t: Double) -> CGFloat {
                 let meio = (paradas[k].t + comecaPulo(k)) / 2
                 return lugar(paradas[k]) - v * CGFloat(t - meio)
             }
+            // DESVIO: no iPhone o chão leva o coelho sentado junto. Indo para a esquerda (o mesmo
+            // lado do chão), numa parada longa ele já chegava perto do próximo lugar, ou passava
+            // dele, e o pulo ficava parado ou para trás. Então cada pulo anda pelo menos
+            // puloMinimo para o lado em que ele olha, e o resto do caminho segue a partir dali.
+            var desvio = [CGFloat](repeating: 0, count: paradas.count)
+            if v > 0 {
+                var soma: CGFloat = 0
+                for k in 1..<paradas.count {
+                    if k >= 2 && k < paradas.count - 1 {
+                        let de = noRoteiro(k - 1, comecaPulo(k - 1)) + desvio[k - 1]
+                        let ate = noRoteiro(k, paradas[k].t) + soma
+                        let lado: CGFloat = paradas[k].f > paradas[k - 1].f ? 1 : -1
+                        let falta = lado * puloMinimo - (ate - de)
+                        if falta * lado > 0 { soma += falta }
+                    }
+                    desvio[k] = soma
+                }
+            }
+            func sentado(_ k: Int, _ t: Double) -> CGFloat { noRoteiro(k, t) + desvio[k] }
             for k in 0..<(paradas.count - 1) {
                 let a = paradas[k], b = paradas[k + 1]
                 guard t >= a.t, t < b.t else { continue }
@@ -650,7 +737,7 @@ enum Floresta {
 // A vista converte o tempo acumulado em tempo de cena conforme a largura visível.
 @MainActor
 enum RelogioDaHistoria {
-    // Duração de um ciclo, em segundos: termina quando o coração sai (Floresta.agenda)
+    // Duração de um ciclo, em segundos: termina quando o coração e a última peça saem (Floresta.agenda)
     static var ciclo: Double { Floresta.agenda.fim }
 
     private static var acumulado: TimeInterval = 0

@@ -14,33 +14,59 @@ import SwiftUI
 // MARK: - Vela e duração
 
 extension Sessao {
-    // O que o VoiceOver fala sobre a vela (sem números, como na tela)
+    // O tamanho que a pessoa escolheu no ateliê, só pela categoria ("tamanho grande")
+    var tamanhoDaVela: String {
+        DescricaoDaDuracao.faixa(minutos: config.minutos).tamanho
+    }
+
+    // O que o VoiceOver fala sobre a vela, com "Vela" na frente (sem números, como na tela).
+    // Usado onde não há um item chamado "Vela" (o "Estado da vela" do teatro de sombras).
     var descricaoDaVela: String {
-        let quanto: String
-        switch progresso {
-        case ..<0.05: quanto = "inteira"
-        case ..<0.25: quanto = "quase inteira"
-        case ..<0.5: quanto = "chegando na metade"
-        case ..<0.75: quanto = "passou da metade"
-        case ..<1: quanto = "quase no fim"
-        default: quanto = "acabou"
-        }
-        let ritmo = derretimentoAcelerado ? ", derretendo mais rápido" : ""
-        let presos = config.enfeites.filter { !caidos.contains($0.id) }.count
-        let enfeites: String
-        switch (config.enfeites.isEmpty, presos) {
-        case (true, _): enfeites = ""
-        case (false, 0): enfeites = ". Todos os enfeites já caíram"
-        case (false, 1): enfeites = ". Ainda resta um enfeite preso na cera"
-        default: enfeites = ". Ainda restam \(presos) enfeites presos na cera"
-        }
         switch estado {
-        case .nova: return "Vela nova, apagada" + enfeites
-        case .acesa: return "Acesa, \(quanto)\(ritmo)" + enfeites
-        case .apagada: return "Apagada, \(quanto)" + enfeites
+        case .nova: return "Vela nova, \(tamanhoDaVela), apagada" + descricaoDosEnfeites
+        case .acabou: return "A vela acabou"
+        default: return "Vela \(tamanhoDaVela), \(estadoDaVela.minusculaNoComeco)"
+        }
+    }
+
+    // O valor do item "Vela" no palco: o rótulo já diz "Vela", então começa pelo tamanho
+    var estadoDaVela: String {
+        let tamanho = tamanhoDaVela.prefix(1).uppercased() + tamanhoDaVela.dropFirst()
+        switch estado {
+        case .nova: return "Vela nova, \(tamanhoDaVela), apagada" + descricaoDosEnfeites
+        case .acesa: return "\(tamanho), acesa, \(quantoQueimou)\(ritmoDaVela)" + descricaoDosEnfeites
+        case .apagada: return "\(tamanho), apagada, \(quantoQueimou)" + descricaoDosEnfeites
         case .acabou: return "A vela acabou"
         }
     }
+
+    private var quantoQueimou: String {
+        switch progresso {
+        case ..<0.05: "inteira"
+        case ..<0.25: "quase inteira"
+        case ..<0.5: "chegando na metade"
+        case ..<0.75: "passou da metade"
+        case ..<1: "quase no fim"
+        default: "acabou"
+        }
+    }
+
+    private var ritmoDaVela: String { derretimentoAcelerado ? ", derretendo mais rápido" : "" }
+
+    private var descricaoDosEnfeites: String {
+        let presos = config.enfeites.filter { !caidos.contains($0.id) }.count
+        switch (config.enfeites.isEmpty, presos) {
+        case (true, _): return ""
+        case (false, 0): return ". Todos os enfeites já caíram"
+        case (false, 1): return ". Ainda resta um enfeite preso na cera"
+        default: return ". Ainda restam \(presos) enfeites presos na cera"
+        }
+    }
+}
+
+private extension String {
+    // "Tamanho grande, acesa" → "tamanho grande, acesa" (para continuar uma frase)
+    var minusculaNoComeco: String { prefix(1).lowercased() + dropFirst() }
 }
 
 enum DescricaoDaDuracao {
@@ -48,6 +74,7 @@ enum DescricaoDaDuracao {
     // Os minutos andam de 5 em 5 (VelaConfig.minutos), então cada faixa tem uma conta certa de passos.
     struct Faixa {
         let nome: String
+        let tamanho: String    // a mesma faixa dita como tamanho, na descrição da vela
         let minutos: ClosedRange<Int>
         var passos: Int { (minutos.upperBound - minutos.lowerBound) / passoDoVoiceOver + 1 }
     }
@@ -55,12 +82,14 @@ enum DescricaoDaDuracao {
     static let passoDoVoiceOver = 5   // minutos por deslize no VoiceOver
 
     static let faixas: [Faixa] = [
-        Faixa(nome: "Duração mínima", minutos: Int(VelaConfig.minimoMinutos)...Int(VelaConfig.minimoMinutos)),
-        Faixa(nome: "Duração curta", minutos: 15...30),
-        Faixa(nome: "Duração curta a média", minutos: 35...60),
-        Faixa(nome: "Duração média", minutos: 65...120),
-        Faixa(nome: "Duração longa", minutos: 125...150),
-        Faixa(nome: "Duração extra longa", minutos: 155...Int(VelaConfig.maximoMinutos))
+        Faixa(nome: "Duração mínima", tamanho: "tamanho mínimo",
+              minutos: Int(VelaConfig.minimoMinutos)...Int(VelaConfig.minimoMinutos)),
+        Faixa(nome: "Duração curta", tamanho: "tamanho pequeno", minutos: 15...30),
+        Faixa(nome: "Duração curta a média", tamanho: "tamanho pequeno a médio", minutos: 35...60),
+        Faixa(nome: "Duração média", tamanho: "tamanho médio", minutos: 65...120),
+        Faixa(nome: "Duração longa", tamanho: "tamanho grande", minutos: 125...150),
+        Faixa(nome: "Duração extra longa", tamanho: "tamanho extra grande",
+              minutos: 155...Int(VelaConfig.maximoMinutos))
     ]
 
     static func faixa(minutos: Int) -> Faixa {
@@ -198,7 +227,7 @@ enum DescricaoDaCena {
                                descricao: "Arbustos. Moitas arredondadas junto ao chão, coladas na chama. Viram uma massa escura e desfocada na base da parede.",
                                faixa: 0.62...0.70),
                 CamadaDescrita(id: "coelho", titulo: "Floresta: coelho",
-                               descricao: "Coelho. A sombra nítida de um coelho sentado, mexendo as orelhas. De vez em quando ele pula para outro lugar.",
+                               descricao: "Coelho. A sombra nítida de um coelho sentado, virando a cabeça. De vez em quando ele pula para outro lugar.",
                                faixa: 0.58...0.68, aoVivo: .coelho)
             ]
         }
@@ -213,7 +242,7 @@ enum DescricaoDaCena {
                            descricao: "Arbustos. Moitas arredondadas em tons de verde, na beira do palco, em volta da vela.",
                            faixa: 0.60...0.68),
             CamadaDescrita(id: "coelho", titulo: "Floresta: coelho",
-                           descricao: "Coelho. Um coelho de papel sentado na frente dos arbustos, mexendo as orelhas. De vez em quando ele pula para outro lugar.",
+                           descricao: "Coelho. Um coelho de papel sentado na frente dos arbustos, virando a cabeça. De vez em quando ele pula para outro lugar.",
                            faixa: 0.56...0.68, aoVivo: .coelho)
         ]
     }

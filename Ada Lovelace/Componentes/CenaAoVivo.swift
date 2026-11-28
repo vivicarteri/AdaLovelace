@@ -295,8 +295,8 @@ enum CenaAoVivo {
     private static func coelho(_ c: Contexto) -> (frase: String, x: CGFloat) {
         let foraDaCena = c.reduzirMovimento ? "Agora ele não está na cena." : "Agora ele não está na cena, logo volta."
         guard let coelho = Floresta.coelho(c.relogio, larguraVisivel: c.larguraVisivel) else {
-            // Sai pela direita no meio da história e pela esquerda no fim
-            return (foraDaCena, c.relogio < 300 ? 0.9 : 0.1)
+            // Sai pela direita no fim da ida e pela esquerda no fim da volta
+            return (foraDaCena, c.relogio < Floresta.agenda.coracao ? 0.9 : 0.1)
         }
         let fracao = c.fracao(coelho.dx)
         guard fracao > 0, fracao < 1 else { return (foraDaCena, fracao < 0.5 ? 0.1 : 0.9) }
