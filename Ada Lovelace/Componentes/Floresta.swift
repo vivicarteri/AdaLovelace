@@ -13,12 +13,15 @@
 //    fundo (céu + silhuetas bem apagadas) → árvores azul-escuras → árvores cinza (com contorno)
 //    → estrelas → SOL e LUA (eclipse) → nuvens → coração → arbustos → coelho → passarinhos
 //
-//  O ROTEIRO segue o animatic da Georgia (5 min no vídeo = 10 min no app, em loop).
-//  Ele só anda com a vela acesa. A lua vem da esquerda e o sol da direita, devagar, e eles
-//  se encontram no ECLIPSE (4:52 do app); depois se cruzam e saem pelos lados. O coração desce,
-//  abre as fitas e sobe (uma vez, depois do eclipse), as nuvens e os passarinhos atravessam, o coelho pula
-//  pelo chão e as estrelas vão aparecendo e depois somem. No fim só sobra a floresta.
-//  Os pontos de cada peça estão na seção "Roteiro" logo abaixo.
+//  O ROTEIRO conta a história em CICLOS e só anda com a vela acesa:
+//    1. A lua vem da esquerda e o sol da direita, devagar, e se encontram no ECLIPSE (5:08 do app);
+//       depois se cruzam e saem inteiros pelos lados.
+//    2. Durante essa passagem entram, um depois do outro: nuvem, coelho, nuvem, pássaro, coelho e
+//       pássaro (a AGENDA, que nunca deixa dois deles se encostarem). As estrelas têm o tempo delas.
+//    3. Quando o sol e a lua saem, o coração desce, abre as fitas, fecha e sobe ("The lovers").
+//    4. Quando o coração sai, começa um novo eclipse.
+//  O caminho e o ritmo de cada peça são os do animatic da Georgia (seção "Roteiro" logo abaixo);
+//  a agenda só escolhe QUANDO cada uma começa.
 //
 //  Se "florestaFundo" não estiver no Assets, o app volta para a tenda do circo.
 
@@ -48,14 +51,17 @@ enum Floresta {
     // ⚙️ Estrelas (na referência elas são um pouco maiores que o desenho)
     static let aumentoDosElementos: CGFloat = 1.1
 
-    // Só o iPhone desliza a floresta. No iPad ela fica parada (só o céu se mexe).
-    static var desliza: Bool {
+    // iPhone ou iPad: a agenda da história é diferente em cada um (veja "Agenda")
+    static var noIPhone: Bool {
         #if canImport(UIKit)
         UIDevice.current.userInterfaceIdiom == .phone
         #else
         false
         #endif
     }
+
+    // Só o iPhone desliza a floresta. No iPad ela fica parada (só o céu se mexe).
+    static var desliza: Bool { noIPhone }
 
 
     // Pixels da Georgia → pixels do Quadro (o mesmo sistema da vela e do resto do palco)
@@ -163,18 +169,19 @@ enum Floresta {
         return 0.5 * (2 * p1 + (p2 - p0) * s + (2 * p0 - 5 * p1 + 4 * p2 - p3) * s2 + (3 * p1 - p0 - 3 * p2 + p3) * s3)
     }
 
-    // SOL E LUA NO IPHONE: o iPhone só vê o terço do meio da floresta, e os astros só entravam
-    // nele lá pelos 3 minutos. O time quer a história COMEÇANDO com eles (o coração saiu do começo).
-    // Então, no iPhone, a parte de longe do caminho deles é encolhida: no começo eles já aparecem
-    // pelas beiradas da tela e vão vindo para o meio. Perto do meio (o eclipse) nada muda.
-    // No iPad (que mostra a floresta inteira) o caminho fica como no animatic.
-    static func caminhoDoAstro(_ dx: CGFloat, larguraVisivel: CGFloat) -> CGFloat {
-        guard larguraVisivel < largura * 0.9 else { return dx }   // iPad: floresta inteira
-        let perto = largura * 0.12            // daqui para dentro (eclipse) não muda
-        let longe = largura / 2               // a beirada da floresta (f = 0 ou 1)
-        let beirada = larguraVisivel / 2      // ali o meio do astro fica na beirada da tela
-        guard abs(dx) > perto, beirada > perto, longe > perto else { return dx }
-        let k = (beirada - perto) / (longe - perto)
+    // SOL E LUA NUMA TELA MENOR QUE A FLORESTA (iPhone, iPad em pé): eles só entrariam lá pelos
+    // 3 minutos, e a história COMEÇA com eles. Então a parte de longe do caminho é encolhida:
+    // logo depois de acender eles já vêm entrando pelas beiradas. Perto do meio (o eclipse)
+    // nada muda. O ponto "fora" do roteiro cai INTEIRO fora da tela (antes caía na beirada, e no
+    // fim do caminho o astro sumia com metade dele ainda aparecendo).
+    // No iPad deitado (que mostra a floresta inteira) o caminho fica como no animatic.
+    static func caminhoDoAstro(_ dx: CGFloat, larguraVisivel: CGFloat, tamanho: CGFloat) -> CGFloat {
+        guard larguraVisivel < largura * 0.9 else { return dx }   // floresta inteira na tela
+        let perto = largura * 0.12                                // daqui para dentro (eclipse) não muda
+        let foraDaFloresta = distanciaDoMeio(foraDireita, larguraVisivel: larguraVisivel, tamanho: tamanho)
+        let foraDaTela = (larguraVisivel + tamanho) / 2 + 20      // o astro inteiro além da borda
+        guard abs(dx) > perto, foraDaTela > perto, foraDaFloresta > perto else { return dx }
+        let k = (foraDaTela - perto) / (foraDaFloresta - perto)
         return (dx < 0 ? -1 : 1) * (perto + (abs(dx) - perto) * k)
     }
 
@@ -248,7 +255,7 @@ enum Floresta {
     struct Andante {
         let peca: PecaAnimada
         let altura: CGFloat     // altura da peça, pixels da Georgia
-        let pontos: [Ponto]
+        var pontos: [Ponto]
         var balanco: CGFloat = 0
         var fase: Double = 0
 
@@ -257,6 +264,14 @@ enum Floresta {
         // Tamanho desenhado
         var alturaNaTela: CGFloat { astro ? altura : altura * aumento }
         var largura: CGFloat { alturaNaTela * peca.peca.width / peca.peca.height }
+
+        // O mesmo caminho, só que começando em "inicio" (o desenho e o ritmo não mudam)
+        func comecando(em inicio: Double) -> Andante {
+            guard let primeiro = pontos.first else { return self }
+            var copia = self
+            copia.pontos = pontos.map { Ponto($0.t + inicio - primeiro.t, $0.f, $0.y) }
+            return copia
+        }
     }
 
     // SOL E LUA (animatic): ficam em cena quase a história inteira. A lua entra pela esquerda e o
@@ -301,9 +316,10 @@ enum Floresta {
     }
 
     // NUVENS (animatic): só duas, bem lentas.
-    // A de baixo vai da esquerda para a direita junto com a lua (0:55–2:10 do animatic);
-    // a de cima vem da direita, passa por cima do sol e sai pela esquerda (1:15–2:40).
-    static let nuvens: [Andante] = [
+    // A de baixo vai da esquerda para a direita; a de cima vem da direita, passa por cima do sol
+    // e sai pela esquerda. Os tempos abaixo são os do animatic: quando cada uma COMEÇA na
+    // história vem da agenda (nuvens, mais abaixo).
+    private static let nuvensDoAnimatic: [Andante] = [
         Andante(peca: CenarioNovo.nuvem1, altura: 144, pontos: [
             Ponto(100, foraEsquerda, 1110), Ponto(120, 0.04, 1110), Ponto(160, 0.28, 1100),
             Ponto(180, 0.5, 1110), Ponto(200, 0.77, 1110), Ponto(230, 0.91, 1080), Ponto(250, 0.97, 1110),
@@ -317,9 +333,9 @@ enum Floresta {
     ]
 
     // PASSARINHOS (animatic): o primeiro vem do alto à esquerda, desce, cruza a floresta e sai
-    // pela direita subindo (0:00–1:37). O segundo vem da direita, desce pelo eclipse, passa
-    // perto do sol e sai pela esquerda (2:05–3:40).
-    static let passarinhos: [Andante] = [
+    // pela direita subindo. O segundo vem da direita, desce, passa perto do sol e sai pela
+    // esquerda. Quando cada um começa na história vem da agenda (passarinhos, mais abaixo).
+    private static let passarinhosDoAnimatic: [Andante] = [
         Andante(peca: CenarioNovo.passarinho, altura: 214, pontos: [
             Ponto(0, foraEsquerda, 273), Ponto(10, 0.01, 365), Ponto(20, 0.06, 425), Ponto(30, 0.14, 717),
             Ponto(40, 0.22, 850), Ponto(50, 0.27, 990), Ponto(60, 0.33, 1063), Ponto(80, 0.38, 1000),
@@ -335,8 +351,64 @@ enum Floresta {
                 balanco: 4, fase: 2.1, aumento: 1.85)
     ]
 
-    // O roteiro não tem mais câmera lenta no eclipse (o animatic anda num ritmo só):
-    // o sol e a lua já passam bem devagar e ficam um bom tempo um na frente do outro.
+    // MARK: Agenda
+    // QUANDO cada peça começa o caminho dela, em segundos desde acender (nesse instante ela ainda
+    // está fora da tela). O caminho e o ritmo continuam os do animatic: só o começo muda.
+    // Mudar um número em X segundos muda em X segundos a hora em que a peça aparece na tela.
+    // A ordem: nuvem, coelho, nuvem, pássaro, coelho, pássaro, todos durante a passagem do sol e
+    // da lua, e nenhum encostando no outro. Depois que o sol e a lua saem, o coração.
+    // O iPhone vê só o meio da floresta e cada peça passa rápido por ele. O iPad vê a floresta
+    // inteira e cada peça fica 2 a 3 vezes mais tempo na tela: por isso ele tem a agenda dele,
+    // com as peças dividindo a tela (em alturas diferentes) sem se encostar.
+    struct Agenda {
+        let nuvemBaixa: Double, coelhoIda: Double, nuvemAlta: Double
+        let passaro1: Double, coelhoVolta: Double, passaro2: Double
+        let coracao: Double     // o coração começa a descer (o sol e a lua já saíram da tela)
+        // O fim da história: o coração terminou de subir. Logo depois começa um novo eclipse.
+        var fim: Double { coracao + Floresta.duracaoDoCoracao + 1 }
+    }
+
+    // ⚙️ AGENDA DO IPHONE. Ao lado: quando a peça aparece e some na tela do iPhone.
+    static let agendaIPhone = Agenda(
+        nuvemBaixa: -30,    // 0:20 – 1:11 (no iPhone ela leva um tempo até chegar na tela:
+                            //              o caminho já começou quando a vela acende)
+        coelhoIda: 102,     // 2:00 – 3:59
+        nuvemAlta: 117,     // 2:47 – 3:50
+        passaro1: 211,      // 4:25 – 5:56
+        coelhoVolta: 236,   // 5:14 – 6:48
+        passaro2: 410,      // 7:40 – 9:02
+        coracao: 545)       // 9:05 – 12:17 (o sol e a lua saem da tela em 9:04). Novo eclipse em 12:18.
+
+    // ⚙️ AGENDA DO IPAD. Ao lado: quando a peça aparece e some no iPad DEITADO (em pé ele mostra
+    // só o meio da floresta: cada peça aparece um pouco depois e some um pouco antes).
+    static let agendaIPad = Agenda(
+        nuvemBaixa: 28,     // 0:30 – 3:09
+        coelhoIda: 73,      // 1:20 – 4:21
+        nuvemAlta: 128,     // 2:10 – 4:56
+        passaro1: 178,      // 3:00 – 6:09
+        coelhoVolta: 292,   // 5:00 – 8:11
+        passaro2: 368,      // 6:10 – 9:08
+        coracao: 554)       // 9:14 – 12:26 (o sol e a lua saem da tela em 9:13). Novo eclipse em 12:27.
+
+    static let agenda: Agenda = noIPhone ? agendaIPhone : agendaIPad
+
+    // As nuvens e os passarinhos da história, cada um começando na hora da agenda
+    static let nuvens: [Andante] = [
+        nuvensDoAnimatic[0].comecando(em: agenda.nuvemBaixa),
+        nuvensDoAnimatic[1].comecando(em: agenda.nuvemAlta)
+    ]
+    static let passarinhos: [Andante] = [
+        passarinhosDoAnimatic[0].comecando(em: agenda.passaro1),
+        passarinhosDoAnimatic[1].comecando(em: agenda.passaro2)
+    ]
+
+    // ⚙️ Base dos movimentos que se repetem (balanços, estrelas pulsando, o chão do iPhone):
+    // eles completam as voltas deles a cada 600 s, como sempre. Fica separada da duração da
+    // história, para o ritmo deles não mudar quando a história fica mais longa ou mais curta.
+    static let periodoDosMovimentos: Double = 600
+
+    // O roteiro não tem câmera lenta no eclipse (o animatic anda num ritmo só): o sol e a lua
+    // já passam bem devagar e ficam um bom tempo um na frente do outro.
     static func tempoDoCenario(_ tempo: Double) -> Double {
         tempo.truncatingRemainder(dividingBy: RelogioDaHistoria.ciclo)
     }
@@ -350,10 +422,17 @@ enum Floresta {
     }
 
     // MARK: Coração
-    // O CORAÇÃO "The lovers": aparece UMA vez, depois do eclipse (3:22–4:58 do animatic = 6:44–9:56
-    // do app). No animatic ele também abria a história (0:03–1:25), mas o time preferiu começar com
-    // o sol e a lua: o coração é das poucas peças que descem de cima, e abrir com ele causava estranheza. A ORDEM (pedido da Georgia): ele DESCE até parar → SÓ ENTÃO abre as fitas →
+    // O CORAÇÃO "The lovers": aparece UMA vez por ciclo, quando o sol e a lua já saíram da tela
+    // (agenda.coracao); quando ele sai, começa um novo eclipse. Os tempos são os do animatic.
+    // No animatic ele também abria a história, mas o time preferiu começar com o sol e a lua: o
+    // coração é das poucas peças que descem de cima, e abrir com ele causava estranheza.
+    // A ORDEM (pedido da Georgia): ele DESCE até parar → SÓ ENTÃO abre as fitas →
     // fica parado → FECHA as fitas → SÓ ENTÃO sobe e sai pelo alto. Nunca anda com as fitas abertas.
+    // ⚙️ Quanto tempo ele leva descendo, parado com as fitas e subindo (segundos)
+    static let descidaDoCoracao: Double = 28
+    static let coracaoParado: Double = 131
+    static let subidaDoCoracao: Double = 33
+    static var duracaoDoCoracao: Double { descidaDoCoracao + coracaoParado + subidaDoCoracao }
     struct PassagemDoCoracao {
         let pontos: [(t: Double, y: CGFloat)]   // y = centro, pixels da Georgia (fora = acima da tela)
         let chega: Double     // quando as fitas abrem
@@ -371,8 +450,12 @@ enum Floresta {
             // Entre dois pontos ele anda suave (começa e termina devagar) e fica parado quando dois
             // pontos seguidos têm o mesmo y. chega/sai: as fitas abrem logo depois de ele parar e
             // terminam de fechar antes de ele começar a subir.
-            // (A primeira passagem, que abria a história, saiu: [(6, fora), (30, 820), (113, 820), (150, fora)])
-            [PassagemDoCoracao(pontos: [(404, fora), (432, 840), (563, 840), (596, fora)], chega: 432.3, sai: 562.5)]
+            let s = Floresta.agenda.coracao
+            let parou = s + Floresta.descidaDoCoracao
+            let vaiSubir = parou + Floresta.coracaoParado
+            return [PassagemDoCoracao(pontos: [(s, fora), (parou, 840), (vaiSubir, 840),
+                                               (vaiSubir + Floresta.subidaDoCoracao, fora)],
+                                      chega: parou + 0.3, sai: vaiSubir - 0.5)]
         }
     }
     static let coracao = Coracao()
@@ -415,12 +498,26 @@ enum Floresta {
         init(_ t: Double, _ f: CGFloat) { self.t = t; self.f = f }
     }
 
+    // A ida começa FORA da tela (antes ela começava em 0,01, que no iPad já é dentro da tela, e o
+    // coelho aparecia no lugar). A primeira parada que aparece no iPhone é 0,34: na 0,26, sentado
+    // e andando junto com o chão, ele saía pela esquerda e voltava pulando.
+    private static let coelhoIda: [Parada] = [
+        Parada(0, foraEsquerda), Parada(10, 0.12), Parada(20, 0.34), Parada(70, 0.46), Parada(80, 0.61),
+        Parada(130, 0.72), Parada(140, 0.94), Parada(190, foraDireita)]
+    private static let coelhoVolta: [Parada] = [
+        Parada(300, foraDireita), Parada(310, 0.98), Parada(360, 0.92), Parada(370, 0.78), Parada(380, 0.62),
+        Parada(420, 0.57), Parada(430, 0.42), Parada(440, 0.29), Parada(490, 0.14), Parada(500, foraEsquerda)]
+
+    // Os dois caminhos do coelho, cada um começando na hora da agenda (o ritmo não muda)
     static let caminhosDoCoelho: [[Parada]] = [
-        [Parada(0, 0.01), Parada(10, 0.12), Parada(20, 0.26), Parada(70, 0.46), Parada(80, 0.61),
-         Parada(130, 0.72), Parada(140, 0.94), Parada(190, foraDireita)],
-        [Parada(300, foraDireita), Parada(310, 0.98), Parada(360, 0.92), Parada(370, 0.78), Parada(380, 0.62),
-         Parada(420, 0.57), Parada(430, 0.42), Parada(440, 0.29), Parada(490, 0.14), Parada(500, foraEsquerda)]
+        comecando(coelhoIda, em: agenda.coelhoIda),
+        comecando(coelhoVolta, em: agenda.coelhoVolta)
     ]
+
+    private static func comecando(_ paradas: [Parada], em inicio: Double) -> [Parada] {
+        guard let primeira = paradas.first else { return paradas }
+        return paradas.map { Parada($0.t + inicio - primeira.t, $0.f) }
+    }
 
     // Quadros extraídos do vídeo "Coelhinho pronto" (12 por segundo), todos do mesmo tamanho,
     // com o coelho no meio do quadro e os pés no mesmo lugar:
@@ -476,7 +573,7 @@ enum Floresta {
     }
 
     // Velocidade do chão no iPhone (pixels da Georgia por segundo; no iPad o chão é parado)
-    static var velocidadeDoChao: CGFloat { desliza ? 2 * largura / CGFloat(RelogioDaHistoria.ciclo) : 0 }
+    static var velocidadeDoChao: CGFloat { desliza ? 2 * largura / CGFloat(periodoDosMovimentos) : 0 }
 
     // Onde o coelho está, qual quadro e para que lado olha. nil = fora de cena.
     // As POSES diferentes do pulo, na ordem: em que instante do vídeo cada uma aparece e quanto do
@@ -541,20 +638,21 @@ enum Floresta {
         return nil
     }
 
-    // Frequência que fecha o ciclo: "n" voltas completas em 10 minutos (balanços, estrelas…)
-    static func onda(_ n: Double, _ relogio: Double, fase: Double = 0) -> Double {
-        sin(2 * .pi * n * relogio / RelogioDaHistoria.ciclo + fase)
+    // Movimento que se repete: "n" voltas completas a cada periodoDosMovimentos (balanços,
+    // estrelas…). Recebe o tempo CONTÍNUO da história: assim nada dá pulo quando ela recomeça.
+    static func onda(_ n: Double, _ tempo: Double, fase: Double = 0) -> Double {
+        sin(2 * .pi * n * tempo / periodoDosMovimentos + fase)
     }
 }
 
 // O RELÓGIO DA HISTÓRIA
-// O roteiro tem 600 segundos de animação.
+// Um ciclo da história: o eclipse, as peças da agenda e o coração (uns 12 min); depois recomeça.
 // Ela só anda com a vela ACESA: pausa quando a vela apaga e volta do zero com uma vela nova.
 // A vista converte o tempo acumulado em tempo de cena conforme a largura visível.
 @MainActor
 enum RelogioDaHistoria {
-    // ⚙️ Duração da história, em segundos
-    static let ciclo: Double = 600
+    // Duração de um ciclo, em segundos: termina quando o coração sai (Floresta.agenda)
+    static var ciclo: Double { Floresta.agenda.fim }
 
     private static var acumulado: TimeInterval = 0
     private static var acesaDesde: Date?
@@ -616,6 +714,9 @@ struct FlorestaView: View {
     var sombra = false
     var acesa = true
     var camada: CamadaDaSombra? = nil   // no teatro: desenha só as sombras desta camada (nil = todas)
+    // Onde terminam os botões de cima, com folga, na altura desta vista (pontos): as estrelas
+    // param abaixo dela. nil = só a conta de sempre (Floresta.topoLivre).
+    var linhaDeCima: CGFloat? = nil
 
     @Environment(\.accessibilityReduceMotion) private var reduzirMovimento
 
@@ -642,7 +743,7 @@ struct FlorestaView: View {
             // O relógio continua o mesmo: cenário e sombra passam pelo meio juntos.
             let percurso = sombra ? larguraVisivel / max(camada?.escala ?? 1, 0.1) * 1.2 : larguraVisivel
             ZStack {
-                faixa(relogio, larguraVisivel: percurso) {
+                faixa(larguraVisivel: percurso) {
                     if !sombra { peca(Floresta.fundo) }
                     ForEach(Floresta.arvores.indices, id: \.self) { i in
                         let p = Floresta.arvores[i]
@@ -659,7 +760,7 @@ struct FlorestaView: View {
                     coracao(relogio)
                 }
                 if mostra(.arbustos) {
-                    faixa(relogio, larguraVisivel: percurso) {
+                    faixa(larguraVisivel: percurso) {
                         ForEach(Floresta.arbustos.indices, id: \.self) { i in peca(Floresta.arbustos[i]) }
                     }
                 }
@@ -679,6 +780,13 @@ struct FlorestaView: View {
     }
 
     private var escala: CGFloat { Floresta.escala * quadro.escala }
+
+    // O tempo contínuo da história (não recomeça a cada ciclo). Os movimentos que se repetem
+    // (balanços, estrelas pulsando, o chão do iPhone) usam este, para não darem pulo no recomeço.
+    private var tempoContinuo: Double {
+        reduzirMovimento ? Floresta.instanteDoEclipse
+                         : RelogioDaHistoria.tempo(em: Date(timeIntervalSinceReferenceDate: t))
+    }
 
     // Recorta as peças só nas LATERAIS da tela. Em cima e embaixo não: o recorte de cima cortava
     // estrelas e passarinhos na altura da barra de status (a área segura do aparelho).
@@ -714,11 +822,12 @@ struct FlorestaView: View {
     }
 
     // Cada par de painéis fecha uma volta. O espelho une bordas idênticas.
-    private func faixa<Conteudo: View>(_ relogio: Double, larguraVisivel: CGFloat,
+    // Anda no tempo contínuo: a mata não dá pulo quando a história recomeça.
+    private func faixa<Conteudo: View>(larguraVisivel: CGFloat,
                                        alternaEspelho: Bool = true,
                                        @ViewBuilder conteudo: () -> Conteudo) -> some View {
         let largura = Floresta.largura * escala
-        let voltas = Floresta.desliza && !reduzirMovimento ? 2 * relogio / RelogioDaHistoria.ciclo : 0
+        let voltas = Floresta.desliza && !reduzirMovimento ? 2 * tempoContinuo / Floresta.periodoDosMovimentos : 0
         let painel = Int(floor(voltas))
         let fracao = voltas - Double(painel)
         let vizinhos = max(1, Int(ceil(larguraVisivel / Floresta.largura)))
@@ -753,10 +862,10 @@ struct FlorestaView: View {
     private func andante(_ a: Floresta.Andante, _ relogio: Double, _ larguraVisivel: CGFloat,
                          _ percurso: CGFloat) -> some View {
         if let p = Floresta.posicao(a.pontos, relogio, larguraVisivel: larguraVisivel, tamanho: a.largura) {
-            let caminho = a.astro ? Floresta.caminhoDoAstro(p.dx, larguraVisivel: larguraVisivel) : p.dx
+            let caminho = a.astro ? Floresta.caminhoDoAstro(p.dx, larguraVisivel: larguraVisivel, tamanho: a.largura) : p.dx
             let dx = Floresta.esticar(caminho, larguraVisivel: larguraVisivel,
                                       percurso: sombra ? percurso : nil, tamanho: a.largura)
-            let balanco = reduzirMovimento ? 0 : a.balanco * CGFloat(Floresta.onda(57, relogio, fase: a.fase * 4))
+            let balanco = reduzirMovimento ? 0 : a.balanco * CGFloat(Floresta.onda(57, tempoContinuo, fase: a.fase * 4))
             let vista = comSombraDePapel(
                 // O rosto (olhos e bochechas) e os raios do sol andam no TEMPO REAL, no ritmo dos
                 // vídeos da Georgia (12 quadros/s). Antes andavam no relógio da história, que no
@@ -781,7 +890,7 @@ struct FlorestaView: View {
     private func coracao(_ relogio: Double) -> some View {
         if let p = Floresta.passagemDoCoracao(relogio) {
             let c = Floresta.coracao
-            let balanco = reduzirMovimento ? 0 : 6 * CGFloat(Floresta.onda(57, relogio, fase: 0.9))
+            let balanco = reduzirMovimento ? 0 : 6 * CGFloat(Floresta.onda(57, tempoContinuo, fase: 0.9))
             let y = Floresta.yDoCoracao(p, relogio) + balanco
             comSombraDePapel(Image(nomeDoCoracao(relogio, passagem: p))
                 .resizable()
@@ -859,16 +968,20 @@ struct FlorestaView: View {
         ForEach(Floresta.estrelas.indices, id: \.self) { i in
             let e = Floresta.estrelas[i]
             let tamanho = e.altura * Floresta.aumentoDosElementos
-            // Parada: inteira abaixo da barra de cima (mesmo pulsando e flutuando).
+            // Parada: inteira abaixo dos botões de cima (mesmo pulsando e flutuando). A linha vem de
+            // quem desenha a cena, medida na tela de verdade (no palco e na parede das sombras);
+            // vale a mais baixa entre ela e o alto do céu de sempre (topoLivre).
             // Fora: inteira acima do alto da tela, em qualquer aparelho.
-            let minimoY = Floresta.topoLivre(no: quadro) + tamanho * 1.06 / 2 + 10
+            let abaixoDosBotoes = linhaDeCima.map { ($0 - quadro.origem.y) / max(escala, 0.001) } ?? 0
+            let topo = max(Floresta.topoLivre(no: quadro), abaixoDosBotoes)
+            let minimoY = topo + tamanho * 1.06 / 2 + 10
             let altoDaTela = (-quadro.origem.y - 80) / max(escala, 0.001)
             let foraY = min(altoDaTela, 0) - tamanho
             if let p = Floresta.posicao(Floresta.caminho(da: e, minimoY: minimoY, foraY: foraY), relogio,
                                         larguraVisivel: larguraVisivel, tamanho: tamanho) {
                 let dx = Floresta.esticar(p.dx, larguraVisivel: larguraVisivel,
                                           percurso: sombra ? percurso : nil, tamanho: tamanho)
-                let vista = estrela(e, relogio)
+                let vista = estrela(e)
                     .position(x: quadro.x(Floresta.noQuadro(x: Floresta.centroX + dx)),
                               y: quadro.y(Floresta.noQuadro(y: p.y)))
                 if sombra { vista } else { vista.mask(FlorestaView.recorteDosLados) }
@@ -876,10 +989,10 @@ struct FlorestaView: View {
         }
     }
 
-    private func estrela(_ e: Floresta.Estrela, _ relogio: Double) -> some View {
-        let pulso = reduzirMovimento ? 0 : (1 + Floresta.onda(86, relogio, fase: e.fase)) / 2
+    private func estrela(_ e: Floresta.Estrela) -> some View {
+        let pulso = reduzirMovimento ? 0 : (1 + Floresta.onda(86, tempoContinuo, fase: e.fase)) / 2
         let tamanho = e.altura * Floresta.aumentoDosElementos * escala * (1 + 0.06 * pulso)
-        let flutua = reduzirMovimento ? 0 : 8 * Floresta.onda(48, relogio, fase: e.fase)
+        let flutua = reduzirMovimento ? 0 : 8 * Floresta.onda(48, tempoContinuo, fase: e.fase)
         return comSombraDePapel(Image(e.nome)
             .resizable()
             .scaledToFit()

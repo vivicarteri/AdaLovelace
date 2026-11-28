@@ -51,7 +51,8 @@ struct TeatroSombrasView: View {
                                 ForEach(CamadaDaSombra.allCases, id: \.self) { camada in
                                     CenaArte(quadro: Quadro(geo: geo), mostrarPersonagens: true,
                                              sombra: true, congelado: congelado, luz: sessao.movimento,
-                                             camadaDaSombra: camada)
+                                             camadaDaSombra: camada,
+                                             linhaDeCima: linhaDasEstrelas(camada, luz: luz, altura: h))
                                         // A transparência é de cada silhueta (FlorestaView): onde duas se
                                         // cruzam, a sombra fica mais escura, como num teatro de verdade.
                                         .blur(radius: camada.borrao * fator)
@@ -123,6 +124,19 @@ struct TeatroSombrasView: View {
         .rotorCamadasDePapel(mostrarCamadas ? camadasDoRotor : [], in: rotorDaCena)
         .accessibilityLabel(acesa ? "Teatro de sombras. As sombras da cena de papel aparecem na parede"
                                   : "Teatro de sombras, no escuro. A vela está apagada")
+    }
+
+    // Na parede as estrelas também param abaixo dos botões de cima. Aqui a vista vai até o alto
+    // da tela (a área segura vem de fora, em "margens"), e a sombra passa por duas mudanças antes
+    // de chegar na parede: a camada encolhe a partir do chão (camada.escala) e a luz estica a
+    // partir da chama (luz.descida e luz.escalaY). A conta faz o caminho de volta, para achar a
+    // linha certa dentro da cena.
+    private func linhaDasEstrelas(_ camada: CamadaDaSombra, luz: Projecao, altura h: CGFloat) -> CGFloat {
+        let naParede = margens.top + MedidasBarraDoPalco.linhaDasEstrelas
+        let chama = luz.ancora.y * h
+        let antesDaLuz = chama + (naParede - chama) / max(luz.escalaY, 0.01) - luz.descida
+        let chao = camada.ancoraY * h
+        return chao + (antesDaLuz - chao) / max(camada.escala, 0.01)
     }
 }
 

@@ -16,6 +16,9 @@ struct VelaView: View {
     var enfeites: [Enfeite] = []
     var caidos: Set<UUID> = []
     var marcas: [Marca] = []
+    // Palco: o alfinete que sai da vela CAI até o prato (a vela é cortada na borda dele).
+    // Ateliê e prévias: ele só some na hora (pegar um alfinete da vela não é uma queda).
+    var quedaComFisica = false
     @Environment(\.accessibilityReduceMotion) private var reduzirMovimento
 
     static func espacoChama(largura: CGFloat) -> CGFloat { largura * 1.8 }
@@ -142,13 +145,16 @@ struct VelaView: View {
                         .frame(width: abs(pontaX) + espessura * 2, height: espessura)
                         .position(x: meioX + pontaX / 2, y: linha)
                         .transition(.asymmetric(insertion: .opacity,
-                                                removal: .opacity.animation(.easeOut(duration: 0.1))))
+                                                removal: quedaComFisica ? .opacity.animation(.easeOut(duration: 0.1))
+                                                                        : .identity))
                     EnfeiteView(tipo: .alfinete, lado: enfeite.lado, largura: largura, estilo: enfeite.desenho)
                         .position(centro)
                         .transition(.asymmetric(insertion: .opacity,
-                                                removal: quedaDoAlfinete(lado: enfeite.lado, altura: h, centro: centro,
-                                                                         tamanho: tamanho,
-                                                                         vista: CGSize(width: larguraTotal, height: alturaTotal))))
+                                                removal: quedaComFisica
+                                                    ? quedaDoAlfinete(lado: enfeite.lado, altura: h, centro: centro,
+                                                                      tamanho: tamanho,
+                                                                      vista: CGSize(width: larguraTotal, height: alturaTotal))
+                                                    : .identity))
                 }
             }
         }

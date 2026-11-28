@@ -155,7 +155,10 @@ final class Haptics {
     private var chama: CHHapticAdvancedPatternPlayer?
     private var chamaTocando = false   // para religar a chama se o sistema reiniciar o motor
     private var segurar: CHHapticAdvancedPatternPlayer?
-    private var audioPrego: AVAudioPlayer?
+    // O Prego.wav lido uma vez. Cada queda ganha o seu tocador: duas quedas seguidas tocam
+    // dois sons (um tocador só seria reagendado e cortaria o primeiro).
+    private var dadosDoPrego: Data?
+    private var audiosDoPrego: [AVAudioPlayer] = []
     private let somRiscoFosforo = SomRiscoFosforo()
 
     // SEM MOTOR DE VIBRAÇÃO (iPad): os sons que vão junto com a vibração no iPhone (acender, apagar
@@ -213,9 +216,7 @@ final class Haptics {
             return
         }
         do {
-            let player = try AVAudioPlayer(contentsOf: url)
-            player.prepareToPlay()
-            audioPrego = player
+            dadosDoPrego = try Data(contentsOf: url)
         } catch {
             print("Erro ao carregar Prego.wav: \(error)")
         }
@@ -240,12 +241,19 @@ final class Haptics {
 
     // Agenda o WAV original para tocar no instante em que o enfeite encosta (depois de "atraso" segundos)
     private func tocarAudioDoPrego(volume: Float, depois atraso: TimeInterval) {
-        guard Chaves.ligado(Chaves.somObjetos), let player = audioPrego else { return }
-        player.stop()
-        player.currentTime = 0
+        guard Chaves.ligado(Chaves.somObjetos), let dadosDoPrego,
+              let player = try? AVAudioPlayer(data: dadosDoPrego) else { return }
+        let espera = max(0, atraso)
         player.volume = max(0, min(1, volume))
         player.prepareToPlay()
-        player.play(atTime: player.deviceCurrentTime + max(0, atraso))
+        player.play(atTime: player.deviceCurrentTime + espera)
+        // Fica guardado até terminar de tocar
+        audiosDoPrego.append(player)
+        let duracao = player.duration
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(espera + duracao + 0.2))
+            self?.audiosDoPrego.removeAll { $0 === player }
+        }
     }
 
     private func ligarSePreciso() throws {

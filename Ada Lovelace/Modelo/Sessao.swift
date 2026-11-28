@@ -394,18 +394,41 @@ final class Sessao: ObservableObject {
         let novos = config.enfeites.filter { !caidos.contains($0.id) && config.caiu($0, progresso: progresso) }
         if !novos.isEmpty {
             caidos.formUnion(novos.map(\.id))
-            if comSom, let maisAlto = novos.map(\.altura).max() {
-                // Vela grande + enfeite alto = cai de mais alto = som e batida mais fortes
-                let forca = maisAlto * (0.5 + 0.5 * config.posicaoSlider)
-                // A batida toca quando ele encosta no prato. A distância é medida em frações da
-                // vela mais alta, a mesma conta que a VelaView faz em pontos para desenhar a queda.
-                let distancia = CGFloat(maisAlto) * GeometriaVela.alturaCheia(posicao: config.posicaoSlider, alturaMaxima: 1)
-                haptics.prego(forca: Float(forca),
-                              depois: QuedaDoEnfeite.tempo(distancia: distancia, alturaMaxima: 1))
-            }
+            if comSom { agendarBatidas(novos) }
         }
 
         if progresso >= 1 { terminar(comSom: comSom) }
+    }
+
+    // ⚙️ Distância mínima entre duas batidas de enfeite no prato (segundos): dois caindo juntos
+    // soam como dois, e não como uma batida só
+    static let intervaloEntreBatidas: Double = 0.1
+    private var batidasAgendadas: [Date] = []   // quando cada batida já agendada vai tocar
+
+    // Cada enfeite que caiu toca o seu som e a sua vibração quando encosta no prato.
+    // Vela grande + enfeite alto = cai de mais alto = batida mais forte e um pouco mais tarde.
+    // A distância é medida em frações da vela mais alta, a mesma conta que a VelaView faz
+    // em pontos para desenhar a queda (QuedaDoEnfeite).
+    private func agendarBatidas(_ enfeites: [Enfeite]) {
+        let agora = Date()
+        batidasAgendadas.removeAll { $0 < agora }
+        let fracaoDaVela = GeometriaVela.alturaCheia(posicao: config.posicaoSlider, alturaMaxima: 1)
+        let quedas = enfeites.map { e -> (forca: Double, tempo: Double) in
+            let distancia = CGFloat(e.altura) * fracaoDaVela
+            return (e.altura * (0.5 + 0.5 * config.posicaoSlider),
+                    QuedaDoEnfeite.tempo(distancia: distancia, alturaMaxima: 1))
+        }.sorted { $0.tempo < $1.tempo }
+        for queda in quedas {
+            var quando = agora.addingTimeInterval(queda.tempo)
+            // Outra batida já toca perto deste instante: esta espera um pouquinho depois dela
+            while let perto = batidasAgendadas.first(where: {
+                abs($0.timeIntervalSince(quando)) < Sessao.intervaloEntreBatidas
+            }) {
+                quando = perto.addingTimeInterval(Sessao.intervaloEntreBatidas)
+            }
+            batidasAgendadas.append(quando)
+            haptics.prego(forca: Float(queda.forca), depois: quando.timeIntervalSince(agora))
+        }
     }
 
     private func terminar(comSom: Bool) {

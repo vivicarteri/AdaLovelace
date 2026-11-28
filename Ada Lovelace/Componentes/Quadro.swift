@@ -193,6 +193,7 @@ struct CenaArte: View {
     var congelado = false   // durante a transição de zoom tudo para, para o movimento ficar liso
     var luz: Movimento? = nil   // só nas sombras: a chama inclina, a luz muda de lugar e as sombras andam
     var camadaDaSombra: CamadaDaSombra? = nil   // na floresta: só uma camada de sombras (nil = todas)
+    var linhaDeCima: CGFloat? = nil   // as estrelas param abaixo desta linha (os botões de cima)
 
     // ⚙️ Quanto as sombras andam quando a chama deita (em pixels do Quadro) e quanto elas giram
     static let andarDaSombra: CGFloat = 60   // (era 110: as sombras andavam demais ao mexer o aparelho)
@@ -218,7 +219,7 @@ struct CenaArte: View {
                     // Cenário novo da Georgia: a floresta, com o céu (sol, lua, nuvens, passarinhos).
                     // Veja Floresta.swift. Ela só aparece com a vela acesa.
                     FlorestaView(quadro: quadro, t: t, sombra: sombra, acesa: mostrarPersonagens,
-                                 camada: camadaDaSombra)
+                                 camada: camadaDaSombra, linhaDeCima: linhaDeCima)
                         .offset(x: sombra && !reduzirMovimento ? CenaArte.tremor(t: t, indice: 1).dx : 0)
                 } else {
                     camada("tenda", PosicaoArte.tenda, t: t, indice: 0)

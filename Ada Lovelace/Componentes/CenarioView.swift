@@ -10,6 +10,7 @@ struct CenarioView: View {
     var mostrarPersonagens: Bool
     var comFundo = true      // false = só as figuras (usado para fazer as sombras)
     var quadro: Quadro? = nil // posição da arte. Quem desenha a vela passa o mesmo quadro, para tudo bater.
+    var linhaDeCima: CGFloat? = nil   // as estrelas param abaixo desta linha (os botões de cima)
 
     var body: some View {
         if arteExiste("tenda") {
@@ -31,7 +32,7 @@ struct CenarioView: View {
                 (acesa ? Cores.fundoClaro : Cores.fundoEscuro)
                     .ignoresSafeArea()
             }
-            CenaArte(quadro: quadro, mostrarPersonagens: mostrarPersonagens)
+            CenaArte(quadro: quadro, mostrarPersonagens: mostrarPersonagens, linhaDeCima: linhaDeCima)
             if comFundo {
                 // Anoitecendo conforme a vela queima
                 Color(red: 0.08, green: 0.1, blue: 0.3)

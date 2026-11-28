@@ -86,7 +86,7 @@ enum CenaAoVivo {
     // Posição de uma peça do céu (sol, lua, nuvem, passarinho) no instante t, igual ao desenho
     private static func posicao(_ a: Floresta.Andante, _ t: Double, _ c: Contexto) -> (dx: CGFloat, y: CGFloat)? {
         guard let p = Floresta.posicao(a.pontos, t, larguraVisivel: c.larguraVisivel, tamanho: a.largura) else { return nil }
-        return (a.astro ? Floresta.caminhoDoAstro(p.dx, larguraVisivel: c.larguraVisivel) : p.dx, p.y)
+        return (a.astro ? Floresta.caminhoDoAstro(p.dx, larguraVisivel: c.larguraVisivel, tamanho: a.largura) : p.dx, p.y)
     }
 
     private static func lado(_ dx: CGFloat) -> String { dx < 0 ? "esquerda" : "direita" }

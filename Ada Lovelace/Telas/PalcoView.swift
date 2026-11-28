@@ -12,6 +12,10 @@ import TipKit
 enum MedidasBarraDoPalco {
     static let margemSuperior: CGFloat = 8
     static let diametro: CGFloat = 44
+    // ⚙️ Folga entre o fim dos botões de cima e o alto das estrelas paradas (pontos)
+    static let folgaDasEstrelas: CGFloat = 16
+    // Onde as estrelas podem parar, a partir do alto da área segura: abaixo dos botões, com folga
+    static var linhaDasEstrelas: CGFloat { margemSuperior + diametro + folgaDasEstrelas }
 }
 
 struct PalcoView: View {
@@ -269,7 +273,8 @@ struct PalcoView: View {
             // APAGA a vela no meio: o cenário fica pausado e escuro, não preto. Com a vela nova ou
             // que acabou, a cortina fechada cobre tudo.
             CenarioView(acesa: acesa, progresso: sessao.progresso,
-                        mostrarPersonagens: estado == .acesa || estado == .apagada, quadro: g.quadro)
+                        mostrarPersonagens: estado == .acesa || estado == .apagada, quadro: g.quadro,
+                        linhaDeCima: MedidasBarraDoPalco.linhaDasEstrelas)
                 .accessibilityHint(acesa ? "Use o rotor Camadas de papel para explorar a cena" : "")
 
             // VoiceOver: uma camada de papel por vez (rotor "Camadas de papel"). Fica embaixo
@@ -320,7 +325,8 @@ struct PalcoView: View {
                          fumacaCurta: fumacaDoFim != nil,
                          movimento: sessao.movimento,
                          enfeites: sessao.config.enfeites,
-                         caidos: sessao.caidos)
+                         caidos: sessao.caidos,
+                         quedaComFisica: true)
                     .accessibilityHidden(true)   // o VoiceOver usa o alvo "vela + prato" (velaAcessivel)
                     .position(x: g.centroX,
                               y: g.baseY - (alturaCheia + espacoChama) / 2 + (afundando ? alturaCheia + espacoChama : 0))
@@ -1124,9 +1130,13 @@ private struct LayoutPalco {
                 y: botaoBaixoY + CaixaFosforoView.meioDoDesenhoAcima(largura: larguraCaixa))
     }
 
+    // ⚙️ Folga a mais entre o botão de baixo (e a caixa de fósforos) e as alças do prato,
+    // só no iPhone (pontos). No iPad o botão continua onde estava.
+    private static let respiroDosBotoesDeBaixo: CGFloat = 20
+
     // Botão de baixo à esquerda (personalizar / acabar com a vela).
     // No iPhone o prato da vela vai quase de ponta a ponta: aí o botão sobe para ficar
-    // acima da alça esquerda do prato, em vez de ficar por cima dela.
+    // acima da alça esquerda do prato, em vez de ficar por cima dela, com uma folga de respiro.
     // No iPad o prato fica longe do botão e ele continua no lugar de sempre.
     var botaoBaixoX: CGFloat { tamanho.width * 0.17 }
     var botaoBaixoY: CGFloat {
@@ -1137,7 +1147,16 @@ private struct LayoutPalco {
         let alcaTermina = alcaComeca + PosicaoArte.suporte.width * quadro.escala * 0.26
         let encosta = botaoBaixoX + raio > alcaComeca && botaoBaixoX - raio < alcaTermina
         guard encosta else { return normal }
-        return min(normal, topoDoPrato - raio - 10)
+        let respiro = LayoutPalco.ehIPhone ? LayoutPalco.respiroDosBotoesDeBaixo : 0
+        return min(normal, topoDoPrato - raio - 10 - respiro)
+    }
+
+    private static var ehIPhone: Bool {
+        #if canImport(UIKit)
+        UIDevice.current.userInterfaceIdiom == .phone
+        #else
+        false
+        #endif
     }
 
     // A lixa é a faixa da própria caixa: a conta abaixo leva a faixa de dentro
