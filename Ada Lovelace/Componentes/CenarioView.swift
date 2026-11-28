@@ -25,7 +25,7 @@ struct CenarioView: View {
         }
     }
 
-    // Com a arte da Georgia: camadas de papel, escurecendo aos poucos (do dia para a noite)
+    // Com a arte: camadas de papel, escurecendo aos poucos (do dia para a noite)
     private func cenarioComArte(_ quadro: Quadro) -> some View {
         ZStack {
             if comFundo {
@@ -232,7 +232,7 @@ private struct Personagens: View {
 }
 
 // O cenário provisório só aparece quando a "tenda" NÃO está no Assets.
-// Como a arte da Georgia já chegou, as peças provisórias ficam aqui separadas.
+// As peças provisórias ficam aqui separadas.
 
 #Preview("Provisório: Tenda") {
     Tenda()

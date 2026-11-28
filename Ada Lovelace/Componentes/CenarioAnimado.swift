@@ -1,17 +1,17 @@
 //  CenarioAnimado.swift
-//  As peças do CENÁRIO NOVO da Georgia (desenhado deitado) que piscam o olho.
+//  As peças do CENÁRIO NOVO (desenhado deitado) que piscam o olho.
 //
 //  COMO ISSO FOI FEITO
-//  A Georgia mandou cada peça como um vídeo .mov com fundo transparente
+//  Cada peça veio como um vídeo .mov com fundo transparente
 //  (12 quadros por segundo, 10 s, numa tela de 3840 × 2878).
 //  Num vídeo desses, quase tudo fica parado: só o olho muda. Então o vídeo foi convertido em:
 //    - a peça parada, uma vez só ("cenarioLua");
 //    - só o pedacinho do olho em cada quadro diferente ("cenarioLua_1", "cenarioLua_2"…);
 //    - o RITMO: qual pedacinho aparece em cada um dos 120 quadros (0 = olho da peça parada).
-//  Assim o app toca exatamente o que ela animou, gastando bem pouca memória
+//  Assim o app toca exatamente a animação do vídeo, gastando bem pouca memória
 //  (o quadro inteiro do vídeo ocuparia uns 44 MB de memória CADA).
 //
-//  As posições estão em pixels da tela da Georgia (3840 × 2878).
+//  As posições estão em pixels da tela da arte (3840 × 2878).
 //  ⚠️ Ainda são as posições dos vídeos de teste: quando o cenário final chegar,
 //  cada peça vai para o lugar dela no cenário.
 
@@ -20,8 +20,8 @@ import SwiftUI
 // Uma peça parada + o pedacinho que muda, tocados no ritmo do vídeo
 struct PecaAnimada {
     let nome: String
-    let peca: CGRect          // onde a peça fica na tela da Georgia
-    let pedaco: CGRect        // onde fica o pedacinho que muda (também na tela da Georgia)
+    let peca: CGRect          // onde a peça fica na tela da arte
+    let pedaco: CGRect        // onde fica o pedacinho que muda (também na tela da arte)
     let ritmo: [Int]          // um número por quadro do vídeo; 0 = sem pedacinho (peça parada)
     var fps: Double = 12
 
@@ -34,7 +34,7 @@ struct PecaAnimada {
 }
 
 enum CenarioNovo {
-    // Tamanho da tela em que a Georgia desenha o cenário deitado
+    // Tamanho da tela em que o cenário deitado foi desenhado
     static let largura: CGFloat = 3840
     static let altura: CGFloat = 2878
 
@@ -62,7 +62,7 @@ enum CenarioNovo {
                 28, 28, 28, 37, 27, 36, 26, 25, 24, 23, 29, 30, 31, 32, 33, 34]
     )
 
-    // Peças que chegaram em 17/11 (pasta da Georgia: sol.mov e passarinho2.mov).
+    // Peças dos vídeos sol.mov e passarinho2.mov.
     // Esses vídeos vieram com fundo PRETO (sem transparência): o preto de fora do
     // contorno branco foi apagado e virou transparente.
 
@@ -144,7 +144,7 @@ struct PecaAnimadaView: View {
 
     private func desenho(_ tamanho: CGSize, tempo: Double) -> some View {
         let q = peca.quadro(t: tempo)
-        // Quanto a peça encolheu/cresceu da tela da Georgia para a tela do aparelho
+        // Quanto a peça encolheu/cresceu da tela da arte para a tela do aparelho
         let ex = tamanho.width / peca.peca.width
         let ey = tamanho.height / peca.peca.height
         let p = peca.pedaco
@@ -174,7 +174,7 @@ struct PecaAnimadaView: View {
 
 // FAIXA INFINITA
 // As peças do cenário novo passam devagarinho pela tela e, quando saem de um lado,
-// voltam pelo outro, para sempre (como na animatic da Georgia: a lua vai para a direita…).
+// voltam pelo outro, para sempre (como na animatic: a lua vai para a direita…).
 //
 // As medidas estão em pixels do Quadro (o mesmo da arte atual, 1290 de largura = a tela do iPhone).
 // A volta inteira é mais larga que a tela: cada peça passa um tempo escondida fora da tela

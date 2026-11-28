@@ -60,7 +60,7 @@ struct TeatroSombrasView: View {
                                 }
                             }
                         } else if arteExiste("tendasombra") {
-                            // Sombras desenhadas pela Georgia (circo)
+                            // Sombras desenhadas (circo)
                             CenaArte(quadro: Quadro(geo: geo), mostrarPersonagens: true,
                                      sombra: true, congelado: congelado, luz: sessao.movimento)
                                 .opacity(0.7)
@@ -83,7 +83,7 @@ struct TeatroSombrasView: View {
 
                 // Bambinela (cortina de cima)
                 VStack(spacing: 0) {
-                    // A arte da Georgia é bem comprida: ela preenche a faixa. Numa tela em pé
+                    // A arte é bem comprida: ela preenche a faixa. Numa tela em pé
                     // (iPhone) sobram os lados, que são cortados; numa tela deitada (iPad) a faixa
                     // fica mais alta, para a cortina aparecer INTEIRA (antes cortava as franjas).
                     let faixa = MedidasBambinela.altura(largura: w, altura: h)
@@ -99,7 +99,7 @@ struct TeatroSombrasView: View {
                 .ignoresSafeArea(edges: .top)
                 .accessibilityHidden(true)
 
-                // (O letreiro "Teatro de Sombras" saiu, a pedido do time: a cortina de cima fica sozinha.)
+                // (Sem letreiro: a cortina de cima fica sozinha.)
 
                 // A caixa do teatro, lá embaixo. Tocar nela entra de novo (a câmera vai até ela).
                 Button(action: entrar) {
@@ -157,7 +157,7 @@ enum MedidasBambinela {
     static let alturaMaxima: CGFloat = 0.22
     static let fimDasFranjas: CGFloat = 437.0 / 476.0
 
-    // Largura ÷ altura da arte (lida do Assets; se a Georgia trocar a imagem, acompanha)
+    // Largura ÷ altura da arte (lida do Assets; se a imagem mudar, acompanha)
     static let proporcao: CGFloat? = {
         #if canImport(UIKit)
         if let tamanho = UIImage(named: nome)?.size, tamanho.height > 0 { return tamanho.width / tamanho.height }

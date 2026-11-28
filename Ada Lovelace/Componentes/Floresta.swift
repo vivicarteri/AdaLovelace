@@ -1,9 +1,9 @@
 //  Floresta.swift
-//  O cenário novo da Georgia: a floresta, montada igual ao mockup dela (IMG_3976).
+//  O cenário novo: a floresta, montada igual ao mockup (IMG_3976).
 //
 //  COMO FOI MONTADO
-//  A Georgia desenhou a floresta numa tela DEITADA de 2732 × 2048 (a tela do iPad deitado).
-//  Todas as medidas aqui estão nessa tela ("pixels da Georgia"). Ela é encaixada pela ALTURA:
+//  A floresta foi desenhada numa tela DEITADA de 2732 × 2048 (a tela do iPad deitado).
+//  Todas as medidas aqui estão nessa tela ("pixels da arte"). Ela é encaixada pela ALTURA:
 //    - iPad: aparece a floresta inteira (deitado) e ela fica PARADA; só o céu se mexe.
 //    - iPhone: a mata forma um rolo contínuo (como uma câmera passando). O céu (sol, lua,
 //      nuvens, pássaros, estrelas, coração) faz o mesmo roteiro do iPad, na tela do iPhone.
@@ -20,7 +20,7 @@
 //       pássaro (a AGENDA, que nunca deixa dois deles se encostarem). As estrelas têm o tempo delas.
 //    3. Quando o sol e a lua saem, o coração desce, abre as fitas, fecha e sobe ("The lovers").
 //    4. Quando o coração sai, começa um novo eclipse.
-//  O caminho e o ritmo de cada peça são os do animatic da Georgia (seção "Roteiro" logo abaixo);
+//  O caminho e o ritmo de cada peça são os do animatic (seção "Roteiro" logo abaixo);
 //  a agenda só escolhe QUANDO cada uma começa.
 //
 //  Se "florestaFundo" não estiver no Assets, o app volta para a tenda do circo.
@@ -31,7 +31,7 @@ import UIKit
 #endif
 
 enum Floresta {
-    // Tela em que a Georgia desenhou a floresta
+    // Tela em que a floresta foi desenhada
     static let largura: CGFloat = 2732
     static let altura: CGFloat = 2048
 
@@ -44,7 +44,7 @@ enum Floresta {
     // A floresta está no Assets? (a conta é feita uma vez e guardada)
     static let ligada: Bool = arteExiste("florestaFundo")
 
-    // A COMPOSIÇÃO É UMA SÓ (o mockup da Georgia com o iPhone no meio do iPad): o iPad mostra a
+    // A COMPOSIÇÃO É UMA SÓ (o mockup com o iPhone no meio do iPad): o iPad mostra a
     // floresta inteira e o iPhone é uma JANELA no meio dela, na MESMA escala. Por isso as árvores,
     // as cores e o tamanho dos elementos são iguais nos dois; só muda quanto da floresta aparece.
 
@@ -64,7 +64,7 @@ enum Floresta {
     static var desliza: Bool { noIPhone }
 
 
-    // Pixels da Georgia → pixels do Quadro (o mesmo sistema da vela e do resto do palco)
+    // Pixels da arte → pixels do Quadro (o mesmo sistema da vela e do resto do palco)
     static func noQuadro(x: CGFloat) -> CGFloat { Quadro.largura / 2 + (x - centroX) * escala }
     static func noQuadro(y: CGFloat) -> CGFloat { y * escala }
 
@@ -76,14 +76,14 @@ enum Floresta {
 
     struct Peca {
         let nome: String
-        let x: CGFloat, y: CGFloat, w: CGFloat, h: CGFloat   // canto de cima, pixels da Georgia
+        let x: CGFloat, y: CGFloat, w: CGFloat, h: CGFloat   // canto de cima, pixels da arte
         var tinta: Color = .white       // colorMultiply: escurece/azula a peça (branco = cor original)
         var espelho = false
         var sombra: CamadaDaSombra? = nil   // em qual camada ela faz sombra no teatro (nil = não faz)
     }
 
     // Cores (colorMultiply = cor desejada ÷ cor original da peça).
-    // ⚙️ Árvores do fundo: ROXO-escuro (pedido da Georgia). Na referência o tronco é ~(24, 22, 32);
+    // ⚙️ Árvores do fundo: ROXO-escuro. Na referência o tronco é ~(24, 22, 32);
     // aqui ele fica um pouco mais roxo, ~(27, 22, 44).
     static let roxoDasArvoresDoFundo = Color(red: 0.24, green: 0.19, blue: 0.38)
     static let arbustoEscuroRef = Color(red: 0.57, green: 0.57, blue: 0.58)    // arbustos de trás
@@ -91,7 +91,7 @@ enum Floresta {
 
     static let fundo = Peca(nome: "florestaFundo", x: 0, y: 0, w: 2732, h: 2048)   // o céu de fundo não faz sombra
 
-    // As árvores grandes nas posições em que a Georgia desenhou (iguais no iPhone e no iPad).
+    // As árvores grandes nas posições do desenho (iguais no iPhone e no iPad).
     // As cinza ficam na cor original; as do meio, roxo-escuras.
     static let arvores: [Peca] = [
         Peca(nome: "florestaFundoArvores2", x: 42, y: 660, w: 2522, h: 1381,
@@ -100,9 +100,9 @@ enum Floresta {
              sombra: .arvoresDaFrente)
     ]
 
-    // A Georgia mandou dois arbustos; do lado direito eles se repetem espelhados (como no mockup).
+    // São dois desenhos de arbusto; do lado direito eles se repetem espelhados (como no mockup).
     // Os de trás um pouco escurecidos, os da frente na cor original.
-    // Os dois do MEIO estão virados (pedido da Georgia): o lado mais alto de cada um fica para fora
+    // Os dois do MEIO estão virados: o lado mais alto de cada um fica para fora
     // e a parte baixa se encontra no meio, embaixo da vela.
     static let arbustos: [Peca] = [
         Peca(nome: "florestaArbusto1", x: 0, y: 1426, w: 1158, h: 622, tinta: arbustoEscuroRef, sombra: .arbustos),
@@ -112,16 +112,16 @@ enum Floresta {
         Peca(nome: "florestaArbusto2", x: 1114, y: 1691, w: 1144, h: 357, sombra: .arbustos)
     ]
 
-    // MARK: Roteiro (animatic da Georgia)
+    // MARK: Roteiro (animatic)
     //
-    // Tudo o que anda segue o ANIMATIC dela ("animaticqualidade baixa.mp4", 5 min).
+    // Tudo o que anda segue o ANIMATIC ("animaticqualidade baixa.mp4", 5 min).
     // No animatic aparecem 3 telas de iPhone lado a lado = a floresta inteira (o iPad deitado).
     // Cada peça tem PONTOS de passagem medidos nos quadros do vídeo:
     //   t: segundos do roteiro do app (o animatic tem 5 min e o app 10 min, então t = tempo do vídeo × 2)
     //   f: onde ela está na largura da FLORESTA INTEIRA (as 3 telas do animatic):
     //      0 = borda esquerda, 0.5 = meio, 1 = borda direita
     //      (Floresta.foraEsquerda / foraDireita = inteira fora da floresta)
-    //   y: altura do centro, em pixels da Georgia
+    //   y: altura do centro, em pixels da arte
     // O iPad mostra a floresta inteira (o animatic todo). O iPhone é a TELA DO MEIO do animatic:
     // ele vê só o terço do meio, então só aparece o que passa por ali, na ordem e no ritmo do
     // vídeo (as peças não correm mais para caber na tela pequena).
@@ -136,7 +136,7 @@ enum Floresta {
     static let foraEsquerda: CGFloat = -1000
     static let foraDireita: CGFloat = 1000
 
-    // f → distância até o meio da tela, em pixels da Georgia (tamanho: largura da peça).
+    // f → distância até o meio da tela, em pixels da arte (tamanho: largura da peça).
     // A conta é sempre na floresta inteira (2732), igual no iPhone e no iPad. Num iPad mais largo
     // que a floresta, usa a tela toda.
     static func distanciaDoMeio(_ f: CGFloat, larguraVisivel: CGFloat, tamanho: CGFloat) -> CGFloat {
@@ -254,7 +254,7 @@ enum Floresta {
     // Peça que anda no céu (sol, lua, nuvem, passarinho)
     struct Andante {
         let peca: PecaAnimada
-        let altura: CGFloat     // altura da peça, pixels da Georgia
+        let altura: CGFloat     // altura da peça, pixels da arte
         var pontos: [Ponto]
         var balanco: CGFloat = 0
         var fase: Double = 0
@@ -280,7 +280,7 @@ enum Floresta {
     // e saem pelos lados (4:40 do animatic = 9:20 do app).
     static let instanteDoEclipse: Double = 292
 
-    // A primeira linha livre do céu, logo abaixo da barra de cima (botões), em pixels da Georgia.
+    // A primeira linha livre do céu, logo abaixo da barra de cima (botões), em pixels da arte.
     // Vale para qualquer iPhone ou iPad: usa a área segura do aparelho (quadro.origem) e o
     // tamanho real da barra.
     static func topoLivre(no quadro: Quadro) -> CGFloat {
@@ -413,7 +413,7 @@ enum Floresta {
         tempo.truncatingRemainder(dividingBy: RelogioDaHistoria.ciclo)
     }
 
-    // Onde fica o alto da chama com a vela no tamanho padrão (pixels da Georgia).
+    // Onde fica o alto da chama com a vela no tamanho padrão (pixels da arte).
     // Vem das medidas da arte da vela (ArteVela): pavio da vela padrão menos a altura da chama.
     static var topoDaChamaPadrao: CGFloat {
         let cheia = GeometriaVela.alturaCheia(posicao: VelaConfig().posicaoSlider, alturaMaxima: ArteVela.alturaMaxima)
@@ -424,9 +424,8 @@ enum Floresta {
     // MARK: Coração
     // O CORAÇÃO "The lovers": aparece UMA vez por ciclo, quando o sol e a lua já saíram da tela
     // (agenda.coracao); quando ele sai, começa um novo eclipse. Os tempos são os do animatic.
-    // No animatic ele também abria a história, mas o time preferiu começar com o sol e a lua: o
-    // coração é das poucas peças que descem de cima, e abrir com ele causava estranheza.
-    // A ORDEM (pedido da Georgia): ele DESCE até parar → SÓ ENTÃO abre as fitas →
+    // A história começa com o sol e a lua, e não com o coração.
+    // A ORDEM: ele DESCE até parar → SÓ ENTÃO abre as fitas →
     // fica parado → FECHA as fitas → SÓ ENTÃO sobe e sai pelo alto. Nunca anda com as fitas abertas.
     // ⚙️ Quanto tempo ele leva descendo, parado com as fitas e subindo (segundos)
     static let descidaDoCoracao: Double = 28
@@ -434,7 +433,7 @@ enum Floresta {
     static let subidaDoCoracao: Double = 33
     static var duracaoDoCoracao: Double { descidaDoCoracao + coracaoParado + subidaDoCoracao }
     struct PassagemDoCoracao {
-        let pontos: [(t: Double, y: CGFloat)]   // y = centro, pixels da Georgia (fora = acima da tela)
+        let pontos: [(t: Double, y: CGFloat)]   // y = centro, pixels da arte (fora = acima da tela)
         let chega: Double     // quando as fitas abrem
         let sai: Double       // quando as fitas terminam de fechar
         var inicio: Double { pontos.first?.t ?? 0 }
@@ -443,7 +442,7 @@ enum Floresta {
 
     struct Coracao {
         let nome = "florestaCoracao"
-        let w: CGFloat = 720, h: CGFloat = 566     // tamanho desenhado, pixels da Georgia
+        let w: CGFloat = 720, h: CGFloat = 566     // tamanho desenhado, pixels da arte
         var fora: CGFloat { -h / 2 - 40 }          // inteiro acima da tela
         var passagens: [PassagemDoCoracao] {
             // Centro parado: 0,40 da altura (medido na tela do meio do animatic em alta).
@@ -547,10 +546,10 @@ enum Floresta {
     // 1 = mistura o tempo todo). Pouca mistura = sem "coelho duplo"; um pouco = sem tranco.
     static let misturaDoPulo: Double = 0.5
     static var duracaoDoPulo: Double { Double(ritmoDoPulo.count) / (12 * velocidadeDoPulo) }
-    // Tamanho do quadro (1040 × 910 na tela de 3840 da Georgia → pixels da floresta)
+    // Tamanho do quadro (1040 × 910 na tela de 3840 da arte → pixels da floresta)
     static let coelhoW: CGFloat = 740, coelhoH: CGFloat = 647
-    static let pesDoCoelho: CGFloat = 1950       // onde os pés ficam (pixels da Georgia)
-    // ⚙️ Quanto a sombra do coelho sobe na parede (pixels da Georgia)
+    static let pesDoCoelho: CGFloat = 1950       // onde os pés ficam (pixels da arte)
+    // ⚙️ Quanto a sombra do coelho sobe na parede (pixels da arte)
     static let subidaDaSombraDoCoelho: CGFloat = 260
     static let pesNoQuadro: CGFloat = 863 / 910   // onde os pés ficam dentro do quadro (fração)
 
@@ -572,7 +571,7 @@ enum Floresta {
         return ritmoDoCoelhoSentado[(i - sobra) % n]
     }
 
-    // Velocidade do chão no iPhone (pixels da Georgia por segundo; no iPad o chão é parado)
+    // Velocidade do chão no iPhone (pixels da arte por segundo; no iPad o chão é parado)
     static var velocidadeDoChao: CGFloat { desliza ? 2 * largura / CGFloat(periodoDosMovimentos) : 0 }
 
     // Onde o coelho está, qual quadro e para que lado olha. nil = fora de cena.
@@ -794,18 +793,18 @@ struct FlorestaView: View {
 
     // SOBREPOSIÇÃO (teatro de sombras): cada silhueta tem a sua própria transparência.
     // Onde uma passa na frente da outra (a lua na frente do sol, a nuvem na frente da lua),
-    // a luz atravessa as duas e a sombra fica MAIS ESCURA, como na referência da Georgia.
+    // a luz atravessa as duas e a sombra fica MAIS ESCURA.
     private var opacidadeDaSombra: Double { camada?.opacidade ?? 0.7 }
 
-    // ⚙️ Sombra de papel recortado no cenário aceso (como no protótipo do circo da Georgia):
+    // ⚙️ Sombra de papel recortado no cenário aceso:
     // cada peça projeta uma sombra macia no que está atrás dela.
     // O tamanho da sombra é PROPORCIONAL ao tamanho da peça (fração da altura dela):
-    // a lua grande faz uma sombra maior que uma estrelinha. raioMinimo em pixels da Georgia.
-    // (Mais marcada, pedido da Georgia: dá para ver um elemento fazendo sombra no outro.)
+    // a lua grande faz uma sombra maior que uma estrelinha. raioMinimo em pixels da arte.
+    // A sombra é marcada: dá para ver um elemento fazendo sombra no outro.
     static let sombraDoPapel = (opacidade: 0.62, raio: CGFloat(0.024), x: CGFloat(0.008), y: CGFloat(0.024),
                                 raioMinimo: CGFloat(6))
 
-    // altura: altura da peça desenhada, em pixels da Georgia
+    // altura: altura da peça desenhada, em pixels da arte
     private func comSombraDePapel<V: View>(_ vista: V, altura: CGFloat, ativa: Bool = true) -> some View {
         let s = FlorestaView.sombraDoPapel
         let raio = max(s.raioMinimo, altura * s.raio)
@@ -868,10 +867,10 @@ struct FlorestaView: View {
             let balanco = reduzirMovimento ? 0 : a.balanco * CGFloat(Floresta.onda(57, tempoContinuo, fase: a.fase * 4))
             let vista = comSombraDePapel(
                 // O rosto (olhos e bochechas) e os raios do sol andam no TEMPO REAL, no ritmo dos
-                // vídeos da Georgia (12 quadros/s). Antes andavam no relógio da história, que no
+                // vídeos das peças (12 quadros/s). Antes andavam no relógio da história, que no
                 // eclipse ficava mais lento e, no teste acelerado, corria junto.
-                // Na parede o desenho vira sombra COM os detalhes (rosto, raios, penas), como na
-                // referência da Georgia: o rosto do sol e da lua aparece dentro da sombra.
+                // Na parede o desenho vira sombra COM os detalhes (rosto, raios, penas), e
+                // o rosto do sol e da lua aparece dentro da sombra.
                 PecaAnimadaView(peca: a.peca, t: t, fase: a.fase)
                     .frame(width: a.largura * escala, height: a.alturaNaTela * escala)
                     .modifier(TomDaSombraDoCeu(ativo: sombra)),
@@ -906,7 +905,7 @@ struct FlorestaView: View {
         }
     }
 
-    // Qual desenho do coração mostrar (vídeos "Coração entrada" e "Coração saída" da Georgia):
+    // Qual desenho do coração mostrar (vídeos "Coração entrada" e "Coração saída"):
     // desce sem as fitas → as fitas abrem quando ele chega → fica aberto → as fitas fecham → sobe.
     // Todos os quadros têm o mesmo tamanho e o coração no mesmo lugar.
     private func nomeDoCoracao(_ relogio: Double, passagem p: Floresta.PassagemDoCoracao) -> String {
@@ -1034,12 +1033,12 @@ struct FlorestaView: View {
 // AS SOMBRAS EM CAMADAS (regra física do teatro de sombras)
 // Quanto mais PERTO DA PAREDE um boneco está, mais nítida e menor é a sombra dele.
 // Quanto mais PERTO DA CHAMA, mais borrada, maior e mais pesada (vira uma massa escura).
-// Pela referência da Georgia: o céu fica perto da parede (nítido) e a mata perto da chama.
+// O céu fica perto da parede (nítido) e a mata perto da chama.
 // Elas vêm em ordem: primeiro a que fica mais perto da parede.
 enum CamadaDaSombra: CaseIterable {
     case ceu, arvoresDeTras, arvoresDaFrente, arbustos
 
-    // Medido na referência da Georgia (Refsombras): parede branca; o céu (sol, lua, nuvens,
+    // Medido na referência (Refsombras): parede branca; o céu (sol, lua, nuvens,
     // coração, pássaros, estrelas) bem escuro e nítido, com os detalhes aparecendo por dentro;
     // as árvores cinza-claras e um pouco borradas; os arbustos médios, escurecendo onde se
     // cruzam. A cena aparece no MESMO tamanho de dentro da caixa (dá para reconhecer tudo).

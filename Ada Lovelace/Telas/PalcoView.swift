@@ -283,7 +283,7 @@ struct PalcoView: View {
                 CamadasDaCenaAcessiveis(camadas: camadasDoRotor, rotor: rotorDaCena)
             }
 
-            // Cortina lateral (arte "Cortina_Horizontal" da Georgia), ATRÁS da vela: fecha dos lados
+            // Cortina lateral (arte "Cortina_Horizontal"), ATRÁS da vela: fecha dos lados
             // para o meio quando a vela acaba e só reabre quando a vela é ACESA.
             CortinaLateralView(fechada: cortinaFechada)
 
@@ -1099,7 +1099,7 @@ struct PalcoView: View {
     }
 }
 
-// Onde fica cada coisa na tela. A vela segue a posição da arte da Georgia (Quadro).
+// Onde fica cada coisa na tela. A vela segue a posição da arte (Quadro).
 private struct LayoutPalco {
     let tamanho: CGSize
     let quadro: Quadro

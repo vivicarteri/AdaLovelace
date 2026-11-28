@@ -295,7 +295,7 @@ final class Haptics {
         }
     }
 
-    // ⚙️ Vibrações mais fortes (pedido da mentora): a força de cada batida do .ahap é multiplicada
+    // ⚙️ Vibrações mais fortes: a força de cada batida do .ahap é multiplicada
     // por este número (no máximo 1, que é o mais forte que o iPhone faz). O reforço é feito aqui, na hora de carregar.
     static let reforcoDaVibracao: [String: Double] = ["Acender": 1.8, "Apagar": 1.25]
 
@@ -469,8 +469,7 @@ final class Haptics {
         tocarAudioDoPrego(volume: volume, depois: atraso)
     }
 
-    // ⚙️ As batidas foram reforçadas (pedido da mentora: os haptics podiam ser mais intensos).
-    // A vibração contínua da chama NÃO mudou (ela já tinha sido suavizada a pedido do time).
+    // ⚙️ As batidas são reforçadas; a vibração contínua da chama é mais suave.
     // Batidinha (slider, encaixar enfeite…)
     func tique() { toque(forca: 0.7, nitidez: 0.55) }
 

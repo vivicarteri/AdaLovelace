@@ -112,7 +112,7 @@ struct OnboardingView: View {
         )
     }
 
-    // Ilustrações provisórias (a Georgia pode trocar por animações)
+    // Ilustrações provisórias (podem virar animações)
     @ViewBuilder private var ilustracao: some View {
         switch passo {
         case 0:

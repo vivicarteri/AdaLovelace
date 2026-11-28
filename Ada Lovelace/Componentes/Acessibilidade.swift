@@ -105,7 +105,7 @@ enum DescricaoDoEnfeite {
         tipo == .alfinete ? "Alfinete" : "Penduricalho"
     }
 
-    // O desenho da cabeça do alfinete (alfinete1, 2 e 3 da Georgia)
+    // O desenho da cabeça do alfinete (alfinete1, 2 e 3)
     static func desenho(_ estilo: Int) -> String {
         switch estilo {
         case 0: "estrela"

@@ -20,7 +20,7 @@ struct MedidasCaixa {
     private var escalaDaArte: CGFloat { min(tela.width * 0.36, 160) / MedidasCaixa.arteTamanho.width }
 
     // Sem a arte: a ABERTURA tem o mesmo formato da tela, para o zoom encaixar certinho.
-    // Com a arte: é a abertura do desenho da Georgia.
+    // Com a arte: é a abertura do desenho.
     var abertura: CGSize {
         if usaArte {
             let f = escalaDaArte
@@ -119,8 +119,8 @@ nonisolated struct EfeitoCamera: GeometryEffect {
 // Cortina de duas folhas que abre para os lados. abertura: 0 = fechada, 1 = aberta.
 struct CortinaCaixa: View {
     var abertura: CGFloat
-    var sobra: CGFloat = 0   // aberta, cada folha ainda cobre este tanto do lado (teatro da Georgia)
-    var arte = "cortinaCaixa"   // qual desenho de pano (no teatro da Georgia: o mesmo pano do palco)
+    var sobra: CGFloat = 0   // aberta, cada folha ainda cobre este tanto do lado (teatro com a arte)
+    var arte = "cortinaCaixa"   // qual desenho de pano (no teatro com a arte: o mesmo pano do palco)
 
     static let descida: CGFloat = 0.05   // fração da altura da abertura
 
@@ -210,7 +210,7 @@ struct CaixaTeatroView: View {
         }
     }
 
-    // O teatro da Georgia: o palco e a cortininha ficam ATRÁS do desenho, que tem a abertura vazada
+    // O teatro com a arte: o palco e a cortininha ficam ATRÁS do desenho, que tem a abertura vazada
     private var caixaDaGeorgia: some View {
         let caixa = medidas.caixa
         let fundo = medidas.fundo
@@ -255,7 +255,7 @@ struct CaixaTeatroView: View {
         )
     }
 
-    // A caixa feita no código (enquanto não tinha a arte da Georgia)
+    // A caixa feita no código (usada quando a arte não está no Assets)
     private var caixaProvisoria: some View {
         let a = medidas.abertura
         let caixa = medidas.caixa
@@ -324,7 +324,7 @@ struct CaixaTeatroView: View {
                     .offset(y: -medidas.telhado * 0.35)
             }
             .frame(width: caixa.width, height: medidas.telhado, alignment: .bottom)
-            // Topo arredondado (pedido da mentora: a quina reta destoava do resto do app).
+            // Topo arredondado, no mesmo estilo do resto do app.
             // A máscara desce além do telhado, para não cortar as franjas de baixo.
             .mask(alignment: .top) {
                 UnevenRoundedRectangle(topLeadingRadius: caixa.width * 0.09, topTrailingRadius: caixa.width * 0.09)

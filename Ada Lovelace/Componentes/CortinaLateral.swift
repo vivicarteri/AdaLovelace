@@ -18,7 +18,7 @@ struct CortinaLateralView: View {
     // mais para dentro do que embaixo. Sem descontar isso, sobrava uma fresta escura no meio.
     static let inclinacaoDaBorda: CGFloat = 0.056
 
-    // Largura ÷ altura do pano (lido da arte; se a Georgia trocar a imagem, acompanha)
+    // Largura ÷ altura do pano (lido da arte; se a imagem mudar, acompanha)
     static let proporcao: CGFloat = {
         #if canImport(UIKit)
         if let t = UIImage(named: nome)?.size, t.height > 0 { return t.width / t.height }

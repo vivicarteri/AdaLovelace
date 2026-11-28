@@ -1,5 +1,5 @@
 //  Arte.swift
-//  Cores do app e o "lugar da arte" da Georgia.
+//  Cores do app e o "lugar da arte".
 //
 //  COMO TROCAR UM DESENHO:
 //  Arrastem o PNG (fundo transparente) para o Assets.xcassets com o nome indicado

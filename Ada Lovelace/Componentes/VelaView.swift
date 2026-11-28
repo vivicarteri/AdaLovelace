@@ -116,7 +116,7 @@ struct VelaView: View {
     // A altura da vela mais alta, na escala desta vela (a queda é medida por ela, em QuedaDoEnfeite)
     private var alturaMaxima: CGFloat { largura * ArteVela.alturaMaxima / ArteVela.largura }
 
-    // Alfinetes que ainda não caíram, desenhados atrás da cera. Cada um tem o desenho da Georgia
+    // Alfinetes que ainda não caíram, desenhados atrás da cera. Cada um tem o seu desenho
     // e, atrás dele, um fio da cor da agulha que continua da ponta até o meio da vela.
     private var alfinetesAtras: some View {
         let larguraTotal = largura * 3
@@ -239,7 +239,7 @@ struct VelaView: View {
         guard arteExiste("velaCorpo") else { return sinal * largura / 2 }
         let reserva = sinal * largura * 0.42
         let s = largura / ArteVela.largura
-        let pixelParaPonto = ArteVela.k * s          // pixel do desenho da Georgia → ponto na tela
+        let pixelParaPonto = ArteVela.k * s          // pixel do desenho → ponto na tela
         let topo = (ArteVela.topoBaixo - ArteVela.corpoTopo) * s
         let inteiro = (ArteVela.corpoBaixo - ArteVela.corpoTopo) * s
         let liso = (ArteVela.corpoBaixo - ArteVela.topoBaixo) * s
@@ -276,7 +276,7 @@ struct VelaView: View {
         return CGPoint(x: x, y: tamanho.height / 2 - ponta.y)
     }
 
-    // Vela da Georgia, montada com as DUAS peças que ela desenhou:
+    // Vela da arte, montada com as DUAS peças do desenho:
     //   "velaTopo"  = os escorridos e o pavio (sempre no alto, sempre do mesmo tamanho)
     //   "velaCorpo" = a vela inteira; aqui usamos só a parte LISA dela, esticada ou
     //                 encolhida para a vela ficar do tamanho escolhido.
@@ -284,8 +284,8 @@ struct VelaView: View {
     // O pulo do gato é onde as duas se encontram. O desenho do corpo também tem os
     // escorridos no começo dele, então o corpo é encolhido de um jeito que a parte lisa
     // fique com a altura certa, e os escorridos dele são cortados fora por cima.
-    // Assim a emenda cai SEMPRE no mesmo ponto do desenho — exatamente onde a Georgia
-    // cortou as duas peças. Antes a emenda caía num lugar qualquer do corpo e só batia
+    // Assim a emenda cai SEMPRE no mesmo ponto do desenho — exatamente onde as duas
+    // peças foram cortadas. Antes a emenda caía num lugar qualquer do corpo e só batia
     // certo na vela do tamanho máximo; por isso o topo ficava estranho nos outros tamanhos.
     //
     // Um pedaço da cera fica escondido atrás do suporte (por isso o "escondido").
@@ -378,14 +378,14 @@ private struct QuedaDoAlfinete: ViewModifier {
 
 // Alfinete (espetado de lado) ou penduricalho (estrelinha pendurada).
 // O desenho é feito para o lado ESQUERDO da vela: cabeça para fora, agulha apontando para a vela.
-// Os alfinetes são os da Georgia (estrela, coração e bolinha), deitados.
+// Os alfinetes são os da arte (estrela, coração e bolinha), deitados.
 struct EnfeiteView: View {
     var tipo: TipoEnfeite
     var lado: Double = 1
     var largura: CGFloat
     var estilo: Int = 0
 
-    // Medidas dos desenhos "alfinete1/2/3", em pixels da Georgia (mesma escala da vela).
+    // Medidas dos desenhos "alfinete1/2/3", em pixels da arte (mesma escala da vela).
     // ponta = onde a agulha termina; cabeca = de onde até onde vai a cabeça (de cima para baixo).
     private static let alfinetes: [(tamanho: CGSize, ponta: CGPoint, cabeca: ClosedRange<CGFloat>)] = [
         (CGSize(width: 143, height: 61), CGPoint(x: 135, y: 28.5), 6...54),   // estrela
@@ -395,7 +395,7 @@ struct EnfeiteView: View {
 
     private static var usaArte: Bool { arteExiste("alfinete1") }
 
-    // Medidas do desenho de um alfinete, em pixels da Georgia (usado nas almofadas do ateliê)
+    // Medidas do desenho de um alfinete, em pixels da arte (usado nas almofadas do ateliê)
     static func desenhoDoAlfinete(_ estilo: Int) -> (tamanho: CGSize, ponta: CGPoint) {
         let m = medidas(estilo)
         return (m.tamanho, m.ponta)
@@ -528,7 +528,7 @@ struct EnfeiteView: View {
 
 // MARK: - Borda da cera
 //
-// Onde fica a borda da vela em cada altura, lida dos próprios desenhos da Georgia
+// Onde fica a borda da vela em cada altura, lida dos próprios desenhos
 // ("velaTopo" e "velaCorpo"). A vela não é um retângulo: ela é meio torta e a cera de cima
 // é mais larga. Os enfeites e os furinhos usam isso para ficarem na borda de verdade.
 // A leitura é feita uma vez só (na primeira vez que precisa) e fica guardada.
@@ -645,7 +645,7 @@ struct ChamaView: View {
     }
 }
 
-// Suporte (o prato da Georgia). Fica embaixo da vela e esconde a parte de baixo dela.
+// Suporte (o prato). Fica embaixo da vela e esconde a parte de baixo dela.
 // As alças sobem acima da borda do prato, então o MEIO do desenho não fica logo abaixo da base:
 // use desvioX/desvioY a partir do pé da vela (centroX, baseY).
 struct SuporteView: View {

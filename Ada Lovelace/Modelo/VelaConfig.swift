@@ -16,7 +16,7 @@ struct Enfeite: Identifiable, Codable, Equatable {
     var tipo: TipoEnfeite
     var altura: Double   // 0 = base da vela, 1 = topo
     var lado: Double     // -1 = esquerda, 1 = direita
-    // Qual dos desenhos de alfinete da Georgia (0 = estrela, 1 = coração, 2 = bolinha).
+    // Qual dos desenhos de alfinete (0 = estrela, 1 = coração, 2 = bolinha).
     // Opcional: velas salvas antes de existir isso continuam abrindo (aí sai do próprio id).
     var estilo: Int? = nil
 

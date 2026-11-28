@@ -354,7 +354,7 @@ struct PersonalizacaoView: View {
         let sobram = tipo.map { rascunho.sobram($0) } ?? 0
         let arrastandoDaCaixinha = arrastando != nil && arrastando?.tiradoDe == nil
 
-        // AS ALMOFADAS DA GEORGIA: cada almofada é um item do VoiceOver, com as próprias ações
+        // AS ALMOFADAS: cada almofada é um item do VoiceOver, com as próprias ações
         if tipo == .alfinete && arteExiste("almofada1") {
             return AnyView(almofadas(g).position(x: g.centroX, y: g.caixinhaY))
         }
@@ -412,16 +412,16 @@ struct PersonalizacaoView: View {
         })
     }
 
-    // AS ALMOFADAS DA GEORGIA: os alfinetes que sobram ficam espetados nelas.
+    // AS ALMOFADAS: os alfinetes que sobram ficam espetados nelas.
     // Os alfinetes são desenhados ATRÁS da almofada: a ponta da agulha some dentro dela.
     private func almofadas(_ g: LayoutAtelie) -> some View {
         let a = ArteAtelie.self
         let larguraArte = a.almofada1.width + a.vaoEntreAlmofadas + a.almofada2.width
         let alturaArte = a.almofada2.height + a.alturaDosAlfinetes
         // Mesma escala do desenho da vela: os alfinetes da almofada ficam do tamanho dos que vão
-        // para a vela, e a almofada fica do tamanho que a Georgia desenhou perto da vela
+        // para a vela, e a almofada fica do tamanho do desenho perto da vela
         // (antes elas eram esticadas para encher a caixinha e ficavam grandes demais).
-        // ⚙️ 1,4: um pouco maiores que na escala da vela (pedido do time), sem passar da largura da tela
+        // ⚙️ 1,4: um pouco maiores que na escala da vela , sem passar da largura da tela
         let larguraComBandeja = arteExiste("bandejaPenduricalhos") ? max(larguraArte, a.bandeja.width) : larguraArte
         let f = min(1.4 * ArteVela.k * g.larguraVela / ArteVela.largura, g.tamanho.width * 0.94 / larguraComBandeja)
         let w = larguraArte * f, h = alturaArte * f
@@ -434,7 +434,7 @@ struct PersonalizacaoView: View {
         let origem2 = CGPoint(x: (a.almofada1.width + a.vaoEntreAlmofadas) * f, y: h - a.almofada2.height * f)
         let naMao = arrastando?.tiradoDe == nil && arrastando?.tipo == .alfinete ? arrastando?.daCaixinha : nil
 
-        // A bandeja da Georgia fica atrás das almofadas (as almofadas apoiam dentro dela)
+        // A bandeja fica atrás das almofadas (as almofadas apoiam dentro dela)
         let usaBandeja = arteExiste("bandejaPenduricalhos")
         let bandejaW = a.bandeja.width * f, bandejaH = a.bandeja.height * f
         let bandejaX = (w - bandejaW) / 2                          // centrada nas almofadas
@@ -573,7 +573,7 @@ struct PersonalizacaoView: View {
         .animation(.easeInOut(duration: 0.25), value: vagasUsadas)
     }
 
-    // A BANDEJA DA GEORGIA com os penduricalhos que sobram. A parte da frente da bandeja
+    // A BANDEJA com os penduricalhos que sobram. A parte da frente da bandeja
     // é desenhada de novo por cima, para eles ficarem DENTRO dela.
     private func bandeja(_ g: LayoutAtelie, sobram: Int) -> some View {
         let a = ArteAtelie.self
@@ -946,7 +946,7 @@ struct PersonalizacaoView: View {
     }
 }
 
-// Medidas das almofadas e da bandeja da Georgia (em pixels dos recortes dela)
+// Medidas das almofadas e da bandeja (em pixels dos recortes)
 private enum ArteAtelie {
     static let almofada1 = CGSize(width: 267, height: 231)
     static let almofada2 = CGSize(width: 408, height: 301)

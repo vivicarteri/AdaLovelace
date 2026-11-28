@@ -1,5 +1,5 @@
 // converte-video.swift
-// Transforma um vídeo .mov da Georgia (fundo transparente, 12 fps) em imagens para o app:
+// Transforma um vídeo .mov (fundo transparente, 12 fps) em imagens para o app:
 // a peça parada + só o pedacinho que muda em cada quadro + o ritmo.
 //
 // COMO USAR (no Terminal, dentro da pasta do projeto):

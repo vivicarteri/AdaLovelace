@@ -49,7 +49,7 @@ struct LuaCrescente: Shape {
     }
 }
 
-// Bonequinho provisório (até a Georgia mandar os personagens)
+// Bonequinho provisório (até os personagens desenhados chegarem)
 struct Bonequinho: Shape {
     var bracos: Double = 0.6     // ângulo dos braços (0 = para baixo, 1,5 = para cima)
     var pernas: Double = 0.35

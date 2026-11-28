@@ -265,7 +265,7 @@ final class Sessao: ObservableObject {
 
     // MARK: Ciclo do app (aberto, em segundo plano…)
 
-    // Com a vela ACESA a tela do aparelho não apaga sozinha (teste do Guilherme: o iPhone
+    // Com a vela ACESA a tela do aparelho não apaga sozinha (senão o iPhone
     // dormia no meio da vela). Apagou, acabou ou é vela nova: o aparelho volta ao normal.
     // (Só com o app aberto na tela: quando a Sessao nasce, o app ainda está abrindo.)
     private func manterTelaAcesa() {

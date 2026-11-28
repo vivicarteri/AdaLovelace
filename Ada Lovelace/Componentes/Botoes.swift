@@ -165,10 +165,10 @@ struct CortinaView: View {
     }
 }
 
-// O pano da cortina. A arte da Georgia ("cortina") é deitada: ela PREENCHE a tela
+// O pano da cortina. A arte ("cortina") é deitada: ela PREENCHE a tela
 // (corta um pouco dos lados) em vez de encolher para caber, senão sobrava tela vazia.
 private struct TecidoDaCortina: View {
-    // Na arte da Georgia (3032 × 2348) o pano é inteiro (sem nenhum buraco) até 85,5% da
+    // Na arte (3032 × 2348) o pano é inteiro (sem nenhum buraco) até 85,5% da
     // altura; daí para baixo vêm as pontas recortadas.
     static let parteInteira: CGFloat = 2009.0 / 2348.0
 
@@ -209,7 +209,7 @@ struct CaixaFosforoView: View {
 
     static let emRepouso: CGFloat = 0.28
 
-    // CAIXA DE FÓSFOROS NOVA DA GEORGIA (25/11): "Caixa_Fósforos_Cheia" separada em duas peças:
+    // CAIXA DE FÓSFOROS: "Caixa_Fósforos_Cheia" separada em duas peças:
     //   "caixaFosforo"   = a luva (capa), com a lixa hachurada em cima (562 × 384 px)
     //   "gavetaFosforos" = a parte da gaveta que sai da luva, com os fósforos (217 × 384 px)
     // Com a gaveta toda para dentro, fica igual à "Caixa_Fósforos_Fechada".
@@ -362,7 +362,7 @@ struct FosforoView: View {
         return CGPoint(x: cabeca.x + d * sin(a), y: cabeca.y - d * cos(a))
     }
 
-    // Fósforo da Georgia (25/11): o desenho dela veio deitado (cabeça à esquerda) e foi
+    // Fósforo: o desenho veio deitado (cabeça à esquerda) e foi
     // guardado EM PÉ, com a cabeça em cima ("fosforo", 58 × 324 px). Ele ocupa 95% da altura
     // da vista: assim a cabeça fica nos mesmos 10% de cima e o pé nos mesmos 95% de antes.
     private static let arte = CGSize(width: 58, height: 324)

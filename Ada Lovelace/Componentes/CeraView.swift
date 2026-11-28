@@ -1,13 +1,13 @@
 //  CeraView.swift
-//  A cera da Georgia derretendo no topo da vela, e os escorridos que correm pela vela até o fim.
+//  A cera derretendo no topo da vela, e os escorridos que correm pela vela até o fim.
 //
 //  DOIS RITMOS:
 //  1. O formato da cera no topo acompanha o quanto a vela já queimou ("progresso").
-//     São os quadros "velaCera_1…145": os 13 desenhos dela (cera nova → escorridos crescem →
+//     São os quadros "velaCera_1…145": os 13 desenhos da cera (cera nova → escorridos crescem →
 //     a cera vira um escorrido só) com 11 quadros intermediários entre cada par, no mesmo traço.
 //  2. Com a vela acesa, de tempos em tempos a ponta de um escorrido do topo se estica, solta
 //     uma gota e a gota desce COLADA na vela até entrar no suporte. A gota é desenhada do jeito
-//     que a Georgia desenha cera no corpo da vela: duas linhas de tinta abertas em cima, fundo
+//     da cera desenhada no corpo da vela: duas linhas de tinta abertas em cima, fundo
 //     redondo de traço mais grosso e o bege mais escuro por dentro.
 //
 //  Tudo aqui é medido em pixels do quadro da cera (420 × 760, a mesma escala do "velaCorpo"
@@ -108,13 +108,13 @@ struct CeraView: View {
             comprimento: .random(in: 130...200)))
     }
 
-    // MARK: - Desenho (cores e traço tirados dos desenhos da Georgia)
+    // MARK: - Desenho (cores e traço tirados dos desenhos da vela)
 
     private static let tinta = Color(red: 30 / 255, green: 27 / 255, blue: 22 / 255)
     private static let ceraCorpo = Color(red: 236 / 255, green: 227 / 255, blue: 208 / 255) // o corpo da vela
-    private static let bege = Color(red: 205 / 255, green: 193 / 255, blue: 169 / 255)      // o de dentro das marcas dela
+    private static let bege = Color(red: 205 / 255, green: 193 / 255, blue: 169 / 255)      // o de dentro das marcas de cera
 
-    // A gota tem o jeito das marcas que a Georgia desenhou no corpo da vela: duas linhas que
+    // A gota tem o jeito das marcas desenhadas no corpo da vela: duas linhas que
     // descem engrossando até um fundo redondo de traço mais grosso, abertas em cima,
     // e o bege mais escuro por dentro (mais forte de um lado, com uma faixa clara do outro).
     // Enquanto ainda está presa, o começo dela fica escondido atrás da ponta do topo.
@@ -221,11 +221,11 @@ struct Escorrido {
     let inclinacao: CGFloat           // e desce um pouquinho torta
     let onda: CGFloat
     let velocidade: CGFloat           // pixels do quadro por segundo
-    let comprimento: CGFloat          // tamanho da gota (as marcas da Georgia no corpo têm uns 200 px)
+    let comprimento: CGFloat          // tamanho da gota (as marcas desenhadas no corpo têm uns 200 px)
 
     static let formando = 2.2         // segundos que a ponta leva se esticando até a gota soltar
 
-    // Meia largura da gota (as marcas dela no corpo têm uns 16–20 px por dentro)
+    // Meia largura da gota (as marcas desenhadas no corpo têm uns 16–20 px por dentro)
     var fio: CGFloat { min(max(largura * 0.3, 6), 10.5, largura / 2 - 4) }   // mais fina que a ponta
 
     // Onde o meio da gota está em cada altura: sai da ponta e serpenteia um pouquinho

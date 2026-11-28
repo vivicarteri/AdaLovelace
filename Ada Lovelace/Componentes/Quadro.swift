@@ -1,5 +1,5 @@
 //  Quadro.swift
-//  A arte da Georgia foi desenhada num quadro de 1290 × 2796 pixels (tela inteira do iPhone).
+//  A arte foi desenhada num quadro de 1290 × 2796 pixels (tela inteira do iPhone).
 //  Cada desenho foi recortado e guardamos ONDE ele ficava no quadro.
 //  O Quadro converte essas posições para a tela de qualquer aparelho (iPhone ou iPad).
 
@@ -40,25 +40,25 @@ enum PosicaoArte {
     static let tenda = r(0, 0, 1290, 2725)
     static let lua = r(264, 442, 1025, 1237)
     static let picadeiro = r(3, 2152, 1290, 2643)
-    // Prato da Georgia (24/11): recorte x 814–2218, y 1893–2286 do quadro dela.
-    // A borda de cima do prato (y 2067 no quadro dela) fica na base da vela; as alças sobem acima dela.
+    // Prato: recorte x 814–2218, y 1893–2286 do quadro da arte.
+    // A borda de cima do prato (y 2067 no quadro da arte) fica na base da vela; as alças sobem acima dela.
     static let suporte = r(ArteVela.noQuadroX(814), ArteVela.noQuadroY(1893),
                            ArteVela.noQuadroX(2218), ArteVela.noQuadroY(2286))
 }
 
 // Medidas da vela da arte (em pixels do quadro do app)
 //
-// A vela, a chama e o prato novos da Georgia (24/11) vieram num quadro dela de 3032 × 2348.
+// A vela, a chama e o prato vieram num quadro de 3032 × 2348.
 // Cada pixel desse quadro vale "k" pixels do quadro do app. O k foi escolhido para o prato
 // (que é bem largo, com as alças) caber no iPhone com uma folguinha dos lados,
-// mantendo a vela e o prato na mesma proporção em que a Georgia desenhou.
+// mantendo a vela e o prato na mesma proporção do desenho.
 enum ArteVela {
     static let k: CGFloat = 0.87
-    private static let meioDoRecorte: CGFloat = 1504     // x do meio do recorte da vela, no quadro da Georgia
-    private static let bordaDoPrato: CGFloat = 2067      // y da borda de cima do prato, no quadro da Georgia
-    private static let topoDoRecorte: CGFloat = 458      // y do topo do recorte da vela, no quadro da Georgia
+    private static let meioDoRecorte: CGFloat = 1504     // x do meio do recorte da vela, no quadro da arte
+    private static let bordaDoPrato: CGFloat = 2067      // y da borda de cima do prato, no quadro da arte
+    private static let topoDoRecorte: CGFloat = 458      // y do topo do recorte da vela, no quadro da arte
 
-    // Converte um ponto do quadro da Georgia para o quadro do app
+    // Converte um ponto do quadro da arte para o quadro do app
     static func noQuadroX(_ x: CGFloat) -> CGFloat { centroX + (x - meioDoRecorte) * k }
     static func noQuadroY(_ y: CGFloat) -> CGFloat { baseY + (y - bordaDoPrato) * k }
 
@@ -73,11 +73,11 @@ enum ArteVela {
     static let escondido: CGFloat = (2202 - bordaDoPrato) * k   // pé da vela que fica escondido dentro do prato
     static let baseY: CGFloat = 2542         // onde a vela "nasce" (borda de cima do prato)
     static let alturaMaxima: CGFloat = 1459  // da base até o topo do desenho, com a vela no tamanho máximo
-    // Chama: recorte x 1367–1605, y 134–510 do quadro da Georgia
+    // Chama: recorte x 1367–1605, y 134–510 do quadro da arte
     static let chamaDentro: CGFloat = (510 - topoDoRecorte) * k   // quanto a chama desce abaixo do topo do desenho
     static let chamaLargura: CGFloat = 238 * k
     static let chamaAltura: CGFloat = 376 * k
-    static let chamaDesvioX: CGFloat = (1486 - meioDoRecorte) * k   // meio da chama, como a Georgia desenhou
+    static let chamaDesvioX: CGFloat = (1486 - meioDoRecorte) * k   // meio da chama, como no desenho
     private static let pavioX: CGFloat = (1477.5 - meioDoRecorte) * k
     private static let pontaDoPavioY: CGFloat = (473 - topoDoRecorte) * k
     // A ponta do pavio fica dentro da base opaca da chama e vira o centro da rotação.
@@ -92,7 +92,7 @@ enum ArteVela {
 // Isto aqui é para a animação DESENHADA dentro da peça: o olho do passarinho piscando,
 // uma bandeirinha tremulando, uma boca abrindo.
 //
-// COMO A GEORGIA MANDA:
+// COMO OS QUADROS DEVEM VIR:
 //   - Um PNG por quadro, com fundo transparente, numerados a partir de 1:
 //         passarinho_1, passarinho_2, passarinho_3…
 //     (a peça parada continua valendo: se existir só "passarinho", ele é usado e pronto)
@@ -183,7 +183,7 @@ struct Camada: View {
 }
 
 // As camadas do cenário (normais ou as versões de sombra): tenda, a faixa infinita
-// com as peças novas da Georgia (lua e passarinho) e o picadeiro.
+// com as peças novas (lua e passarinho) e o picadeiro.
 // As SOMBRAS andam junto com as peças (mesma conta, mesmo ritmo)
 // e ainda tremulam devagarinho por causa da chama.
 struct CenaArte: View {
@@ -216,20 +216,20 @@ struct CenaArte: View {
             let chama = sombra && !reduzirMovimento ? (luz?.anguloLento ?? 0) : 0
             ZStack {
                 if Floresta.ligada {
-                    // Cenário novo da Georgia: a floresta, com o céu (sol, lua, nuvens, passarinhos).
+                    // Cenário novo: a floresta, com o céu (sol, lua, nuvens, passarinhos).
                     // Veja Floresta.swift. Ela só aparece com a vela acesa.
                     FlorestaView(quadro: quadro, t: t, sombra: sombra, acesa: mostrarPersonagens,
                                  camada: camadaDaSombra, linhaDeCima: linhaDeCima)
                         .offset(x: sombra && !reduzirMovimento ? CenaArte.tremor(t: t, indice: 1).dx : 0)
                 } else {
                     camada("tenda", PosicaoArte.tenda, t: t, indice: 0)
-                    // A lua antiga saiu: no lugar dela passam as peças novas da Georgia (lua e passarinho).
+                    // A lua antiga saiu: no lugar dela passam as peças novas (lua e passarinho).
                     // Elas só aparecem com a vela acesa (somem devagar quando apaga).
                     FaixaInfinitaView(quadro: quadro, t: t, sombra: sombra)
                         .offset(x: sombra && !reduzirMovimento ? CenaArte.tremor(t: t, indice: 1).dx : 0)
                         .opacity(mostrarPersonagens ? 1 : 0)
                 }
-                // Os acrobatas saíram do cenário (pedido do time). As imagens continuam no Assets.
+                // Os acrobatas saíram do cenário. As imagens continuam no Assets.
                 // O picadeiro é do circo: na floresta ele não aparece (não está no mockup).
                 if !Floresta.ligada {
                     camada("picadeiro", PosicaoArte.picadeiro, t: t, indice: 4)
@@ -288,7 +288,7 @@ struct CenaArte: View {
 
 // MARK: - Previews
 
-// Se a Georgia mandar os quadros "tenda_1", "tenda_2"…, esta preview já mostra a animação.
+// Se existirem os quadros "tenda_1", "tenda_2"…, esta preview já mostra a animação.
 // Por enquanto só existe a peça parada, então ela aparece sem se mexer.
 // (As peças novas, lua e passarinho, usam outro sistema: veja CenarioAnimado.swift.)
 #Preview("ImagemAnimada", traits: .sizeThatFitsLayout) {

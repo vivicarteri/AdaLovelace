@@ -6,7 +6,7 @@
 import SwiftUI
 import TipKit
 
-// Vela apagada: como pegar um fósforo (teste do Guilherme: não dava para saber o que tocar)
+// Vela apagada: dica de como pegar um fósforo
 struct DicaPegarFosforo: Tip {
     // Ligado pela PalcoView: vela nova ou apagada, com a caixa de fósforos na tela
     @Parameter static var podePegar: Bool = false
@@ -17,7 +17,7 @@ struct DicaPegarFosforo: Tip {
     var rules: [Rule] { #Rule(Self.$podePegar) { $0 } }
 }
 
-// Fósforo na mão: como riscar (teste do Guilherme: pediu uma dica de como riscar)
+// Fósforo na mão: dica de como riscar
 struct DicaRiscarFosforo: Tip {
     // Ligado pela PalcoView: o fósforo saiu da caixa e ainda não acendeu
     @Parameter static var fosforoNaMao: Bool = false

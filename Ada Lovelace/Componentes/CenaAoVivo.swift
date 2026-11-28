@@ -28,7 +28,7 @@ enum CenaAoVivo {
     static let acabouDeFormar: Double = 40
     // ⚙️ Segundos à frente usados para saber se a peça está subindo ou descendo
     static let olharAFrente: Double = 4
-    // ⚙️ Quanto a peça precisa subir ou descer nesse tempo para dizer "subindo"/"descendo" (pixels da Georgia)
+    // ⚙️ Quanto a peça precisa subir ou descer nesse tempo para dizer "subindo"/"descendo" (pixels da arte)
     static let subidaMinima: CGFloat = 30
 
     // frase: o "agora" (vem depois da descrição da camada)
